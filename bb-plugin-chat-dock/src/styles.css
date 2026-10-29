@@ -53,3 +53,105 @@
   border-top: 1px solid var(--border-seam);
   padding: 0.5rem 0.75rem 0.75rem;
 }
+
+/*
+ * Keep-docked mode. A stowed shell stays mounted in its column, out of sight, and the
+ * Return row takes its place: the composer's footprint and radius, one line
+ * high. The tint and the primary-coloured dashed edge keep it reading as a
+ * control, not a disabled box, in both light and dark themes.
+ */
+[data-chat-dock-stowed] {
+  display: none !important;
+}
+.chat-dock-return {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 0.875rem;
+  border: 1px dashed color-mix(in srgb, var(--primary) 70%, transparent);
+  border-radius: 14px;
+  background-color: color-mix(in srgb, var(--primary) 8%, var(--background));
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .chat-dock-return:hover {
+    border-style: solid;
+    background-color: color-mix(in srgb, var(--primary) 14%, var(--background));
+  }
+}
+.chat-dock-return:active {
+  background-color: color-mix(in srgb, var(--primary) 18%, var(--background));
+}
+.chat-dock-return:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.chat-dock-return-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+.chat-dock-return-label {
+  flex-shrink: 0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.chat-dock-return-draft {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-style: italic;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * BB collapses the composer's footer (environment, permission mode, context
+ * meter) to opacity 0 when the composer is 30rem or narrower, or the pane 26rem
+ * or shorter, until it is expanded. In the panel that is nearly always, so a
+ * docked composer lost its footer. Docked, undo just that rule: `revert-layer`
+ * falls back to BB's own utility values for each breakpoint, and the footer's
+ * children already truncate to fit a narrow panel.
+ */
+[data-chat-dock-host] [data-follow-up-composer]:not([data-follow-up-composer-footer-visible]) [data-follow-up-composer-footer] {
+  opacity: revert-layer;
+  pointer-events: revert-layer;
+  min-height: revert-layer;
+  max-height: revert-layer;
+  margin-top: revert-layer;
+}
+
+/*
+ * The phone drawer's dock: inside BB's React root, laid over the drawer's
+ * bottom (see `overlayFor`). The layer copies the drawer's own geometry (top 0,
+ * `--bb-shell-height`, the bottom safe-area padding), which BB fits to the
+ * visual viewport while the keyboard is up, so the frame sits above it.
+ */
+.chat-dock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  height: var(--bb-shell-height, 100dvh);
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: var(--bb-safe-area-bottom, env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.chat-dock-overlay-frame {
+  background-color: var(--sidebar);
+  pointer-events: auto;
+}
+[data-chat-dock-spacer] {
+  padding: 0 !important;
+  border-width: 0 !important;
+}

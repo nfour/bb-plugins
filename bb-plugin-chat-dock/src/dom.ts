@@ -207,6 +207,7 @@ export function moveInto(shell: HTMLElement, host: HTMLElement): () => void {
   const marker = document.createComment("chat-dock: composer shell home");
   shell.parentNode?.insertBefore(marker, shell);
   host.appendChild(shell);
+  unstow(shell);
   return () => {
     if (marker.parentNode) marker.parentNode.insertBefore(shell, marker);
     else shell.remove();
@@ -220,4 +221,140 @@ export function moveInto(shell: HTMLElement, host: HTMLElement): () => void {
 /** Whether `host` still holds a composer shell (BB can rebuild the shell under a thread, leaving the host empty). */
 export function holdsShell(host: HTMLElement): boolean {
   return host.querySelector('[data-app-composer][data-app-composer-role="primary"]') !== null;
+}
+
+/*
+ * Keep-docked mode ("Keep composer docked"). A shell whose panel closes is put back
+ * in its column, as always, and then stowed there: concealed by a data attribute
+ * (`styles.css`), never unmounted, so the editor and its draft stay as they
+ * were. The Return row (`Return.tsx`) shows in its place. Docking it again is
+ * an ordinary `moveInto`, which unstows it, so it happens only where docking
+ * already happens: in an open panel.
+ */
+const STOWED = "chatDockStowed";
+const stowListeners = new Set<() => void>();
+
+function notifyStow() {
+  for (const listener of stowListeners) listener();
+}
+
+/** Hides a shell that is back in its column. A shell that went stale on the way back is left alone. */
+export function stow(shell: HTMLElement): void {
+  if (!shell.isConnected || STOWED in shell.dataset) return;
+  shell.dataset[STOWED] = "";
+  notifyStow();
+}
+
+/** Shows a stowed shell again. */
+export function unstow(shell: HTMLElement): void {
+  if (!(STOWED in shell.dataset)) return;
+  delete shell.dataset[STOWED];
+  notifyStow();
+}
+
+/** The stowed shells on the page. */
+export function stowedShells(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>("[data-chat-dock-stowed]")];
+}
+
+/** Runs when a shell is stowed or unstowed. */
+export function onStowChange(listener: () => void): () => void {
+  stowListeners.add(listener);
+  return () => {
+    stowListeners.delete(listener);
+  };
+}
+
+/** The composer's editor in a shell: BB's TipTap box. */
+export function editorOf(shell: HTMLElement): HTMLElement | null {
+  return shell.querySelector<HTMLElement>('[contenteditable="true"][role="textbox"], textarea');
+}
+
+/** Whether a panel is the phone drawer rather than the split panel. */
+export function isDrawer({ panel }: Panel): boolean {
+  return panel.matches(SHELF);
+}
+
+export interface Overlay {
+  /** Where the shell goes: inside BB's React root, laid over the drawer's bottom. */
+  host: HTMLElement;
+  dispose(): void;
+}
+
+/**
+ * BB portals the phone drawer outside its React root, and React ignores every
+ * event whose target is outside the root it rendered into. A shell moved into
+ * the drawer took typing (the editor listens natively) but none of its buttons,
+ * and never expanded, so its footer never showed. In the drawer the shell stays
+ * inside the root instead, in a fixed host laid over the drawer's bottom, and
+ * the place it would have taken in the drawer (`spacer`) keeps the host's
+ * height, so nothing in the drawer is covered.
+ *
+ * Vertically the overlay is the drawer's twin in CSS (`styles.css`): the same
+ * `top: 0`, `--bb-shell-height` and bottom safe-area padding. BB shrinks that
+ * height to the visual viewport while the on-screen keyboard is up, so the
+ * composer rises above the keyboard with the drawer, in the same style pass and
+ * with no offset of its own. Horizontally it follows the drawer only while the
+ * drawer moves (opening, a drag, a transition), for a bounded run of frames.
+ */
+export function overlayFor(spacer: HTMLElement, panel: Panel, className: string): Overlay {
+  const drawer = panel.panel;
+  // A full-height layer that lets touches through, and the frame at its bottom that holds the shell.
+  const layer = document.createElement("div");
+  layer.className = "chat-dock-overlay";
+  layer.style.zIndex = String((Number.parseInt(getComputedStyle(drawer).zIndex, 10) || 45) + 1);
+  const host = document.createElement("div");
+  host.dataset.chatDockHost = "overlay";
+  host.className = `${className} chat-dock-overlay-frame`;
+  layer.appendChild(host);
+  (document.getElementById("root") ?? document.body).appendChild(layer);
+  spacer.dataset.chatDockSpacer = "";
+
+  const place = () => {
+    const rect = drawer.getBoundingClientRect();
+    layer.style.width = `${rect.width}px`;
+    layer.style.translate = `${rect.left}px 0`;
+  };
+  let frame = 0;
+  let until = 0;
+  const tick = () => {
+    place();
+    frame = performance.now() < until ? requestAnimationFrame(tick) : 0;
+  };
+  const follow = (ms: number) => {
+    until = performance.now() + ms;
+    if (!frame) frame = requestAnimationFrame(tick);
+  };
+  const dragging = () => follow(10_000);
+  const settled = () => follow(600);
+  const moving = () => follow(700);
+  drawer.addEventListener("pointerdown", dragging, true);
+  window.addEventListener("pointerup", settled, true);
+  window.addEventListener("pointercancel", settled, true);
+  drawer.addEventListener("transitionrun", moving);
+  // The host's height for the spacer; the drawer's size (a rotation, a new viewport) for the host.
+  const sized = new ResizeObserver(() => {
+    spacer.style.height = `${host.offsetHeight}px`;
+    place();
+  });
+  sized.observe(host);
+  sized.observe(drawer);
+  place();
+  moving();
+
+  return {
+    host,
+    dispose() {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      sized.disconnect();
+      drawer.removeEventListener("pointerdown", dragging, true);
+      window.removeEventListener("pointerup", settled, true);
+      window.removeEventListener("pointercancel", settled, true);
+      drawer.removeEventListener("transitionrun", moving);
+      layer.remove();
+      delete spacer.dataset.chatDockSpacer;
+      spacer.style.height = "";
+    },
+  };
 }

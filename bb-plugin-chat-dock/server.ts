@@ -7,7 +7,7 @@ import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 /** The boolean settings the page can switch. */
-export const SETTING_KEYS = ["enabled", "locked", "showButton", "debugLog"] as const;
+export const SETTING_KEYS = ["enabled", "locked", "keepDocked", "showButton", "debugLog"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 export const rpcContract = defineRpcContract({
@@ -34,6 +34,12 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Keep it at the panel's bottom",
       description: "A strip under whichever tab is open, so the composer never goes away while the panel is open. Off, it is a Chat tab instead.",
       default: true,
+    },
+    keepDocked: {
+      type: "boolean",
+      label: "Keep composer docked",
+      description: "Keep the composer in the sidebar when it closes. Click “Return composer” to bring it back to the timeline. Useful for drafting long messages on mobile.",
+      default: false,
     },
     showButton: {
       type: "boolean",

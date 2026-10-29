@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useBbContext } from "@get-bb/plugin-sdk/app";
 import { useDebug } from "./debug";
-import { adopt, createStripHost, findPanes, holdsShell, moveInto, observePage, onShellHome, panelHidden, type Panel } from "./dom";
+import { adopt, createStripHost, findPanes, holdsShell, isDrawer, moveInto, observePage, onShellHome, overlayFor, panelHidden, stow, type Overlay, type Panel } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -20,28 +20,38 @@ import { useOptions } from "./options";
  */
 export function Strip() {
   const { threadId } = useBbContext();
-  const { ready, enabled, locked } = useOptions();
+  const { ready, enabled, locked, keepDocked } = useOptions();
+  // Read when the panel closes, so switching it does not re-dock.
+  const keepDockedNow = useRef(keepDocked);
+  keepDockedNow.current = keepDocked;
   const log = useDebug();
   const on = threadId !== null && ready && enabled && locked;
 
   useEffect(() => {
     if (!on) return;
-    type Entry = { host: HTMLElement; panel: Panel; restore: () => void };
+    // `overlay`: in the phone drawer the shell is there, and `host` only keeps its place.
+    type Entry = { host: HTMLElement; panel: Panel; restore: () => void; overlay?: Overlay };
     const held = new Map<HTMLElement, Entry>();
 
     const release = (root: HTMLElement, reason: string) => {
       const entry = held.get(root);
       if (!entry) return;
       held.delete(root);
+      const shell = (entry.overlay?.host ?? entry.host).querySelector<HTMLElement>("[data-app-composer]");
       entry.host.remove();
       entry.restore();
-      log.current("undock", { from: "strip", reason });
+      entry.overlay?.dispose();
+      // Kept docked: a closed panel keeps the composer docked, stowed in its column.
+      const stowed = reason === "panel closed" && keepDockedNow.current && shell !== null;
+      if (stowed) stow(shell);
+      log.current("undock", { from: "strip", reason, stowed });
     };
     const hold = (root: HTMLElement, shell: HTMLElement, panel: Panel) => {
       const host = createStripHost();
       panel.column.appendChild(host);
-      const restore = moveInto(shell, host);
-      held.set(root, { host, panel, restore });
+      const overlay = isDrawer(panel) ? overlayFor(host, panel, "chat-dock-strip") : undefined;
+      const restore = moveInto(shell, overlay?.host ?? host);
+      held.set(root, { host, panel, restore, overlay });
       log.current("dock", { to: "strip", height: shell.getBoundingClientRect().height });
     };
     // The tab parked the shell in a strip host when the lock went on: take it over.
@@ -73,7 +83,7 @@ export function Strip() {
           hold(root, shell, panel);
         } else if (entry) {
           rehome(root, entry, panel);
-          if (!holdsShell(entry.host)) release(root, "shell replaced");
+          if (!holdsShell(entry.overlay?.host ?? entry.host)) release(root, "shell replaced");
         } else if (shell) hold(root, shell, panel);
         else takeOver(root, panel);
       }
