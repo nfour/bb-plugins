@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useDebug } from "./debug";
-import { findPanel, findShell, holdsShell, moveInto, observePanel, onShellHome, panelHidden, park } from "./dom";
+import { findPanel, findShell, holdsShell, isDrawer, moveInto, observePanel, onShellHome, overlayFor, panelHidden, park, type Overlay } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -22,22 +22,28 @@ export function Dock({ threadId }: { threadId: string }) {
     if (!slot || locked) return;
     const where = findPanel(slot);
     let restore: (() => void) | null = null;
+    // In the phone drawer the shell sits in an overlay and the slot only keeps its place.
+    let overlay: Overlay | null = null;
+    const held = () => overlay?.host ?? slot;
 
     const undock = (reason: string) => {
       if (!restore) return;
       restore();
       restore = null;
+      overlay?.dispose();
+      overlay = null;
       log.current("undock", { from: "tab", reason });
     };
     // Dock now, and keep docking: the shell can be rebuilt under a thread (a layout
     // change), which leaves the marker behind and a fresh shell in the column.
     const check = () => {
-      if (restore && !holdsShell(slot)) undock("shell replaced");
+      if (restore && !holdsShell(held())) undock("shell replaced");
       if (where && panelHidden(where)) return undock("panel closed");
       if (restore) return;
       const shell = findShell(threadId);
       if (!shell) return;
-      restore = moveInto(shell, slot);
+      if (where && isDrawer(where)) overlay = overlayFor(slot, where, "chat-dock-tab-host");
+      restore = moveInto(shell, held());
       log.current("dock", { to: "tab", height: shell.getBoundingClientRect().height });
     };
     check();
@@ -52,6 +58,7 @@ export function Dock({ threadId }: { threadId: string }) {
       stop();
       // Leaving because the lock went on: hand the shell to the strip rather than
       // bounce it through the column while the overlay catches up.
+      // (Not from the drawer: the strip docks there through its own overlay.)
       const shell = slot.querySelector<HTMLElement>("[data-app-composer]");
       if (restore && shell && lockedNow.current && where && !panelHidden(where)) {
         restore();

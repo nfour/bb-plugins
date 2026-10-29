@@ -53,3 +53,45 @@
   border-top: 1px solid var(--border-seam);
   padding: 0.5rem 0.75rem 0.75rem;
 }
+
+/*
+ * BB collapses the composer's footer (environment, permission mode, context
+ * meter) to opacity 0 when the composer is 30rem or narrower, or the pane 26rem
+ * or shorter, until it is expanded. In the panel that is nearly always, so a
+ * docked composer lost its footer. Docked, undo just that rule: `revert-layer`
+ * falls back to BB's own utility values for each breakpoint, and the footer's
+ * children already truncate to fit a narrow panel.
+ */
+[data-chat-dock-host] [data-follow-up-composer]:not([data-follow-up-composer-footer-visible]) [data-follow-up-composer-footer] {
+  opacity: revert-layer;
+  pointer-events: revert-layer;
+  min-height: revert-layer;
+  max-height: revert-layer;
+  margin-top: revert-layer;
+}
+
+/*
+ * The phone drawer's dock: inside BB's React root, laid over the drawer's
+ * bottom (see `overlayFor`). The layer copies the drawer's own geometry (top 0,
+ * `--bb-shell-height`, the bottom safe-area padding), which BB fits to the
+ * visual viewport while the keyboard is up, so the frame sits above it.
+ */
+.chat-dock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  height: var(--bb-shell-height, 100dvh);
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: var(--bb-safe-area-bottom, env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.chat-dock-overlay-frame {
+  background-color: var(--sidebar);
+  pointer-events: auto;
+}
+[data-chat-dock-spacer] {
+  padding: 0 !important;
+  border-width: 0 !important;
+}

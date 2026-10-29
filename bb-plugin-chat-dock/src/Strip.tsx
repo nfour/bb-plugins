@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useBbContext } from "@get-bb/plugin-sdk/app";
 import { useDebug } from "./debug";
-import { adopt, createStripHost, findPanes, holdsShell, moveInto, observePage, onShellHome, panelHidden, type Panel } from "./dom";
+import { adopt, createStripHost, findPanes, holdsShell, isDrawer, moveInto, observePage, onShellHome, overlayFor, panelHidden, type Overlay, type Panel } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -26,7 +26,8 @@ export function Strip() {
 
   useEffect(() => {
     if (!on) return;
-    type Entry = { host: HTMLElement; panel: Panel; restore: () => void };
+    // `overlay`: in the phone drawer the shell is there, and `host` only keeps its place.
+    type Entry = { host: HTMLElement; panel: Panel; restore: () => void; overlay?: Overlay };
     const held = new Map<HTMLElement, Entry>();
 
     const release = (root: HTMLElement, reason: string) => {
@@ -35,13 +36,15 @@ export function Strip() {
       held.delete(root);
       entry.host.remove();
       entry.restore();
+      entry.overlay?.dispose();
       log.current("undock", { from: "strip", reason });
     };
     const hold = (root: HTMLElement, shell: HTMLElement, panel: Panel) => {
       const host = createStripHost();
       panel.column.appendChild(host);
-      const restore = moveInto(shell, host);
-      held.set(root, { host, panel, restore });
+      const overlay = isDrawer(panel) ? overlayFor(host, panel, "chat-dock-strip") : undefined;
+      const restore = moveInto(shell, overlay?.host ?? host);
+      held.set(root, { host, panel, restore, overlay });
       log.current("dock", { to: "strip", height: shell.getBoundingClientRect().height });
     };
     // The tab parked the shell in a strip host when the lock went on: take it over.
@@ -73,7 +76,7 @@ export function Strip() {
           hold(root, shell, panel);
         } else if (entry) {
           rehome(root, entry, panel);
-          if (!holdsShell(entry.host)) release(root, "shell replaced");
+          if (!holdsShell(entry.overlay?.host ?? entry.host)) release(root, "shell replaced");
         } else if (shell) hold(root, shell, panel);
         else takeOver(root, panel);
       }

@@ -221,3 +221,92 @@ export function moveInto(shell: HTMLElement, host: HTMLElement): () => void {
 export function holdsShell(host: HTMLElement): boolean {
   return host.querySelector('[data-app-composer][data-app-composer-role="primary"]') !== null;
 }
+
+/** Whether a panel is the phone drawer rather than the split panel. */
+export function isDrawer({ panel }: Panel): boolean {
+  return panel.matches(SHELF);
+}
+
+export interface Overlay {
+  /** Where the shell goes: inside BB's React root, laid over the drawer's bottom. */
+  host: HTMLElement;
+  dispose(): void;
+}
+
+/**
+ * BB portals the phone drawer outside its React root, and React ignores every
+ * event whose target is outside the root it rendered into. A shell moved into
+ * the drawer took typing (the editor listens natively) but none of its buttons,
+ * and never expanded, so its footer never showed. In the drawer the shell stays
+ * inside the root instead, in a fixed host laid over the drawer's bottom, and
+ * the place it would have taken in the drawer (`spacer`) keeps the host's
+ * height, so nothing in the drawer is covered.
+ *
+ * Vertically the overlay is the drawer's twin in CSS (`styles.css`): the same
+ * `top: 0`, `--bb-shell-height` and bottom safe-area padding. BB shrinks that
+ * height to the visual viewport while the on-screen keyboard is up, so the
+ * composer rises above the keyboard with the drawer, in the same style pass and
+ * with no offset of its own. Horizontally it follows the drawer only while the
+ * drawer moves (opening, a drag, a transition), for a bounded run of frames.
+ */
+export function overlayFor(spacer: HTMLElement, panel: Panel, className: string): Overlay {
+  const drawer = panel.panel;
+  // A full-height layer that lets touches through, and the frame at its bottom that holds the shell.
+  const layer = document.createElement("div");
+  layer.className = "chat-dock-overlay";
+  layer.style.zIndex = String((Number.parseInt(getComputedStyle(drawer).zIndex, 10) || 45) + 1);
+  const host = document.createElement("div");
+  host.dataset.chatDockHost = "overlay";
+  host.className = `${className} chat-dock-overlay-frame`;
+  layer.appendChild(host);
+  (document.getElementById("root") ?? document.body).appendChild(layer);
+  spacer.dataset.chatDockSpacer = "";
+
+  const place = () => {
+    const rect = drawer.getBoundingClientRect();
+    layer.style.width = `${rect.width}px`;
+    layer.style.translate = `${rect.left}px 0`;
+  };
+  let frame = 0;
+  let until = 0;
+  const tick = () => {
+    place();
+    frame = performance.now() < until ? requestAnimationFrame(tick) : 0;
+  };
+  const follow = (ms: number) => {
+    until = performance.now() + ms;
+    if (!frame) frame = requestAnimationFrame(tick);
+  };
+  const dragging = () => follow(10_000);
+  const settled = () => follow(600);
+  const moving = () => follow(700);
+  drawer.addEventListener("pointerdown", dragging, true);
+  window.addEventListener("pointerup", settled, true);
+  window.addEventListener("pointercancel", settled, true);
+  drawer.addEventListener("transitionrun", moving);
+  // The host's height for the spacer; the drawer's size (a rotation, a new viewport) for the host.
+  const sized = new ResizeObserver(() => {
+    spacer.style.height = `${host.offsetHeight}px`;
+    place();
+  });
+  sized.observe(host);
+  sized.observe(drawer);
+  place();
+  moving();
+
+  return {
+    host,
+    dispose() {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      sized.disconnect();
+      drawer.removeEventListener("pointerdown", dragging, true);
+      window.removeEventListener("pointerup", settled, true);
+      window.removeEventListener("pointercancel", settled, true);
+      drawer.removeEventListener("transitionrun", moving);
+      layer.remove();
+      delete spacer.dataset.chatDockSpacer;
+      spacer.style.height = "";
+    },
+  };
+}

@@ -30,4 +30,6 @@ bb plugin dev ./bb-plugin-<id>             # rebuild + reload on every save
 
 - Timeline scroller `[data-page-scroll-viewport]`; rows `[data-timeline-row-id]` in DOM order, ids equal the timeline data's row ids. Virtualized at ≥ 20 top-level rows (`[data-timeline-window-spacer]` placeholders); the last row is always mounted.
 - Right panel `#thread-detail-secondary-panel` (`data-panel-size` 0 when hidden); on phone width it is `[data-testid=secondary-panel-shelf]`. Every plugin setting write remounts its content.
+- The phone drawer is portaled to `body`, outside `#root`: React ignores events on BB elements moved into it, so Chat Dock keeps the composer in `#root` and overlays it. The drawer's height is `--bb-shell-height`, which BB sets on `body` to the visual viewport height while the keyboard is up.
+- The composer footer `[data-follow-up-composer-footer]` fades out under BB's container queries (composer ≤ 30rem wide, or pane ≤ 26rem tall) until the composer is expanded.
 - `experimental_Icon` names are BB's own set, not lucide; a missing name renders the fallback.
