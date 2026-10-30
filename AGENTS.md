@@ -16,7 +16,7 @@ bb plugin dev ./bb-plugin-<id>             # rebuild + reload on every save
 - Install with `pnpm install` at the root, never `npm install` in a plugin.
 - `pnpm check` typechecks every plugin; `pnpm build` runs `bb plugin build` in each; `pnpm --filter <pkg> test` runs a plugin's `node --test` checks (pinned-turns, stay-at-bottom, diff-plus).
 - `bb plugin types ./bb-plugin-<id>` repins the SDK when bb upgrades.
-- Releases are tags `<id>/vX.Y.Z`; `.bb/plugins.json` indexes the plugins for git installs. Stay at Bottom is not released.
+- Releases are tags `<id>/vX.Y.Z`; `.bb/plugins.json` indexes the plugins for git installs. Stay at Bottom is not released. Each release bumps `package.json`'s version and adds an entry at the top of the plugin's `CHANGELOG.md` (what a user notices, not the code), in the same commit as the change.
 - Styling: no Tailwind utility classes. `bb plugin build` scopes every utility it finds anywhere in the folder (code, comments, README) as `:where([data-bb-plugin="<id>"], …) .flex`, and BB's own elements carry the same class names, so each rule is matched page-wide on every style recalc (most of a thread switch's style time with many plugins). Write prefixed classes (`pinned-*`, `chat-dock-*`, `diff-plus-*`) in `src/styles.css`, imported from `app.tsx`; check `dist/app.css` for `:where([data-bb-plugin=` after a build.
 
 ## Plugins
