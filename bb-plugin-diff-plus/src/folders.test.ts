@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ancestors, buildTree, filePattern, folderPattern, initialOpen, scopeOf, selectedBy, statusOf, type ChangeKind, type TreeDir, type TreeFile } from "./folders.ts";
+import { allDirs, ancestors, applyFilters, buildTree, extensionOf, filePattern, folderPattern, initialOpen, openAt, scopeOf, selectedBy, statusOf, type ChangeKind, type TreeDir, type TreeFile } from "./folders.ts";
 
-const file = (path: string, additions = 1, deletions = 0): TreeFile => ({ path, previousPath: null, additions, deletions, changeKind: "modified", untracked: false });
+const file = (path: string, additions = 1, deletions = 0): TreeFile => ({ path, previousPath: null, additions, deletions, changeKind: "modified", untracked: false, revision: "r1" });
 const shape = (dir: TreeDir): unknown => ({
   name: dir.name,
   count: dir.count,
@@ -39,6 +39,35 @@ test("buildTree sums counts and lines and folds single-folder chains", () => {
   assert.equal(tree.additions, 9);
   assert.equal(tree.deletions, 5);
   assert.equal(tree.dirs[0]!.dirs[0]!.path, "apps/docs/content");
+});
+
+test("buildTree keeps every folder on its own row without compact", () => {
+  const tree = buildTree([file("apps/docs/content/a.mdx"), file("apps/web/src/page.tsx")], false);
+  assert.deepEqual(shape(tree), {
+    name: "",
+    count: 2,
+    dirs: [
+      {
+        name: "apps",
+        count: 2,
+        dirs: [
+          { name: "docs", count: 1, dirs: [{ name: "content", count: 1, dirs: [], files: ["apps/docs/content/a.mdx"] }], files: [] },
+          { name: "web", count: 1, dirs: [{ name: "src", count: 1, dirs: [], files: ["apps/web/src/page.tsx"] }], files: [] },
+        ],
+        files: [],
+      },
+    ],
+    files: [],
+  });
+});
+
+test("openAt opens every folder, none, or the top levels", () => {
+  const tree = buildTree([file("a/x/deep/1.ts"), file("a/y.ts"), file("b/1.ts"), file("c.ts")]);
+  // A folder with one folder in it is drawn as one row: "a/x/deep" under "a".
+  assert.deepEqual([...allDirs(tree)].sort(), ["a", "a/x/deep", "b"]);
+  assert.deepEqual([...openAt(tree, "all")].sort(), ["a", "a/x/deep", "b"]);
+  assert.deepEqual([...openAt(tree, "none")], []);
+  assert.deepEqual([...openAt(tree, "top")].sort(), [...initialOpen(tree)].sort());
 });
 
 test("initialOpen opens breadth first within the budget", () => {
@@ -98,7 +127,7 @@ test("letters and tones follow VS Code's git decorations", () => {
   const as = (changeKind: ChangeKind, untracked = false): TreeFile => ({ ...file("a.ts"), changeKind, untracked });
   assert.deepEqual(
     [as("modified"), as("added"), as("added", true), as("deleted"), as("renamed"), as("type_changed")].map((f) => statusOf(f).mark + statusOf(f).tone),
-    ["Mmodified", "Aadded", "Uadded", "Ddeleted", "Radded", "Tmodified"],
+    ["Mmodified", "Aadded", "Aadded", "Ddeleted", "Radded", "Tmodified"],
   );
 });
 
@@ -110,4 +139,41 @@ test("a folder's tone is its files' when they agree, modified when they do not",
   assert.equal(tone("gone"), "deleted");
   assert.equal(tone("mixed"), "modified");
   assert.equal(tree.tone, "modified");
+});
+
+test("extensionOf reads extensions as BB's filter menu lists them", () => {
+  assert.equal(extensionOf("src/styles.CSS"), ".css");
+  assert.equal(extensionOf("a.b/Makefile"), "");
+  assert.equal(extensionOf(".gitignore"), "");
+  assert.equal(extensionOf("weird."), "");
+  assert.equal(extensionOf("x.test.ts"), ".ts");
+});
+
+test("applyFilters keeps the extensions picked and hides deleted and viewed files when asked", () => {
+  const gone: TreeFile = { ...file("old.css"), changeKind: "deleted" };
+  const files = [file("a.css"), file("b.ts"), file("Makefile"), gone];
+  const paths = (list: readonly TreeFile[]) => list.map((f) => f.path);
+  const all = { extensions: [], showDeleted: true, showViewed: true };
+  assert.equal(applyFilters(files, null, null), files);
+  assert.equal(applyFilters(files, all, null), files);
+  assert.deepEqual(paths(applyFilters(files, { ...all, extensions: [".css"] }, null)), ["a.css", "old.css"]);
+  assert.deepEqual(paths(applyFilters(files, { ...all, extensions: [".css", ""], showDeleted: false }, null)), ["a.css", "Makefile"]);
+  const viewed = new Map([["a.css", "r1"], ["b.ts", "r0"]]);
+  assert.deepEqual(paths(applyFilters(files, { ...all, showViewed: false }, viewed)), ["b.ts", "Makefile", "old.css"]);
+  assert.equal(applyFilters(files, { ...all, showViewed: false }, null), files);
+});
+
+test("buildTree synced keeps the list's order, a folder where its first file is", () => {
+  const files = ["b.ts", "a/x.ts", "z.ts", "a/y.ts"].map((path) => file(path));
+  const tree = buildTree(files, true, true);
+  assert.deepEqual(
+    tree.entries.map((entry) => ("dirs" in entry ? `${entry.path}/` : entry.path)),
+    ["b.ts", "a/", "z.ts"],
+  );
+  assert.deepEqual(tree.dirs[0]!.entries.map((entry) => ("dirs" in entry ? entry.path : entry.path)), ["a/x.ts", "a/y.ts"]);
+  const natural = buildTree(files);
+  assert.deepEqual(
+    natural.entries.map((entry) => ("dirs" in entry ? `${entry.path}/` : entry.path)),
+    ["a/", "b.ts", "z.ts"],
+  );
 });

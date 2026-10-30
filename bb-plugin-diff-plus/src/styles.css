@@ -16,8 +16,8 @@
  * The folder tree (src/Tree.tsx). Its column goes first in the box around BB's
  * file list, which the plugin flags with `data-diff-plus-tree`: "side" lays it
  * out as a row, the tree beside the list, and "stacked" (a narrow tab) as a
- * column, the tree above it. The toggle goes first in the tab's toolbar actions
- * and copies their look.
+ * column, the tree above it. The menu button goes first in the tab's toolbar
+ * actions and copies their look; it reads as pressed while the tree is shown.
  */
 div[data-diff-plus-tree="side"] {
   flex-direction: row;
@@ -52,7 +52,8 @@ div[data-diff-plus-tree="side"] > :not(.diff-plus-tree) > * {
     transition-duration: 0ms;
   }
 }
-.diff-plus-toggle[aria-pressed="true"] {
+.diff-plus-toggle[data-on],
+.diff-plus-toggle[data-state="open"] {
   background-color: var(--state-active);
   color: var(--foreground);
 }
@@ -73,6 +74,8 @@ div[data-diff-plus-tree="side"] > :not(.diff-plus-tree) > * {
 
 .diff-plus-tree {
   position: relative;
+  /* Its width is set, never taken from its content, so it can be a size container. */
+  container: diff-plus-tree / inline-size;
   display: flex;
   flex: none;
   flex-direction: column;
@@ -89,7 +92,11 @@ div[data-diff-plus-tree="side"] > :not(.diff-plus-tree) > * {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0.25rem 0.75rem 0.75rem;
+  /* No padding on the right: rows reach the scrollbar, and take that room (and
+     the pick's own 0.125rem) inside, as `--diff-plus-row-end`, so what is in them
+     stays where it was. */
+  padding: 0 0 0.75rem 0.75rem;
+  --diff-plus-row-end: 0.375rem;
 }
 
 div[data-diff-plus-tree="stacked"] > .diff-plus-tree {
@@ -109,7 +116,8 @@ div[data-diff-plus-tree="stacked"] > :not(.diff-plus-tree) {
   margin-top: 0.5rem;
 }
 div[data-diff-plus-tree="stacked"] .diff-plus-tree-scroll {
-  padding: 0 0.75rem 0.5rem;
+  padding: 0 0 0.5rem 0.75rem;
+  --diff-plus-row-end: 0.875rem;
 }
 div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
   display: none;
@@ -134,8 +142,12 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
 .diff-plus-row {
   display: flex;
   align-items: center;
-  border-radius: 6px;
   color: var(--muted-foreground);
+}
+/* What the path filter shows (a closed folder: something under it): the
+   selection's tint at about 15%. Before hover and the selection, which win. */
+.diff-plus-row[data-match] {
+  background-color: color-mix(in oklab, var(--state-active) 15%, transparent);
 }
 @media (hover: hover) {
   .diff-plus-row:hover {
@@ -147,8 +159,139 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
   background-color: var(--state-active);
   color: var(--foreground);
 }
+/* "Changes" stays at the top of the tree's view, on the panel's own colour; its
+   2px gap below is painted too, so rows never show through it. */
 .diff-plus-root {
+  position: sticky;
+  top: 0;
+  /* Above every sticky folder row: MAX_PINNED + 1 (Tree.tsx). */
+  z-index: 8;
+  background-color: var(--sidebar);
+  box-shadow: 0 2px 0 var(--sidebar);
   margin-bottom: 0.125rem;
+  gap: 0.375rem;
+  padding-right: var(--diff-plus-row-end);
+}
+/* A soft shadow under the block of fixed rows while the tree is scrolled:
+   strongest in the middle, fading down and to the sides. It is under the lowest
+   stuck folder row (`data-last`, set in Tree.tsx), or under "Changes" while it
+   is stuck and no folder row is (the tree root has `data-pinned` then). Every
+   sticky row carries one, clear until it is the lowest. */
+.diff-plus-root::after,
+.diff-plus-sticky::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 10px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 50% 100% at 50% 0, light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.2)), transparent);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.diff-plus-root[data-stuck]::after,
+.diff-plus-sticky[data-last]::after {
+  opacity: 1;
+}
+[data-pinned] .diff-plus-root::after {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .diff-plus-root::after,
+  .diff-plus-sticky::after {
+    transition: none;
+  }
+}
+/* The row itself never lights up; "Changes" does, as a chip of its own width,
+   so the fold button sits right after it. */
+.diff-plus-row.diff-plus-root:hover {
+  background-color: var(--sidebar);
+}
+/* An open folder's row sticks under "Changes" (its `top` and `z-index` are
+   inline, by depth, in Tree.tsx), inside its wrapper, which ends it. Opaque, so
+   the rows scrolling under it do not show; the tints below are layers over that
+   base instead of colours of their own. */
+.diff-plus-row.diff-plus-sticky {
+  position: sticky;
+  background-color: var(--sidebar);
+}
+.diff-plus-row.diff-plus-sticky[data-match] {
+  background-image: linear-gradient(
+    color-mix(in oklab, var(--state-active) 15%, transparent),
+    color-mix(in oklab, var(--state-active) 15%, transparent)
+  );
+}
+@media (hover: hover) {
+  .diff-plus-row.diff-plus-sticky:hover {
+    background-color: var(--sidebar);
+    background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  }
+}
+.diff-plus-row.diff-plus-sticky[data-active] {
+  background-color: var(--sidebar);
+  background-image: linear-gradient(var(--state-active), var(--state-active));
+}
+.diff-plus-root .diff-plus-pick.diff-plus-root-label {
+  flex: 0 1 auto;
+  border-radius: 6px;
+  padding: 0 0.375rem;
+}
+.diff-plus-root-label .diff-plus-name {
+  flex: 0 1 auto;
+}
+/* In a narrow column the root's count and +/- give way first: BB's toolbar shows
+   the same totals just above. With the view menu and the fold button
+   they fit down to about 254px (measured); 16rem is 256px. */
+@container diff-plus-tree (width < 16rem) {
+  .diff-plus-root .diff-plus-count,
+  .diff-plus-root .diff-plus-stats {
+    display: none;
+  }
+}
+.diff-plus-root-label:hover {
+  background-color: var(--state-hover);
+  color: var(--foreground);
+}
+.diff-plus-root-label[data-active] {
+  background-color: var(--state-active);
+  color: var(--foreground);
+}
+.diff-plus-fill {
+  flex: 1 1 0;
+}
+/* Opens or closes every folder, like BB's "Expand all files" beside the filter. */
+.diff-plus-fold-all {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+}
+.diff-plus-fold-all:hover {
+  background-color: var(--state-hover);
+  color: var(--foreground);
+}
+.diff-plus-fold-all:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+/* On, it takes the row's ink and the selection's tint. */
+.diff-plus-fold-all[data-on] {
+  color: var(--foreground);
+  background-color: var(--state-active);
+}
+
+/* The "Changes" row's buttons (view menu, fold-all) sit close together. */
+.diff-plus-root-buttons {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.125rem;
 }
 
 /* A folder's icon, as the button that opens and closes it. */
@@ -202,7 +345,7 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
   flex: 1;
   align-items: center;
   gap: 0.375rem;
-  padding-right: 0.125rem;
+  padding-right: var(--diff-plus-row-end);
   text-align: left;
   color: inherit;
 }
@@ -233,6 +376,50 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Synced view: a bar on the tree's left edge beside each row whose
+   file is on screen in the list; neighbouring rows' bars join into one line.
+   Bars slide between rows as the view moves; they fade only when appearing from
+   or leaving to nothing. */
+[data-show-in-view] .diff-plus-row:where(:not(.diff-plus-root, .diff-plus-sticky)) {
+  position: relative;
+}
+[data-show-in-view] .diff-plus-row:where(:not(.diff-plus-root))::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  /* Opaque, so bars sliding over each other (see `slide` in Tree.tsx) stay one colour. */
+  background-color: color-mix(in oklab, var(--foreground) 45%, var(--background));
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+/* While a bar slides, its opacity is the animation's, not the fade's. */
+[data-show-in-view] .diff-plus-row[data-sliding]::before {
+  transition: none;
+}
+[data-show-in-view] .diff-plus-row[data-in-view]::before {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-show-in-view] .diff-plus-row::before {
+    transition: none;
+  }
+}
+/* The list view: the name at its width, its folder after it, cut first. */
+.diff-plus-name.diff-plus-name--flat {
+  flex: 0 1 auto;
+}
+.diff-plus-dir {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+  opacity: 0.7;
+}
 .diff-plus-name[data-deleted] {
   text-decoration: line-through;
   text-decoration-color: color-mix(in oklab, currentColor 50%, transparent);
@@ -258,9 +445,192 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
 }
 
 .diff-plus-tree-note {
-  padding: 0.5rem 0.25rem;
+  padding: 0.5rem calc(var(--diff-plus-row-end) + 0.125rem) 0.5rem 0.25rem;
   color: var(--muted-foreground);
 }
 .diff-plus-tree-note[role="alert"] {
   color: var(--destructive);
+}
+
+/* The menus (src/TreeMenu.tsx), portalled to the page's end, in the
+   measures of BB's own menus (the Diff tab's filter menu): 12px/16px text,
+   5px 8px items, the check on the right. */
+.diff-plus-menu {
+  z-index: 50;
+  width: 15rem;
+  max-width: calc(100vw - 1rem);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--popover);
+  padding: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-md);
+  outline-style: none;
+}
+.diff-plus-separator {
+  margin: 4px -4px;
+  height: 1px;
+  background-color: var(--border);
+}
+.diff-plus-item {
+  position: relative;
+  display: flex;
+  cursor: default;
+  user-select: none;
+  align-items: center;
+  border-radius: 4px;
+  padding: 5px 32px 5px 8px;
+  outline-style: none;
+}
+.diff-plus-item--hint {
+  flex-direction: column;
+  align-items: stretch;
+}
+.diff-plus-item[data-highlighted] {
+  background-color: var(--state-hover);
+  color: var(--foreground);
+}
+.diff-plus-item[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.diff-plus-item-mark {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+.diff-plus-item-mark .diff-plus-icon {
+  width: 14px;
+  height: 14px;
+}
+.diff-plus-hint {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted-foreground);
+}
+
+/* The tree's options, indented under its switch. A disabled item greys itself;
+   the chip rows grey as a whole. */
+.diff-plus-nested {
+  margin-left: 12px;
+}
+.diff-plus-segment-row[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* A choice as a label and a row of chips ("Open at first  Top · All · None"). */
+.diff-plus-segment-row {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 8px;
+}
+.diff-plus-segment-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Without a label (Layout), the chips share the row. */
+.diff-plus-segment-line[data-full] .diff-plus-segments {
+  flex: 1;
+}
+.diff-plus-segment-line[data-full] .diff-plus-segment {
+  flex: 1;
+}
+/* The chips keep their size; a label too long for the rest wraps. */
+.diff-plus-segment-line > span {
+  min-width: 0;
+}
+.diff-plus-segments {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px;
+}
+.diff-plus-segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  cursor: default;
+  user-select: none;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  outline-style: none;
+}
+.diff-plus-segment[data-highlighted] {
+  background-color: var(--state-hover);
+  color: var(--foreground);
+}
+.diff-plus-segment[data-state="checked"] {
+  background-color: var(--state-active);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* BB's scope picker (Picker.tsx): a column its items can be ordered in, with the
+   recent commits under a heading. Matches BB's menu items: 5px 8px, 12px/16px. */
+[data-diff-plus-picker] {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  overflow-y: auto;
+}
+.diff-plus-picker-heading {
+  margin: 4px -4px 0;
+  border-top: 1px solid var(--border);
+  padding: 9px 8px 5px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.diff-plus-picker-note {
+  padding: 0 8px 5px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--destructive, var(--muted-foreground));
+}
+.diff-plus-picker-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  cursor: default;
+  user-select: none;
+  outline: none;
+}
+.diff-plus-picker-row:hover {
+  background: var(--state-hover);
+  color: var(--foreground);
+}
+.diff-plus-picker-row[data-busy] {
+  opacity: 0.6;
+  cursor: progress;
+}
+.diff-plus-picker-sha {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  color: var(--muted-foreground);
+}
+.diff-plus-picker-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
