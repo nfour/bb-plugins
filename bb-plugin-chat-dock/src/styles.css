@@ -31,6 +31,17 @@
   height: 1rem;
 }
 
+/* `>` in the chat column, `<` once docked in one of the plugin's hosts (see icons.tsx). */
+.chat-dock-glyph-docked {
+  display: none;
+}
+[data-chat-dock-host] .chat-dock-glyph-column {
+  display: none;
+}
+[data-chat-dock-host] .chat-dock-glyph-docked {
+  display: inline;
+}
+
 /* The Chat tab: the shell sits at the bottom of the tab body. */
 .chat-dock-tab {
   display: flex;
