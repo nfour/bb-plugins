@@ -15,7 +15,7 @@ The view button beside **Changes** switches between the tree and a flat list, an
 - **Compact folders:** a folder holding only one folder shares its row.
 - **Synced view:** the tree in the same order as BB's file list. **Scroll sync** keeps the files on screen in the list in view in the tree, and **Visible indicator lines** marks them with a bar.
 
-The folder button holds the rest: the tree on or off, how far folders open at first (All, Top or None) and how many recent commits to list.
+The folder button holds the rest: the tree on or off, how far folders open at first (All by default, Top or None) and how many recent commits to list.
 
 ## Layout
 

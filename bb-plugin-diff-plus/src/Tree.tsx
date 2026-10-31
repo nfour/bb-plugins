@@ -453,11 +453,11 @@ const LOADING: Files = { status: "loading" };
 function useChangedFiles(environmentId: string | null, scope: Scope | null): Files {
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
-  const [files, setFiles] = useState<Files>({ status: "loading" });
+  const [files, setFiles] = useState<Files>(LOADING);
   const scopeKey = scope ? JSON.stringify(scope) : null;
   const forKey = `${environmentId}|${scopeKey}`;
   useEffect(() => {
-    setFiles({ status: "loading" });
+    setFiles(LOADING);
     if (!environmentId || !scope) return;
     let disposed = false;
     let controller: AbortController | null = null;
@@ -612,42 +612,44 @@ interface Lit {
 // 0.5rem at the root: room between the synced-view line on the left edge and the icons.
 const indent = (depth: number) => ({ paddingLeft: `${0.5 + depth * 0.75}rem` });
 
-const Rows = memo(function Rows({ dir, depth, open, room, active, toggle, pick, lit }: RowsProps) {
-  const fileRow = (file: TreeFile) => {
-    const status = statusOf(file);
-    return (
-      <div
-        key={file.path}
-        className="diff-plus-row"
-        data-active={active === `file:${file.path}` || undefined}
-        data-match={lit?.files.has(file.path) || undefined}
-        data-path={file.path}
-        style={indent(depth)}
+/** A file's row: in the tree under its folder, or in the flat view with its folder beside its name. */
+const FileRow = ({ file, depth, active, pick, lit, flat }: Pick<RowsProps, "active" | "pick" | "lit"> & { file: TreeFile; depth: number; flat?: boolean }) => {
+  const status = statusOf(file);
+  return (
+    <div
+      className="diff-plus-row"
+      data-active={active === `file:${file.path}` || undefined}
+      data-match={lit?.files.has(file.path) || undefined}
+      data-path={file.path}
+      style={indent(depth)}
+    >
+      <button
+        type="button"
+        className="diff-plus-pick"
+        role="treeitem"
+        aria-selected={active === `file:${file.path}`}
+        title={file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}
+        onClick={() => pick("file", file.path)}
       >
-        <button
-          type="button"
-          className="diff-plus-pick"
-          role="treeitem"
-          aria-selected={active === `file:${file.path}`}
-          title={file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}
-          onClick={() => pick("file", file.path)}
-        >
-          <FileIcon icon={fileIcon(file.path)} />
-          <span className="diff-plus-name" data-deleted={file.changeKind === "deleted" || undefined}>
-            {fileName(file.path)}
-          </span>
-          <Stats additions={file.additions} deletions={file.deletions} />
-          <span className="diff-plus-mark" data-tone={status.tone} title={status.title}>
-            {status.mark}
-          </span>
-        </button>
-      </div>
-    );
-  };
+        <FileIcon icon={fileIcon(file.path)} />
+        <span className={flat ? "diff-plus-name diff-plus-name--flat" : "diff-plus-name"} data-deleted={file.changeKind === "deleted" || undefined}>
+          {fileName(file.path)}
+        </span>
+        {flat && <span className="diff-plus-dir">{dirName(file.path)}</span>}
+        <Stats additions={file.additions} deletions={file.deletions} />
+        <span className="diff-plus-mark" data-tone={status.tone} title={status.title}>
+          {status.mark}
+        </span>
+      </button>
+    </div>
+  );
+};
+
+const Rows = memo(function Rows({ dir, depth, open, room, active, toggle, pick, lit }: RowsProps) {
   return (
     <>
       {dir.entries.map((entry) => {
-        if (!("dirs" in entry)) return fileRow(entry);
+        if (!("dirs" in entry)) return <FileRow key={entry.path} file={entry} depth={depth} active={active} pick={pick} lit={lit} />;
         const child = entry;
         const expanded = open.has(child.path);
         // An open folder's row sticks under "Changes" while its rows are above (and
@@ -661,6 +663,7 @@ const Rows = memo(function Rows({ dir, depth, open, room, active, toggle, pick, 
               data-active={active === `dir:${child.path}` || undefined}
               data-match={(expanded ? lit?.whole.has(child.path) : lit?.dirs.has(child.path)) || undefined}
               data-path={child.path}
+              data-open={expanded || undefined}
               style={sticky ? { ...indent(depth), top: PINNED_TOP + depth * ROW_HEIGHT, zIndex: MAX_PINNED - depth } : indent(depth)}
             >
               {/* The folder's icon opens and closes it (no chevrons: the open and closed icons show the state). */}
@@ -705,7 +708,7 @@ const Rows = memo(function Rows({ dir, depth, open, room, active, toggle, pick, 
   );
 });
 
-/** The list view: every file on its own row, its folder beside its name. */
+/** The flat view: every file on its own row, its folder beside its name. */
 const FlatRows = memo(function FlatRows({
   files,
   active,
@@ -714,38 +717,9 @@ const FlatRows = memo(function FlatRows({
 }: Omit<RowsProps, "dir" | "depth" | "open" | "room" | "toggle"> & { files: readonly TreeFile[] }) {
   return (
     <>
-      {files.map((file) => {
-        const status = statusOf(file);
-        return (
-          <div
-            key={file.path}
-            className="diff-plus-row"
-            data-active={active === `file:${file.path}` || undefined}
-            data-match={lit?.files.has(file.path) || undefined}
-            data-path={file.path}
-            style={indent(0)}
-          >
-            <button
-              type="button"
-              className="diff-plus-pick"
-              role="treeitem"
-              aria-selected={active === `file:${file.path}`}
-              title={file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}
-              onClick={() => pick("file", file.path)}
-            >
-              <FileIcon icon={fileIcon(file.path)} />
-              <span className="diff-plus-name diff-plus-name--flat" data-deleted={file.changeKind === "deleted" || undefined}>
-                {fileName(file.path)}
-              </span>
-              <span className="diff-plus-dir">{dirName(file.path)}</span>
-              <Stats additions={file.additions} deletions={file.deletions} />
-              <span className="diff-plus-mark" data-tone={status.tone} title={status.title}>
-                {status.mark}
-              </span>
-            </button>
-          </div>
-        );
-      })}
+      {files.map((file) => (
+        <FileRow key={file.path} file={file} depth={0} active={active} pick={pick} lit={lit} flat />
+      ))}
     </>
   );
 });
@@ -838,27 +812,21 @@ function useInView(tab: DiffTab, treeRef: React.RefObject<HTMLDivElement | null>
     if (!on) return;
     let paths: readonly string[] = [];
     let marked: Element[] = [];
-    const rowFor = (root: Element, path: string) => {
-      for (const candidate of withParents(path).reverse()) {
-        const row = root.querySelector(`.diff-plus-row[data-path="${CSS.escape(candidate)}"]`);
-        if (row) return row;
-      }
-      return null;
-    };
     const mark = () => {
       const root = treeRef.current;
+      const all = root ? [...root.querySelectorAll(".diff-plus-row[data-path]")] : [];
+      const byPath = new Map(all.map((row) => [row.getAttribute("data-path"), row]));
       const rows = new Set<Element>();
-      if (root)
-        for (const path of paths) {
-          const row = rowFor(root, path);
-          if (row) rows.add(row);
-        }
+      for (const path of paths) {
+        // The file's row, else the closest closed folder above it.
+        const row = withParents(path).reverse().map((candidate) => byPath.get(candidate)).find(Boolean);
+        if (row) rows.add(row);
+      }
       // An open folder's row inside the line carries it too (its files are
       // marked, not it), so the line runs on unbroken: one whose row above is
       // marked and whose next file (past more open folders) is.
       if (root && rows.size) {
-        const all = [...root.querySelectorAll(".diff-plus-row[data-path]")];
-        const open = (row: Element) => !!row.querySelector(':scope > .diff-plus-twisty[aria-expanded="true"]');
+        const open = (row: Element) => row.hasAttribute("data-open");
         all.forEach((row, index) => {
           if (!open(row) || rows.has(row) || !rows.has(all[index - 1]!)) return;
           let after = index + 1;
@@ -880,7 +848,7 @@ function useInView(tab: DiffTab, treeRef: React.RefObject<HTMLDivElement | null>
     remark.current = mark;
     // The tree follows the list: when the marked rows leave the tree's own
     // view, it scrolls just far enough to show them (their top, if they are
-    // taller than it). Not while the reader is moving the tree itself. It waits
+    // taller than it), to a whole row so none is left half under the stuck rows. Not while the reader is moving the tree itself. It waits
     // for the list to be still (`askFollow`), since each follow starts a smooth
     // scroll and a list scrolled fast back and forth would restart it all the time.
     const touch = (event: Event) => {
@@ -889,36 +857,65 @@ function useInView(tab: DiffTab, treeRef: React.RefObject<HTMLDivElement | null>
     const inputs = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
     for (const type of inputs) tab.list.addEventListener(type, touch, { capture: true, passive: true });
     const follow = () => {
-      const scroller = treeRef.current?.closest<HTMLElement>(".diff-plus-tree-scroll");
-      if (!scroller || !marked.length || performance.now() - touched.current < FOLLOW_PAUSE_MS) return;
-      if (scroller.scrollHeight <= scroller.clientHeight) return;
+      const root = treeRef.current;
+      const scroller = root?.closest<HTMLElement>(".diff-plus-tree-scroll");
+      if (!root || !scroller || !marked.length || performance.now() - touched.current < FOLLOW_PAUSE_MS) return;
       const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const box = scroller.getBoundingClientRect();
-      // "Changes" and the stuck folder rows cover the top of the view, down to the lowest of them.
-      const changes = treeRef.current?.querySelector(".diff-plus-root")?.getBoundingClientRect().bottom ?? box.top;
-      const covered = treeRef.current?.querySelector(".diff-plus-sticky[data-last]")?.getBoundingClientRect().bottom ?? changes;
-      const view = { top: covered, bottom: box.bottom, height: box.bottom - covered };
+      // Content coordinates: where a row sits in the scroller with scrollTop 0. A stuck
+      // folder row is placed by its wrapper, which is where it would be unstuck.
+      const natural = (row: Element) => {
+        const at = (row.classList.contains("diff-plus-sticky") ? row.parentElement! : row).getBoundingClientRect();
+        return at.top - box.top + scroller.scrollTop;
+      };
+      const rows = root.querySelectorAll(".diff-plus-row[data-path]");
+      const lastRow = rows[rows.length - 1];
+      const end = lastRow ? natural(lastRow) + ROW_HEIGHT : 0;
+      if (end <= scroller.clientHeight) return;
+      const stack = [...root.querySelectorAll<HTMLElement>(".diff-plus-sticky")].map((row) => {
+        const wrapper = row.parentElement!;
+        return { at: parseFloat(row.style.top), top: natural(row), bottom: wrapper.getBoundingClientRect().bottom - box.top + scroller.scrollTop };
+      });
+      // What the stuck rows cover at scrollTop `at`: "Changes", and the folder rows stuck under it.
+      const coveredAt = (at: number) => {
+        let covered = PINNED_TOP;
+        for (const row of stack) if (row.top - at < row.at && row.bottom - at > row.at + ROW_HEIGHT) covered = Math.max(covered, row.at + ROW_HEIGHT);
+        return covered;
+      };
       let top = Infinity;
       let bottom = -Infinity;
       for (const row of marked) {
-        const rect = row.getBoundingClientRect();
-        top = Math.min(top, rect.top);
-        bottom = Math.max(bottom, rect.bottom);
+        top = Math.min(top, natural(row));
+        bottom = Math.max(bottom, natural(row) + ROW_HEIGHT);
       }
+      const tall = (at: number) => bottom - top > scroller.clientHeight - coveredAt(at) - FOLLOW_MARGIN;
+      // Whether the marked rows are in view at scrollTop `at` (their top, if they are taller than the view).
+      const shows = (at: number, strict = true) =>
+        top - at >= coveredAt(at) && (bottom - at <= scroller.clientHeight || (!strict && tall(at)));
+      const maxTop = scroller.scrollHeight - scroller.clientHeight;
+      const go = (to: number) => {
+        const clamped = Math.max(0, Math.min(maxTop, to));
+        if (Math.abs(clamped - scroller.scrollTop) > 0.5) scroller.scrollTo({ top: clamped, behavior: smooth ? "smooth" : "auto" });
+      };
+      // Rows and the stuck stack are on one ROW_HEIGHT grid, so a row is never left half under
+      // the stack at a multiple of it: of the two nearest, take one that keeps the marked rows in view.
+      const snap = (to: number) => {
+        const near = [Math.floor(to / ROW_HEIGHT) * ROW_HEIGHT, Math.ceil(to / ROW_HEIGHT) * ROW_HEIGHT].filter((at) => at >= 0 && at <= maxTop);
+        const good = near.filter((at) => shows(at, false));
+        const pool = good.length ? good : near;
+        return pool.length ? pool.reduce((best, at) => (Math.abs(at - to) < Math.abs(best - to) ? at : best)) : to;
+      };
       // The list at an end puts the tree at the same end (a list that fits is at both),
       // but only if the marked rows stay in view there: they come first.
       const list = listScroller(tab);
       if (list && list.scrollHeight - list.clientHeight > 1) {
-        if (list.scrollTop <= 1 && top + scroller.scrollTop >= changes && bottom + scroller.scrollTop <= box.bottom)
-          return scroller.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
-        const toEnd = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
-        if (list.scrollTop + list.clientHeight >= list.scrollHeight - 1 && top - toEnd >= covered)
-          return scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+        if (list.scrollTop <= 1 && shows(0)) return go(0);
+        const last = snap(Math.max(0, end - scroller.clientHeight));
+        if (list.scrollTop + list.clientHeight >= list.scrollHeight - 1 && shows(last)) return go(last);
       }
-      if (top >= view.top && bottom <= view.bottom) return;
-      const delta =
-        bottom - top > view.height - 2 * FOLLOW_MARGIN || top < view.top ? top - view.top - FOLLOW_MARGIN : bottom - view.bottom + FOLLOW_MARGIN;
-      scroller.scrollBy({ top: delta, behavior: smooth ? "smooth" : "auto" });
+      const now = scroller.scrollTop;
+      if (shows(now)) return;
+      go(snap(tall(now) || top - now < coveredAt(now) ? top - coveredAt(now) : bottom - scroller.clientHeight + FOLLOW_MARGIN));
     };
     let followTimer = 0;
     let firstAsk = 0;
@@ -962,8 +959,8 @@ function useInView(tab: DiffTab, treeRef: React.RefObject<HTMLDivElement | null>
 }
 
 const ROW_HEIGHT = 24;
-/** Where the stuck folder rows start: right under "Changes" itself, over its 2px gap (as in the CSS). */
-const PINNED_TOP = 24;
+/** "Changes" is one row tall, with 2px below it (`margin-bottom` in the CSS): where the rows start. */
+const PINNED_TOP = ROW_HEIGHT + 2;
 /** Most folder rows stuck at once ("Changes" is above them all: z-index MAX_PINNED + 1 in the CSS). */
 const MAX_PINNED = 7;
 /** Share of the tree's view the stuck rows may take. */
@@ -972,82 +969,56 @@ const PINNED_SHARE = 0.4;
 /**
  * Sticky folder rows are the browser's: an open folder's row (`diff-plus-sticky`,
  * see `Rows`) is `position: sticky` at `PINNED_TOP + depth * ROW_HEIGHT` in its
- * own wrapper. This hook only places the one shadow: `data-last` on the lowest
- * stuck folder row (or none, and `data-pinned` on the tree root, for "Changes"
- * to cast it), and `data-stuck` on "Changes" once the tree has scrolled. Per
- * level it binary-searches the non-sticky rows (sticky ones are out of flow
- * order on screen) for the first one past that level's spot; its open folders
- * give the folder at that depth, stuck once its wrapper's top is up to the spot.
+ * own wrapper. This hook feeds the shade (`.diff-plus-shade`): the bottom of the
+ * fixed rows as `--diff-plus-covered` on the tree root, and `data-stuck` on it
+ * once the tree has scrolled. It returns how many folder levels may stick: what
+ * 40% of the tree's view holds, up to MAX_PINNED.
  */
-function useStuckRows(treeRef: React.RefObject<HTMLDivElement | null>, on: boolean, room: number) {
-  const rows = useRef<ArrayLike<HTMLElement> | null>(null);
-  const last = useRef<Element | null>(null);
+function useStuckRows(treeRef: React.RefObject<HTMLDivElement | null>, on: boolean, hasRows: boolean): number {
+  const [room, setRoom] = useState(MAX_PINNED);
+  const sticky = useRef<NodeListOf<HTMLElement> | null>(null);
   const read = useRef<() => void>(() => {});
   read.current = () => {
     const root = treeRef.current;
     const scroller = root?.closest<HTMLElement>(".diff-plus-tree-scroll");
-    const stuck = !!scroller && scroller.scrollTop > 0;
-    let lowest: HTMLElement | null = null;
-    if (on && root && scroller && stuck) {
-      const stackTop = scroller.getBoundingClientRect().top + PINNED_TOP;
-      const list = (rows.current ??= root.querySelectorAll<HTMLElement>(".diff-plus-row[data-path]:not(.diff-plus-sticky)"));
-      let lowestBottom = -Infinity;
-      let parent: Element | null = null;
-      for (let level = 0; level < room; level++) {
-        const spot = stackTop + level * ROW_HEIGHT;
-        let low = 0;
-        let high = list.length - 1;
-        let found = -1;
-        while (low <= high) {
-          const middle = (low + high) >> 1;
-          if (list[middle]!.getBoundingClientRect().bottom > spot) {
-            found = middle;
-            high = middle - 1;
-          } else low = middle + 1;
-        }
-        if (found < 0) break;
-        // The open folders holding that row, outermost first.
-        const chain: HTMLElement[] = [];
-        for (let group = list[found]!.closest('[role="group"]'); group; group = group.parentElement?.closest('[role="group"]') ?? null) {
-          const folder = group.previousElementSibling;
-          if (folder instanceof HTMLElement) chain.unshift(folder);
-        }
-        const folder = chain[level];
-        const wrapper = folder?.parentElement;
-        // The wrapper's top is where the row would be without sticking.
-        if (!folder || !wrapper || wrapper.getBoundingClientRect().top > spot || (parent && !parent.contains(folder))) break;
-        const bottom = folder.getBoundingClientRect().bottom;
-        if (bottom > lowestBottom) {
-          lowest = folder;
-          lowestBottom = bottom;
-        }
-        parent = wrapper;
+    if (!root || !scroller) return;
+    const stuck = scroller.scrollTop > 0;
+    let covered = root.querySelector(".diff-plus-root")?.getBoundingClientRect().bottom ?? 0;
+    if (on && stuck) {
+      sticky.current ??= root.querySelectorAll<HTMLElement>(".diff-plus-sticky");
+      for (const row of sticky.current) {
+        const at = row.getBoundingClientRect();
+        // Stuck: below where its wrapper (its containing block) starts, which is where it would be unstuck.
+        if (at.top - row.parentElement!.getBoundingClientRect().top > 0.5) covered = Math.max(covered, at.bottom);
       }
     }
-    // Writes after the reads, so nothing here forces a layout.
-    root?.querySelector(".diff-plus-root")?.toggleAttribute("data-stuck", stuck);
-    if (lowest !== last.current) {
-      last.current?.removeAttribute("data-last");
-      lowest?.setAttribute("data-last", "");
-      last.current = lowest;
-      root?.toggleAttribute("data-pinned", lowest !== null);
-    }
+    const top = scroller.getBoundingClientRect().top;
+    root.toggleAttribute("data-stuck", stuck);
+    root.style.setProperty("--diff-plus-covered", `${covered - top}px`);
   };
   // Layout effect: a render that moved the rows never paints a stale shadow first.
   useLayoutEffect(() => {
-    rows.current = null;
+    sticky.current = null;
     read.current();
   });
-  useEffect(() => {
-    // On the document, capturing: the tree's scroller mounts after loading
-    // and can be replaced, and scroll events do not bubble.
-    const onScroll = (event: Event) => {
-      if (!(event.target instanceof Element) || !event.target.matches(".diff-plus-tree-scroll") || !event.target.contains(treeRef.current)) return;
+  useLayoutEffect(() => {
+    const scroller = treeRef.current?.closest<HTMLElement>(".diff-plus-tree-scroll");
+    if (!scroller) return;
+    const measure = () => {
+      setRoom(Math.min(MAX_PINNED, Math.floor((PINNED_SHARE * scroller.clientHeight) / ROW_HEIGHT)));
       read.current();
     };
-    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
-    return () => document.removeEventListener("scroll", onScroll, { capture: true });
-  }, [treeRef]);
+    const onScroll = () => read.current();
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, [hasRows, treeRef]);
+  return room;
 }
 
 interface TreeColumnProps {
@@ -1063,15 +1034,18 @@ interface TreeColumnProps {
 }
 
 function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: TreeColumnProps) {
+  const editOpen = useCallback(
+    (edit: (paths: Set<string>) => Set<string>) => setOpen((previous) => previous && { ...previous, paths: edit(previous.paths) }),
+    [setOpen],
+  );
   const toggle = useCallback(
     (path: string) =>
-      setOpen((previous) => {
-        if (!previous) return previous;
-        const next = new Set(previous.paths);
+      editOpen((paths) => {
+        const next = new Set(paths);
         if (!next.delete(path)) next.add(path);
-        return { ...previous, paths: next };
+        return next;
       }),
-    [setOpen],
+    [editOpen],
   );
   const known = useMemo(() => new Set(files.status === "ready" ? files.files.map((file) => file.path) : []), [files]);
   const { view, synced, syncScroll, syncBars } = useOptions();
@@ -1105,15 +1079,13 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
         void setFilter(tab, "");
         return;
       }
-      if (tree) {
-        setOpen((previous) => {
-          if (!previous) return previous;
-          const next = new Set(previous.paths);
+      if (tree)
+        editOpen((paths) => {
+          const next = new Set(paths);
           for (const dir of ancestors(tree, path)) next.add(dir);
           if (kind === "dir") next.add(path);
-          return { ...previous, paths: next };
+          return next;
         });
-      }
       const pattern = kind === "dir" ? folderPattern(path) : filePattern(path, files.status === "ready" ? files.files : []);
       void setFilter(tab, pattern).then((done) => {
         if (!done) return;
@@ -1121,27 +1093,15 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
         if (kind === "file") void expandFile(tab, path);
       });
     },
-    [active, tab, tree, files, setOpen],
+    [active, tab, tree, files, editOpen],
   );
 
   const setAllOpen = useCallback(
-    (all: boolean) => tree && setOpen((previous) => previous && { ...previous, paths: all ? allDirs(tree) : new Set() }),
-    [tree, setOpen],
+    (all: boolean) => tree && editOpen(() => (all ? allDirs(tree) : new Set())),
+    [tree, editOpen],
   );
   const anyOpen = useMemo(() => (tree && paths ? [...allDirs(tree)].some((dir) => paths.has(dir)) : false), [tree, paths]);
-  // How many folder rows may stick: what 40% of the tree's view holds, up to MAX_PINNED.
-  const [room, setRoom] = useState(MAX_PINNED);
-  const hasRows = !!tree?.count && !!paths;
-  useLayoutEffect(() => {
-    const scroller = treeRef.current?.closest<HTMLElement>(".diff-plus-tree-scroll");
-    if (!scroller) return;
-    const measure = () => setRoom(Math.min(MAX_PINNED, Math.floor((PINNED_SHARE * scroller.clientHeight) / ROW_HEIGHT)));
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(scroller);
-    return () => observer.disconnect();
-  }, [hasRows]);
-  useStuckRows(treeRef, !flat, room);
+  const room = useStuckRows(treeRef, !flat, !!tree?.count && !!paths);
 
   if (!scope) return <p className="diff-plus-tree-note">No folder tree for this view.</p>;
   if (files.status === "loading") return <p className="diff-plus-tree-note">Loading files…</p>;
@@ -1157,7 +1117,14 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
     return <p className="diff-plus-tree-note">{hidden ? "No files match the filter." : "No changes."}</p>;
   }
   return (
-    <div role="tree" aria-label="Changed files by folder" ref={treeRef} data-show-in-view={(synced && syncBars) || undefined}>
+    <div
+      role="tree"
+      aria-label="Changed files by folder"
+      ref={treeRef}
+      data-show-in-view={(synced && syncBars) || undefined}
+      data-follows={(synced && syncScroll) || undefined}
+    >
+      <div className="diff-plus-shade" aria-hidden />
       {/* "Changes" shows every file and carries the selection itself, so the fold
           button beside it and the totals stay on the plain background. */}
       <div className="diff-plus-row diff-plus-root">

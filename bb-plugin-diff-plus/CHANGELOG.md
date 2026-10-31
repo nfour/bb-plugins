@@ -2,7 +2,7 @@
 
 Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
-## 0.1.2 (2026-10-30)
+## 0.1.2 (2026-10-31)
 
 - The folder button opens a menu: the tree on or off, how far folders open at first, and recent commits.
 - A view menu beside **Changes** switches between the tree and a flat list, and holds Compact folders and Synced view (the tree in the list's order, with optional scroll sync and indicator lines).
@@ -11,6 +11,10 @@ Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 - Open folders stay pinned at the top while you scroll through them.
 - Coming back to the Diff tab after opening a file puts back your open folders, the picked row and your place in the list.
 - Untracked files show A, like added ones.
+- Folders open fully at first by default (All); Top and None are in the folder button's menu.
+- The view switch reads Tree / Flat.
+- With Scroll sync, the tree lands on a whole row when it follows the list, so no row hides half under the pinned folders.
+- The shadow under pinned folders no longer leaves stale paint behind in Brave.
 
 ## 0.1.1 (2026-10-29)
 

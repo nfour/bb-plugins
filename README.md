@@ -25,7 +25,11 @@ Plugins for [BB](https://getbb.app), one folder each.
 
 **Diff Plus**
 
-![The folder tree beside the file list in BB's Diff tab, one folder picked](docs/screenshots/diff-plus-tree.png)
+![The folder tree in BB's Diff tab beside the chat, the src folder picked: its row highlighted and the list filtered to it](docs/screenshots/diff-plus-tree.png)
+
+![In a narrow panel the tree sits above the file list](docs/screenshots/diff-plus-stacked.png)
+
+![Flat view: every changed file on its own row with its folder beside it, one file picked](docs/screenshots/diff-plus-flat.png)
 
 ## Install
 

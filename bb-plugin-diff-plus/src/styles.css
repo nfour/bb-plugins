@@ -99,6 +99,11 @@ div[data-diff-plus-tree="side"] > :not(.diff-plus-tree) > * {
   --diff-plus-row-end: 0.375rem;
 }
 
+/* One row of room at the end, so the tree can follow to a whole row there. */
+.diff-plus-tree-scroll [data-follows] {
+  padding-bottom: 1.5rem;
+}
+
 div[data-diff-plus-tree="stacked"] > .diff-plus-tree {
   width: auto;
   max-width: none;
@@ -173,33 +178,34 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
   padding-right: var(--diff-plus-row-end);
 }
 /* A soft shadow under the block of fixed rows while the tree is scrolled:
-   strongest in the middle, fading down and to the sides. It is under the lowest
-   stuck folder row (`data-last`, set in Tree.tsx), or under "Changes" while it
-   is stuck and no folder row is (the tree root has `data-pinned` then). Every
-   sticky row carries one, clear until it is the lowest. */
-.diff-plus-root::after,
-.diff-plus-sticky::after {
+   strongest in the middle, fading down and to the sides. It hangs off a
+   zero-height sticky element that sits at the scroller's top at every scroll
+   position (a shadow on the sticky rows themselves was left stale by Chrome
+   when a row un-stuck in a smooth scroll). Tree.tsx sets `--diff-plus-covered`
+   to the bottom of the fixed rows and `data-stuck` once the tree has scrolled. */
+.diff-plus-shade {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  height: 0;
+  pointer-events: none;
+}
+.diff-plus-shade::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 100%;
+  top: var(--diff-plus-covered, 0px);
   height: 10px;
-  pointer-events: none;
   background: radial-gradient(ellipse 50% 100% at 50% 0, light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.2)), transparent);
   opacity: 0;
   transition: opacity 150ms ease-out;
 }
-.diff-plus-root[data-stuck]::after,
-.diff-plus-sticky[data-last]::after {
+[data-stuck] > .diff-plus-shade::after {
   opacity: 1;
 }
-[data-pinned] .diff-plus-root::after {
-  opacity: 0;
-}
 @media (prefers-reduced-motion: reduce) {
-  .diff-plus-root::after,
-  .diff-plus-sticky::after {
+  .diff-plus-shade::after {
     transition: none;
   }
 }

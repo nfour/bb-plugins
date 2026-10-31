@@ -30,7 +30,7 @@ export const RECENT_COUNTS = [10, 20, 50] as const;
 const KEY = "bb-plugin-diff-plus:options";
 /** The on/off choice from before the options, kept so it carries over. */
 const OPEN_KEY = "bb-plugin-diff-plus:tree";
-const DEFAULTS: Options = { open: true, depth: "top", view: "tree", compact: true, synced: true, syncScroll: false, syncBars: false, recent: true, recentCount: 10 };
+const DEFAULTS: Options = { open: true, depth: "all", view: "tree", compact: true, synced: true, syncScroll: false, syncBars: false, recent: true, recentCount: 10 };
 
 const listeners = new Set<() => void>();
 let cached: { raw: string | null; legacy: string | null; options: Options } | null = null;

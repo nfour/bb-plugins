@@ -6,7 +6,11 @@ A BB plugin. It adds what the Diff Tree plugin offered and BB's own Diff tab lac
 - **Views.** Tree or flat list, compact folders, and Synced view: the tree in BB's list order, optionally scrolling with the list and marking the files on screen with a bar.
 - **Recent commits.** The last 10/20/50 commits in BB's scope picker. BB lists only commits since the merge base, so picking one moves the checkout's merge base back (`show_recent` in `server.ts`) and any other scope, an abandoned pick, or the plugin stopping or starting puts it back; each move is logged (`bb plugin logs diff-plus`).
 
-![The folder tree beside the file list in BB's Diff tab, one folder picked](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/diff-plus-tree.png)
+![The folder tree in BB's Diff tab beside the chat, the src folder picked: its row highlighted and the list filtered to it](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/diff-plus-tree.png)
+
+![In a narrow panel the tree sits above the file list](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/diff-plus-stacked.png)
+
+![Flat view: every changed file on its own row with its folder beside it, one file picked](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/diff-plus-flat.png)
 
 Quoting selected lines needs no plugin: BB's diff has its own "Add to chat" (the "+" beside a line, or a click on one line number and a Shift-click on another).
 

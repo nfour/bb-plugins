@@ -33,7 +33,7 @@ const keepOpen = (event: Event) => event.preventDefault();
 
 const LAYOUTS: Choice[] = [
   { value: "tree", label: "Tree", icon: LIST_TREE_ICON },
-  { value: "list", label: "List", icon: LIST_ICON },
+  { value: "list", label: "Flat", icon: LIST_ICON },
 ];
 
 /**
@@ -101,7 +101,7 @@ export function ViewMenu() {
             >
               <Check />
               <span>Visible indicator lines</span>
-              <span className="diff-plus-hint">A bar on the tree's edge next to each file the list shows</span>
+              <span className="diff-plus-hint">A bar on the tree's edge next to each file the list shows. Works best in flat view</span>
             </Menu.CheckboxItem>
           </div>
         </Menu.Content>
