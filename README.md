@@ -6,7 +6,7 @@ Plugins for [BB](https://getbb.app), one folder each.
 | --- | --- |
 | [Pinned Turns](bb-plugin-pinned-turns) | Keeps the message you are reading under and the latest agent reply pinned to the top of a thread; click either to jump to it. |
 | [Chat Dock](bb-plugin-chat-dock) | Moves the composer into the thread's right panel while it is open, as a strip under any tab or as a Chat tab. |
-| [Diff Plus](bb-plugin-diff-plus) | Adds a folder tree with per-folder counts and +/- to BB's Diff tab. |
+| [Diff Plus](bb-plugin-diff-plus) | Improves BB's Diff tab with a folder tree, sticky folders, Tree or Flat view, a view synced with the list, and recent commits in the scope picker. |
 | [Stay at bottom](bb-plugin-stay-at-bottom) | Keeps a streaming thread scrolled to its bottom when BB's own keeper slips. |
 
 ## Screenshots

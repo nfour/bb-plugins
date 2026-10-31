@@ -2,6 +2,11 @@
 
 Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 1.0.0 (2026-10-31)
+
+- First stable release, with no change in behaviour from 0.1.2. From here, new features come as 1.x minor releases and fixes as patches, and both reach marketplace installs on their own.
+- The marketplace listing is rewritten as a plain list of features, with three screenshots.
+
 ## 0.1.2 (2026-10-31)
 
 - The folder button opens a menu: the tree on or off, how far folders open at first, and recent commits.
