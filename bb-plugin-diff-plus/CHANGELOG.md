@@ -2,6 +2,11 @@
 
 Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 1.1.0 (2026-11-02)
+
+- Works in a split workspace: each pane's Diff tab shows the tree for that pane's own thread. Before, the tree in a right-hand pane could list the left pane's files while BB's cards showed the right pane's.
+- The tree's column loads in one go: **Changes** shows straight away with a spinner under it, instead of a "Loading files…" line followed by an empty gap. The messages for an error or no changes sit under **Changes** too.
+
 ## 1.0.0 (2026-10-31)
 
 - First stable release, with no change in behaviour from 0.1.2. From here, new features come as 1.x minor releases and fixes as patches, and both reach marketplace installs on their own.

@@ -897,7 +897,7 @@ function useInView(tab: DiffTab, treeRef: React.RefObject<HTMLDivElement | null>
         const clamped = Math.max(0, Math.min(maxTop, to));
         if (Math.abs(clamped - scroller.scrollTop) > 0.5) scroller.scrollTo({ top: clamped, behavior: smooth ? "smooth" : "auto" });
       };
-      // Rows and the stuck stack are on one ROW_HEIGHT grid, so a row is never left half under
+      // Rows and the stuck stack are on one ROW_HEIGHT lattice, so a row is never left half under
       // the stack at a multiple of it: of the two nearest, take one that keeps the marked rows in view.
       const snap = (to: number) => {
         const near = [Math.floor(to / ROW_HEIGHT) * ROW_HEIGHT, Math.ceil(to / ROW_HEIGHT) * ROW_HEIGHT].filter((at) => at >= 0 && at <= maxTop);
@@ -1103,23 +1103,39 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
   const anyOpen = useMemo(() => (tree && paths ? [...allDirs(tree)].some((dir) => paths.has(dir)) : false), [tree, paths]);
   const room = useStuckRows(treeRef, !flat, !!tree?.count && !!paths);
 
-  if (!scope) return <p className="diff-plus-tree-note">No folder tree for this view.</p>;
-  if (files.status === "loading") return <p className="diff-plus-tree-note">Loading files…</p>;
-  if (files.status === "error")
-    return (
+  // "Changes" is there from the first render, whatever the files are doing, so the
+  // column does not change shape as they load; only what is under it does. Between
+  // the files arriving and the open folders being chosen there is one render with
+  // no rows to show: the spinner stays through it.
+  const rows = tree && paths && tree.count ? tree : null;
+  let body: React.ReactNode;
+  if (!scope) body = <p className="diff-plus-tree-note">No folder tree for this view.</p>;
+  else if (files.status === "error")
+    body = (
       <p className="diff-plus-tree-note" role="alert">
         {files.message}
       </p>
     );
-  if (!tree || !paths) return null;
-  if (!tree.count) {
+  else if (!tree || !paths) body = <div className="diff-plus-spinner" role="status" aria-label="Loading files" />;
+  else if (!tree.count) {
     const hidden = files.status === "ready" && files.files.length > 0;
-    return <p className="diff-plus-tree-note">{hidden ? "No files match the filter." : "No changes."}</p>;
-  }
+    body = <p className="diff-plus-tree-note">{hidden ? "No files match the filter." : "No changes."}</p>;
+  } else
+    body = (
+      <>
+        {flat ? (
+          <FlatRows files={flat} active={active} pick={pick} lit={lit} />
+        ) : (
+          <Rows dir={tree} depth={0} open={paths} room={room} active={active} toggle={toggle} pick={pick} lit={lit} />
+        )}
+        {files.status === "ready" && files.truncated && <p className="diff-plus-tree-note">BB cut this list short; filter by path to find the rest.</p>}
+      </>
+    );
   return (
     <div
       role="tree"
       aria-label="Changed files by folder"
+      aria-busy={(scope && files.status === "loading") || undefined}
       ref={treeRef}
       data-show-in-view={(synced && syncBars) || undefined}
       data-follows={(synced && syncScroll) || undefined}
@@ -1141,7 +1157,7 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
         </button>
         <span className="diff-plus-root-buttons">
           <ViewMenu />
-          {!flat && (
+          {rows && !flat && (
             <button
               type="button"
               className="diff-plus-fold-all"
@@ -1154,17 +1170,16 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
           )}
         </span>
         <span className="diff-plus-fill" />
-        <span className="diff-plus-count">{tree.count}</span>
-        <Stats additions={tree.additions} deletions={tree.deletions} />
-        {/* The letters' room, so the root's +/- line up with the rows'. */}
-        <span className="diff-plus-mark" />
+        {rows && (
+          <>
+            <span className="diff-plus-count">{rows.count}</span>
+            <Stats additions={rows.additions} deletions={rows.deletions} />
+            {/* The letters' room, so the root's +/- line up with the rows'. */}
+            <span className="diff-plus-mark" />
+          </>
+        )}
       </div>
-      {flat ? (
-        <FlatRows files={flat} active={active} pick={pick} lit={lit} />
-      ) : (
-        <Rows dir={tree} depth={0} open={paths} room={room} active={active} toggle={toggle} pick={pick} lit={lit} />
-      )}
-      {files.truncated && <p className="diff-plus-tree-note">BB cut this list short; filter by path to find the rest.</p>}
+      {body}
     </div>
   );
 }

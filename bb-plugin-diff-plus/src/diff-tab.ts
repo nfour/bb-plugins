@@ -49,9 +49,28 @@ export function findDiffTabs(): DiffTab[] {
   return tabs;
 }
 
+/**
+ * In a split workspace each pane has its own right panel, `#thread-detail-secondary-panel-<pane id>`
+ * (the one panel of a single pane has no suffix), and it sits in the same layout box as every pane's
+ * timeline, so the first timeline row in that box belongs to the first pane, not to the panel's.
+ */
+const PANE_PANEL = '[id^="thread-detail-secondary-panel-pane"]';
+const PANE_PANEL_PREFIX = "thread-detail-secondary-panel-";
+
+/** The pane whose thread the tab shows: its panel's own pane in a split, else the box the tab is in. */
+function threadPane(tab: DiffTab): Element | null {
+  const panel = tab.toolbar.closest(PANE_PANEL);
+  if (!panel) return tab.pane;
+  const id = panel.id.slice(PANE_PANEL_PREFIX.length);
+  // The right panel's own tabs are split panes with ids of their own, inside the panel.
+  for (const pane of document.querySelectorAll(`[data-split-pane-id="${CSS.escape(id)}"]`))
+    if (!pane.closest(PANE_PANEL)) return pane;
+  return null;
+}
+
 /** The thread whose rows are in the tab's pane, when the pane shows a timeline. */
 export function paneThread(tab: DiffTab): string | null {
-  const row = tab.pane?.querySelector("[data-timeline-row-id]");
+  const row = threadPane(tab)?.querySelector("[data-timeline-row-id]");
   const id = row?.getAttribute("data-timeline-row-id");
   return id ? id.slice(0, id.indexOf(":")) || null : null;
 }
@@ -346,7 +365,7 @@ export function watchDiffTabs(onChange: () => void, lists: () => readonly HTMLEl
     if (records.some((record) => !inside.some((list) => list.contains(record.target)))) onChange();
   });
   const attach = () => {
-    for (const panel of document.querySelectorAll("#thread-detail-secondary-panel, [data-testid=secondary-panel-shelf]")) {
+    for (const panel of document.querySelectorAll(`#thread-detail-secondary-panel, ${PANE_PANEL}, [data-testid=secondary-panel-shelf]`)) {
       if (observed.has(panel)) continue;
       observed.add(panel);
       observer.observe(panel, { childList: true, subtree: true, characterData: true });

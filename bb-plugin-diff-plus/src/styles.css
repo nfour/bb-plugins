@@ -458,6 +458,27 @@ div[data-diff-plus-tree="stacked"] .diff-plus-tree-resize {
   color: var(--destructive);
 }
 
+/* Under "Changes" while the files load: a small ring, still when motion is reduced. */
+.diff-plus-spinner {
+  width: 1rem;
+  height: 1rem;
+  margin: 1rem auto;
+  border: 2px solid var(--border);
+  border-top-color: var(--muted-foreground);
+  border-radius: 50%;
+  animation: diff-plus-spin 0.8s linear infinite;
+}
+@keyframes diff-plus-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .diff-plus-spinner {
+    animation-duration: 3s;
+  }
+}
+
 /* The menus (src/TreeMenu.tsx), portalled to the page's end, in the
    measures of BB's own menus (the Diff tab's filter menu): 12px/16px text,
    5px 8px items, the check on the right. */

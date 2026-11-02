@@ -24,7 +24,7 @@ Diff Plus improves BB's Diff tab with a folder tree beside the file list, plus a
 - **Recent commits:** your last 10, 20 or 50 commits in the scope picker, even merged ones (see below)
 - **Follows the tab:** its scope and its **Filter files** menu; rows the path filter matches are tinted
 - **Remembers your place:** open folders, the picked row and your place in the list come back after you open a file
-- **Fits any width:** drag the tree's edge to resize it; in a narrow panel or the phone drawer it sits above the list
+- **Fits any width:** drag the tree's edge to change its width; in a narrow panel or the phone drawer it sits above the list
 
 Every option is configurable, from the folder button in the tab's toolbar and the view button beside **Changes**.
 
@@ -32,6 +32,7 @@ Every option is configurable, from the folder button in the tab's toolbar and th
 
 - Clicks filter through the tab's own filter box
 - BB's search, filters, Viewed checkboxes, split view and "Add to chat" work as before
+- Works in a split workspace: each pane's Diff tab shows the tree for that pane's own thread, and follows when you move focus between panes
 - The folder button in the tab's toolbar turns the tree off
 
 ## Recent commits and the merge base
