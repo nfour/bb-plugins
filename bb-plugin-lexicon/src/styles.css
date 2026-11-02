@@ -1,0 +1,19 @@
+/*
+ * The settings page's own classes, prefixed so nothing of BB's matches them (see AGENTS.md).
+ * Terms are painted with the Custom Highlight API and need no classes.
+ */
+.lexicon-page { display: grid; gap: 14px; font-size: 13px; }
+.lexicon-bar { display: grid; grid-auto-flow: column; justify-content: start; align-items: center; gap: 8px; }
+.lexicon-h { margin: 0; font-size: 12px; font-weight: 600; opacity: 0.7; }
+.lexicon-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.lexicon-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; border: 1px solid color-mix(in oklab, currentColor 14%, transparent); }
+.lexicon-row[data-stale] { border-color: oklch(0.7 0.14 70 / 0.7); }
+.lexicon-main { display: grid; gap: 2px; min-width: 0; }
+.lexicon-term { font-weight: 600; overflow-wrap: anywhere; }
+.lexicon-meta { opacity: 0.65; font-size: 12px; overflow-wrap: anywhere; }
+.lexicon-actions { display: grid; grid-auto-flow: column; gap: 6px; }
+.lexicon-button { font: inherit; padding: 2px 9px; border-radius: 6px; cursor: pointer; border: 1px solid color-mix(in oklab, currentColor 25%, transparent); background: transparent; color: inherit; }
+.lexicon-button:disabled { opacity: 0.45; cursor: default; }
+.lexicon-select { font: inherit; padding: 2px 6px; border-radius: 6px; background: transparent; color: inherit; border: 1px solid color-mix(in oklab, currentColor 25%, transparent); }
+.lexicon-empty { opacity: 0.6; }
+.lexicon-note { opacity: 0.75; }

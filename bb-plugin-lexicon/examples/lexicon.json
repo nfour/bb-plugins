@@ -1,0 +1,12 @@
+{
+  "terms": [
+    { "id": "billing", "term": "billing-service", "kind": "name", "aliases": ["Billing"], "hue": 210 },
+    { "id": "invoice-run", "term": "invoice run", "kind": "feature", "parent": "billing", "aliases": ["nightly invoicing", "invoice job"], "code": ["runInvoices"] },
+    { "id": "retry-queue", "term": "retry queue", "kind": "feature", "parent": "billing", "code": ["RETRY_LIMIT"] },
+    { "id": "checkout", "term": "checkout", "kind": "feature", "hue": 160 },
+    { "id": "click", "term": "click", "kind": "action", "aliases": ["clicks", "clicked"] },
+    { "id": "done", "term": "done", "kind": "outcome", "tone": "good", "aliases": ["resolved"] },
+    { "id": "reverted", "term": "reverted", "kind": "outcome", "tone": "bad", "aliases": ["rolled back"] },
+    { "id": "timeouts", "term": "timeouts", "kind": "topic" }
+  ]
+}
