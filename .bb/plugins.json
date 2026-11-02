@@ -6,6 +6,7 @@
     { "name": "pinned-turns", "source": "./bb-plugin-pinned-turns" },
     { "name": "chat-dock", "source": "./bb-plugin-chat-dock" },
     { "name": "diff-plus", "source": "./bb-plugin-diff-plus" },
+    { "name": "lexicon", "source": "./bb-plugin-lexicon" },
     { "name": "stay-at-bottom", "source": "./bb-plugin-stay-at-bottom" }
   ]
 }
