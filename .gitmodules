@@ -1,0 +1,3 @@
+[submodule "forks/floating-notes"]
+	path = forks/floating-notes
+	url = https://github.com/nfour/bb-plugin-floating-notes.git
