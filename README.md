@@ -8,6 +8,7 @@ Plugins for [BB](https://getbb.app), one folder each.
 | [Chat Dock](bb-plugin-chat-dock) | Moves the composer into the thread's right panel while it is open, as a strip under any tab or as a Chat tab. |
 | [Diff Plus](bb-plugin-diff-plus) | Improves BB's Diff tab with a folder tree, sticky folders, Tree or Flat view, a view synced with the list, and recent commits in the scope picker. |
 | [Lexicon](bb-plugin-lexicon) | Colours a project's key terms in chat, the same way every time: plugin names, features, code identifiers, actions and outcomes. |
+| [Guest View](bb-plugin-guest-view) | Shares one thread with someone who has no BB account through a public link: they follow it live and suggest prompts you approve. |
 | [Stay at bottom](bb-plugin-stay-at-bottom) | Keeps a streaming thread scrolled to its bottom when BB's own keeper slips. |
 
 ## Screenshots
@@ -31,6 +32,20 @@ Plugins for [BB](https://getbb.app), one folder each.
 ![In a narrow panel the tree sits above the file list](docs/screenshots/diff-plus-stacked.png)
 
 ![Flat view: every changed file on its own row with its folder beside it, one file picked](docs/screenshots/diff-plus-flat.png)
+
+**Guest View**
+
+![What a guest sees: the conversation, a Working line, the prompts they sent and a composer with their name](docs/screenshots/guest-view-page-light.jpg)
+
+![The same page in the dark theme, with the list of sent prompts open](docs/screenshots/guest-view-page-dark.jpg)
+
+![Share with guest in the thread's actions menu](docs/screenshots/guest-view-menu.jpg)
+
+![The card above the composer, opened: guests connected, how long the link has lived, and waiting prompts with Use, Copy and Dismiss](docs/screenshots/guest-view-owner-card.jpg)
+
+![The card with its History opened](docs/screenshots/guest-view-owner-card-history.jpg)
+
+![The settings panel: who is connected with a Kick button, the link's expiry and what guests see](docs/screenshots/guest-view-settings.jpg)
 
 ## Install
 

@@ -1,0 +1,603 @@
+/*
+ * The plugin's own classes, prefixed `guest-view-` so nothing of BB's matches them
+ * (see AGENTS.md: the plugin build scopes any utility word it finds in this folder).
+ * Colours are BB's theme variables.
+ */
+
+/* Same box as BB's git row beneath it (36px, 8px radius, raised surface); BB's own 8px gap sits between the banners. */
+.guest-view-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--surface-raised-solid, var(--card, var(--background)));
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.guest-view-row {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  min-width: 0;
+}
+
+/* Everything before the link icon: one click target that opens and closes Prompt Approval. */
+.guest-view-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px 0 12px;
+  overflow: clip;
+}
+
+.guest-view-toggle {
+  cursor: pointer;
+}
+
+.guest-view-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 0;
+}
+
+.guest-view-chevron {
+  display: inline-flex;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 120ms cubic-bezier(.42,0,.58,1), rotate 120ms cubic-bezier(.42,0,.58,1);
+}
+
+.guest-view-chevron[data-open="true"] {
+  rotate: 180deg;
+}
+
+.guest-view-toggle:hover .guest-view-chevron,
+.guest-view-toggle:focus-visible .guest-view-chevron,
+.guest-view-chevron[data-shown="true"] {
+  opacity: 1;
+}
+
+.guest-view-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.guest-view-live {
+  display: inline-flex;
+  color: #2f9e5b;
+  animation: guest-view-pulse 1.6s cubic-bezier(.42,0,.58,1) infinite;
+}
+
+.guest-view-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+
+/* Guest prompts waiting: yellow, and the icon and text pulse together so it is noticed while closed. */
+.guest-view-pending {
+  color: #c4891a;
+  color: light-dark(#a8741a, #e6bf4a);
+  animation: guest-view-pulse 1.6s cubic-bezier(.42,0,.58,1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guest-view-live,
+  .guest-view-pending {
+    animation: none;
+  }
+}
+
+.guest-view-time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.guest-view-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.guest-view-icon-button[data-active="true"] {
+  color: var(--foreground);
+}
+
+@media (hover: hover) {
+  .guest-view-icon-button:hover {
+    background-color: var(--surface-recessed, var(--muted));
+    color: var(--foreground);
+  }
+}
+
+.guest-view-card > .guest-view-problem,
+.guest-view-card > .guest-view-line {
+  margin: 0 12px;
+}
+
+.guest-view-card > .guest-view-line:first-child,
+.guest-view-card > .guest-view-problem:first-child {
+  margin-top: 10px;
+}
+
+.guest-view-card > :last-child:not(.guest-view-row):not(.guest-view-expanded) {
+  margin-bottom: 10px;
+}
+
+.guest-view-card > * + .guest-view-problem {
+  margin-top: 8px;
+}
+
+.guest-view-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+.guest-view-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(440px, 100%);
+  max-height: min(640px, 100%);
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  outline: none;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.guest-view-dialog-head {
+  display: flex;
+  align-items: center;
+}
+
+.guest-view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guest-view-section + .guest-view-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.guest-view-heading {
+  font-weight: 600;
+}
+
+.guest-view-guest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.guest-view-guest-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: clip;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guest-view-form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.guest-view-fine {
+  font-size: 12px;
+}
+
+.guest-view-number {
+  width: 4.5rem;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+
+.guest-view-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: var(--surface-recessed, var(--muted));
+  cursor: pointer;
+  flex: none;
+}
+
+.guest-view-switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.guest-view-switch[data-on="true"] {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.guest-view-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background-color: var(--foreground);
+  transition: transform 120ms cubic-bezier(.42,0,.58,1);
+}
+
+.guest-view-switch[data-on="true"] .guest-view-switch-knob {
+  background-color: var(--primary-foreground);
+  transform: translateX(14px);
+}
+
+.guest-view-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.guest-view-line-icon,
+.guest-view-prompt-icon,
+.guest-view-button-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+}
+
+@keyframes guest-view-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.guest-view-strong {
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.guest-view-muted {
+  color: var(--muted-foreground);
+}
+
+.guest-view-spacer {
+  flex: 1;
+}
+
+.guest-view-error {
+  color: var(--destructive, #c0392b);
+}
+
+.guest-view-problem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.guest-view-command {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border-radius: calc(var(--radius) - 2px);
+  background-color: var(--surface-recessed, var(--muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+.guest-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.guest-view-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background-color: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.guest-view-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.guest-view-button-primary {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+@media (hover: hover) {
+  .guest-view-button:not(:disabled):hover {
+    background-color: var(--surface-recessed, var(--muted));
+  }
+  .guest-view-button-primary:not(:disabled):hover {
+    background-color: var(--primary);
+    opacity: 0.9;
+  }
+}
+
+.guest-view-link {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-decoration-line: underline;
+}
+
+/* The part that opens under the row: Prompt Approval, or a line saying nothing came yet, and History. */
+.guest-view-expanded {
+  border-top: 1px solid var(--border);
+}
+
+/* Prompt Approval: its own scroll, so a pile of prompts never pushes the composer away. */
+.guest-view-approval {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.guest-view-empty {
+  padding: 8px 12px;
+}
+
+/* History: prompts already used or dismissed. Closed until opened by hand; at most 200px tall. */
+.guest-view-history {
+  border-top: 1px solid var(--border);
+}
+
+.guest-view-expanded > .guest-view-history:first-child {
+  border-top: 0;
+}
+
+/* History is the first thing in the opened part; what waits for approval follows it. */
+.guest-view-history + .guest-view-approval,
+.guest-view-history + .guest-view-empty {
+  border-top: 1px solid var(--border);
+}
+
+.guest-view-history-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.guest-view-history-head:hover {
+  color: var(--foreground);
+}
+
+.guest-view-history-list {
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border-top: 1px solid var(--border);
+}
+
+.guest-view-history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+}
+
+.guest-view-history-row + .guest-view-history-row {
+  border-top: 1px solid var(--border);
+}
+
+.guest-view-prompt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.guest-view-prompt + .guest-view-prompt {
+  border-top: 1px solid var(--border);
+}
+
+.guest-view-prompt-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.guest-view-prompt-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 20px;
+}
+
+.guest-view-prompt-name {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+/* Cut at four lines; a chevron shows only when something is cut, and a click opens it. */
+.guest-view-prompt-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+}
+
+.guest-view-prompt-text[data-lines="2"] {
+  -webkit-line-clamp: 2;
+  color: var(--muted-foreground);
+}
+
+.guest-view-prompt-text[data-expanded="true"] {
+  display: block;
+  -webkit-line-clamp: none;
+}
+
+.guest-view-prompt-text[data-cut="true"] {
+  cursor: pointer;
+}
+
+.guest-view-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: rotate 120ms cubic-bezier(.42,0,.58,1);
+}
+
+.guest-view-more[data-open="true"] {
+  rotate: 180deg;
+}
+
+.guest-view-button-square {
+  justify-content: center;
+  width: 1.75rem;
+  padding: 0;
+}
+
+/* Use is a split button: the main part inserts the text, the chevron opens a menu of other ways (portalled to the page). */
+.guest-view-split {
+  display: inline-flex;
+  align-items: center;
+}
+
+.guest-view-split-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.guest-view-split-more {
+  justify-content: center;
+  width: 1.5rem;
+  padding: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-color: color-mix(in srgb, var(--primary-foreground) 35%, transparent);
+}
+
+.guest-view-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.guest-view-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.guest-view-menu-item:focus-visible {
+  background-color: var(--surface-recessed, var(--muted));
+  outline: none;
+}
+
+@media (hover: hover) {
+  .guest-view-menu-item:hover {
+    background-color: var(--surface-recessed, var(--muted));
+  }
+}
+
+.guest-view-menu-hint {
+  max-width: 100%;
+  overflow: clip;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+
+.guest-view-prompt > .guest-view-actions {
+  flex-wrap: nowrap;
+}

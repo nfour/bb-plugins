@@ -7,6 +7,7 @@
     { "name": "chat-dock", "source": "./bb-plugin-chat-dock" },
     { "name": "diff-plus", "source": "./bb-plugin-diff-plus" },
     { "name": "lexicon", "source": "./bb-plugin-lexicon" },
+    { "name": "guest-view", "source": "./bb-plugin-guest-view" },
     { "name": "stay-at-bottom", "source": "./bb-plugin-stay-at-bottom" }
   ]
 }
