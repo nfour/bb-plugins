@@ -13,14 +13,15 @@ The dock button in the composer's action row switches docking on and off. **Chat
 
 ## Behavior
 
-- Hiding the right panel (Ctrl+J) puts the composer back under the timeline.
+- Hiding the right panel (Ctrl+J) puts the composer back under the timeline. With **Keep composer docked** on (off by default), it stays docked out of sight instead, draft and all, and a **Return composer** row at the bottom of the timeline brings it back.
 - Opening another thread with the panel open docks that thread's composer.
 - Split chat panes each keep their own composer.
-- On a phone-width screen the composer docks at the bottom of the panel drawer. BB hides composer actions there, so use the thread menu.
+- On a phone-width screen the composer docks at the bottom of the panel drawer, with all its buttons working, and rises above the on-screen keyboard. BB hides composer actions there, so use the thread menu.
+- In a narrow panel the docked composer keeps its footer (environment, permission mode, context meter).
 
 ## Settings
 
-Each option is a plugin setting: docking itself, the strip or the Chat tab, the dock button and a debug log. All of them are in the thread menu and on the plugin's page in BB settings.
+Each option is a plugin setting: docking itself, the strip or the Chat tab, keeping the composer docked, the dock button and a debug log. All of them are in the thread menu and on the plugin's page in BB settings.
 
 ## Requirements
 

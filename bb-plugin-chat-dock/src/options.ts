@@ -5,6 +5,7 @@ import type { SettingKey } from "../server";
 export const DEFAULTS: Record<SettingKey, boolean> = {
   enabled: true,
   locked: true,
+  keepDocked: false,
   showButton: true,
   debugLog: false,
 };
@@ -18,5 +19,5 @@ export type Options = Record<SettingKey, boolean> & {
 export function useOptions(): Options {
   const { values, isLoading } = useSettings();
   const read = (key: SettingKey) => (typeof values?.[key] === "boolean" ? (values[key] as boolean) : DEFAULTS[key]);
-  return { ready: !isLoading, enabled: read("enabled"), locked: read("locked"), showButton: read("showButton"), debugLog: read("debugLog") };
+  return { ready: !isLoading, enabled: read("enabled"), locked: read("locked"), keepDocked: read("keepDocked"), showButton: read("showButton"), debugLog: read("debugLog") };
 }

@@ -12,6 +12,7 @@ import { useOptions, type Options } from "./options";
 const OPTIONS: { key: SettingKey; label: string }[] = [
   { key: "enabled", label: "Dock the composer in the right panel" },
   { key: "locked", label: "Keep it at the panel's bottom" },
+  { key: "keepDocked", label: "Keep composer docked" },
   { key: "showButton", label: "Dock button in the composer" },
   { key: "debugLog", label: "Debug log" },
 ];
@@ -70,7 +71,7 @@ export const threadMenu: PluginThreadActionRegistration<Data> = {
             id: key,
             label,
             selected: options[key],
-            disabled: key === "locked" && !options.enabled,
+            disabled: (key === "locked" || key === "keepDocked") && !options.enabled,
           })),
           { id: SETTINGS, label: "Plugin settings", icon: "Settings" as const },
         ],

@@ -6,6 +6,7 @@
 // and @get-bb/plugin-sdk/app are provided by BB at load time, never bundled.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { Dock } from "./src/Dock";
+import { Return } from "./src/Return";
 import { DockButton } from "./src/DockButton";
 import { DOCK_ICON, DockIcon } from "./src/icons";
 import { useOptions } from "./src/options";
@@ -30,6 +31,7 @@ export default definePluginApp((app) => {
     },
   });
   app.slots.experimental_appOverlay({ id: "strip", component: Strip });
+  app.slots.experimental_appOverlay({ id: "return", component: Return });
   // The button is in the composer's own action row, so it is wherever the composer is.
   app.composer.customize({ id: "dock", scopes: ["thread"], actions: [{ id: "menu", component: DockButton }] });
   app.slots.experimental_threadAction(threadMenu);
