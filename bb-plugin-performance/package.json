@@ -1,0 +1,44 @@
+{
+  "name": "bb-plugin-performance",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nfour/bb-plugins.git",
+    "directory": "bb-plugin-performance"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.94"
+  },
+  "scripts": {
+    "build": "bb plugin build",
+    "dev": "bb plugin dev",
+    "check": "tsc --noEmit",
+    "test": "node --test src/model.test.ts src/jsonl.test.ts src/proc.test.ts src/report.test.ts"
+  },
+  "bb": {
+    "name": "Performance",
+    "description": "Measures how far BB is from feeling native while you use it (frames, typing, thread switches, start, idle) against set targets, shows which plugin is behind a slowdown, and writes the numbers to a JSONL file.",
+    "branding": {
+      "icon": "TimeSchedule"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "skills": [
+      "skills"
+    ]
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.94",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

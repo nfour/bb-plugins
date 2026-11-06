@@ -1,0 +1,145 @@
+/*
+ * The dashboard's own classes, prefixed so nothing of BB's matches them (see AGENTS.md).
+ * Colours come from BB's theme variables so light and dark both read.
+ */
+.perf-scroll { height: 100%; min-height: 0; overflow-y: auto; --perf-good: oklch(0.7 0.14 150); --perf-warn: oklch(0.78 0.15 80); --perf-bad: oklch(0.63 0.2 25); --perf-line: color-mix(in oklab, currentColor 14%, transparent); --perf-soft: color-mix(in oklab, currentColor 7%, transparent); --perf-accent: oklch(0.65 0.14 255); }
+.perf-page { display: grid; gap: 14px; padding: 16px 20px 36px; font-size: 13px; max-width: 1040px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.perf-h { margin: 18px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted-foreground, currentColor); opacity: 0.9; }
+.perf-note { margin: 0; opacity: 0.7; line-height: 1.45; max-width: 76ch; }
+.perf-note[data-tone="bad"] { color: var(--destructive, #d33); opacity: 1; }
+.perf-note[data-tone="warn"] { color: var(--warning-text, #b7791f); opacity: 1; }
+.perf-path { font-family: var(--font-mono, monospace); font-size: 12px; overflow-wrap: anywhere; }
+.perf-dim { opacity: 0.6; }
+
+/* the tones, for shapes (fill) and for boxes (background) alike */
+.perf-tone { --c: color-mix(in oklab, currentColor 30%, transparent); fill: var(--c); background: var(--c); }
+.perf-tone[data-tone="good"] { --c: var(--perf-good); }
+.perf-tone[data-tone="warn"] { --c: var(--perf-warn); }
+.perf-tone[data-tone="bad"] { --c: var(--perf-bad); }
+[data-tone="good"].perf-chart-value, b[data-tone="good"] { color: oklch(0.52 0.13 150); }
+[data-tone="warn"].perf-chart-value, b[data-tone="warn"] { color: oklch(0.58 0.14 70); }
+[data-tone="bad"].perf-chart-value, b[data-tone="bad"] { color: oklch(0.55 0.2 25); }
+@media (prefers-color-scheme: dark) {
+  [data-tone="good"].perf-chart-value, b[data-tone="good"] { color: oklch(0.78 0.14 150); }
+  [data-tone="warn"].perf-chart-value, b[data-tone="warn"] { color: oklch(0.82 0.14 80); }
+  [data-tone="bad"].perf-chart-value, b[data-tone="bad"] { color: oklch(0.72 0.17 25); }
+}
+
+/* the top: score and period */
+.perf-hero { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center; padding: 16px 20px; border-radius: 12px; border: 1px solid var(--perf-line); background: var(--perf-soft); }
+.perf-score { display: grid; gap: 2px; }
+.perf-score-number { font-size: 44px; line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; }
+.perf-score-label { opacity: 0.7; }
+.perf-score-dots { display: grid; grid-auto-flow: column; justify-content: start; gap: 5px; margin-top: 8px; }
+.perf-score-dots i { width: 9px; height: 9px; border-radius: 50%; }
+.perf-hero-side { display: grid; gap: 8px; justify-items: start; }
+.perf-worst { line-height: 1.4; }
+.perf-segments { display: grid; grid-auto-flow: column; gap: 2px; padding: 2px; border-radius: 8px; background: color-mix(in oklab, currentColor 8%, transparent); }
+.perf-segment { font: inherit; padding: 3px 10px; border-radius: 6px; cursor: pointer; border: 0; background: transparent; color: inherit; opacity: 0.7; }
+.perf-segment[data-on] { background: var(--background, canvas); opacity: 1; }
+
+/* the nine metric cards */
+.perf-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.perf-metric { display: grid; gap: 7px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--perf-line); }
+.perf-metric[data-tone="warn"] { border-color: color-mix(in oklab, var(--perf-warn) 60%, transparent); }
+.perf-metric[data-tone="bad"] { border-color: color-mix(in oklab, var(--perf-bad) 65%, transparent); }
+.perf-metric[data-tone="good"] { border-color: color-mix(in oklab, var(--perf-good) 45%, transparent); }
+.perf-metric-top { display: grid; grid-auto-flow: column; justify-content: space-between; gap: 8px; font-size: 12px; }
+.perf-metric-label { opacity: 0.75; }
+.perf-metric-value { font-size: 24px; line-height: 1.1; font-weight: 650; font-variant-numeric: tabular-nums; }
+.perf-metric-meta { display: grid; grid-auto-flow: column; justify-content: space-between; font-size: 12px; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.perf-gauge { position: relative; height: 6px; border-radius: 3px; background: var(--perf-soft); }
+.perf-gauge > span { display: block; height: 100%; border-radius: 3px; min-width: 0; }
+.perf-gauge > u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: currentColor; opacity: 0.55; text-decoration: none; }
+
+/* charts */
+.perf-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
+.perf-charts-two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.perf-chart { margin: 0; display: grid; gap: 6px; align-content: start; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--perf-line); min-width: 0; }
+.perf-chart figcaption { display: grid; grid-auto-flow: column; justify-content: space-between; align-items: baseline; gap: 8px; }
+.perf-chart-title { font-size: 12px; opacity: 0.75; }
+.perf-chart-value { font-size: 15px; font-variant-numeric: tabular-nums; }
+.perf-chart-note { font-size: 11.5px; opacity: 0.6; line-height: 1.4; }
+.perf-svg { display: block; width: 100%; height: 64px; overflow: visible; }
+.perf-svg line, .perf-svg path { vector-effect: non-scaling-stroke; }
+.perf-svg .perf-tone { stroke: none; }
+.perf-plot { position: relative; height: 64px; }
+.perf-plot > .perf-svg { position: absolute; inset: 0; }
+.perf-pt { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; opacity: 0.9; }
+.perf-pt[data-shape="square"] { border-radius: 2px; }
+.perf-pt[data-shape="small"] { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; background: var(--perf-accent); }
+.perf-target { stroke: currentColor; stroke-opacity: 0.45; stroke-width: 1; stroke-dasharray: 4 3; }
+.perf-line { fill: none; stroke: var(--perf-accent); stroke-width: 1.6; stroke-linejoin: round; }
+.perf-area { fill: var(--perf-accent); fill-opacity: 0.14; stroke: none; }
+.perf-axis { display: grid; grid-auto-flow: column; justify-content: space-between; font-size: 11px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.perf-empty { display: grid; place-items: center; height: 64px; border-radius: 6px; background: var(--perf-soft); opacity: 0.7; font-size: 12px; }
+.perf-hist-edges { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; font-size: 10px; text-align: center; opacity: 0.55; font-variant-numeric: tabular-nums; margin-top: 3px; }
+
+/* who ran */
+.perf-stack { display: grid; gap: 10px; }
+.perf-stack-bar { display: grid; overflow: clip; height: 14px; border-radius: 7px; background: var(--perf-soft); }
+.perf-stack-bar > span { display: block; height: 100%; min-width: 2px; }
+.perf-stack-bar > span:first-child { border-radius: 7px 0 0 7px; }
+.perf-stack-bar > span:last-child { border-radius: 0 7px 7px 0; }
+.perf-stack-bar > span:only-child { border-radius: 7px; }
+.perf-legend { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.perf-legend li { display: grid; grid-template-columns: 10px 1fr auto 36px; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.perf-legend i, .perf-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.perf-legend li > :last-child { text-align: right; }
+.perf-swatch { margin-right: 8px; vertical-align: -1px; }
+
+/* the plugin list */
+.perf-grid { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.perf-grid th { text-align: left; font-weight: 500; font-size: 12px; opacity: 0.65; padding: 4px 8px; border-bottom: 1px solid var(--perf-line); }
+.perf-grid td { padding: 6px 8px; border-bottom: 1px solid color-mix(in oklab, currentColor 8%, transparent); }
+.perf-grid .perf-num { text-align: right; white-space: nowrap; }
+.perf-grid th[data-active] { opacity: 1; }
+.perf-cell { min-width: 120px; }
+.perf-cell-text { display: block; min-height: 1.2em; }
+.perf-meter { position: relative; display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: var(--perf-soft); }
+.perf-meter > span { display: block; height: 100%; border-radius: 2px; }
+.perf-meter > u { position: absolute; top: -2px; bottom: -2px; width: 1.5px; background: currentColor; opacity: 0.5; text-decoration: none; }
+.perf-sort { font: inherit; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; opacity: inherit; }
+.perf-head-button { display: grid; grid-auto-flow: column; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 6px; border: 1px solid color-mix(in oklab, currentColor 25%, transparent); }
+
+.perf-flag { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 999px; font-size: 11px; line-height: 18px; background: oklch(0.78 0.15 80 / 0.22); }
+.perf-flag[data-core] { background: color-mix(in oklab, currentColor 12%, transparent); }
+
+.perf-slow { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.perf-slow li { display: grid; grid-auto-flow: column; justify-content: start; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid color-mix(in oklab, currentColor 8%, transparent); }
+
+.perf-facts { display: grid; gap: 4px; }
+.perf-facts > div { display: grid; grid-template-columns: 240px auto; justify-content: start; gap: 12px; }
+
+/* actions */
+.perf-actions { display: grid; gap: 6px; }
+.perf-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.perf-btn { font: inherit; padding: 5px 12px; border-radius: 8px; cursor: pointer; color: inherit; background: transparent; border: 1px solid color-mix(in oklab, currentColor 25%, transparent); }
+.perf-btn:hover:not(:disabled) { background: var(--perf-soft); }
+.perf-btn:disabled { opacity: 0.45; cursor: default; }
+.perf-status { min-height: 1.4em; }
+
+/* the plugin list: an accordion */
+.perf-expand { display: inline-grid; grid-auto-flow: column; align-items: center; gap: 0; text-align: left; font-weight: 500; opacity: 1; }
+.perf-chevron { margin-right: 8px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; transition: rotate 120ms; }
+.perf-row[data-open] .perf-chevron { rotate: 90deg; }
+.perf-row[data-open] td { border-bottom-color: transparent; }
+.perf-detail-row > td { padding: 0 8px 14px 26px; }
+.perf-detail { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr); gap: 16px 28px; padding: 12px 14px; border-radius: 10px; background: var(--perf-soft); }
+.perf-detail-facts > div { grid-template-columns: 150px auto; }
+.perf-detail-side { display: grid; gap: 12px; align-content: start; }
+.perf-detail-wide { grid-column: 1 / -1; display: grid; gap: 6px; }
+.perf-words { display: flex; flex-wrap: wrap; gap: 6px; }
+.perf-words .perf-flag { margin-left: 0; }
+.perf-flag[data-bound="script"] { background: oklch(0.68 0.13 250 / 0.25); }
+.perf-flag[data-bound="render"] { background: oklch(0.68 0.13 310 / 0.25); }
+
+@media (max-width: 640px) {
+  .perf-detail { grid-template-columns: 1fr; }
+  .perf-hero { grid-template-columns: 1fr; gap: 14px; }
+}
+
+.perf-sites { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.perf-sites li { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.perf-sites b { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.perf-sites code { overflow-wrap: anywhere; font-size: 11px; opacity: 0.85; }

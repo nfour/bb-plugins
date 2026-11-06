@@ -9,6 +9,7 @@ Plugins for [BB](https://getbb.app), one folder each.
 | [Diff Plus](bb-plugin-diff-plus) | Improves BB's Diff tab with a folder tree, sticky folders, Tree or Flat view, a view synced with the list, and recent commits in the scope picker. |
 | [Lexicon](bb-plugin-lexicon) | Colours a project's key terms in chat, the same way every time: plugin names, features, code identifiers, actions and outcomes. |
 | [Guest View](bb-plugin-guest-view) | Shares one thread with someone who has no BB account through a public link: they follow it live and suggest prompts you approve. |
+| [Performance](bb-plugin-performance) | A nav tab measuring how far BB is from feeling native in your real sessions (frames, typing, thread switches, start, idle, memory) and which plugin is behind a slowdown. |
 | [Stay at bottom](bb-plugin-stay-at-bottom) | Keeps a streaming thread scrolled to its bottom when BB's own keeper slips. |
 
 ## Screenshots
@@ -46,6 +47,22 @@ Plugins for [BB](https://getbb.app), one folder each.
 ![The card with its History opened](docs/screenshots/guest-view-owner-card-history.jpg)
 
 ![The settings panel: who is connected with a Kick button, the link's expiry and what guests see](docs/screenshots/guest-view-settings.jpg)
+
+**Performance**
+
+![The Performance tab in BB's nav: the score, the nine metrics against their targets, and the first charts](docs/screenshots/performance-dashboard-light.png)
+
+![The same tab in the dark theme](docs/screenshots/performance-dashboard-dark.png)
+
+![Distributions, slow moments over time, and the plugins as charts](docs/screenshots/performance-charts.png)
+
+![Slow moments with the split of each frame, marks you made, and where the time of slow frames went](docs/screenshots/performance-moments.png)
+
+![The plugin list with one row opened: what that plugin costs, its trend, what started its script and the class names behind its page-wide CSS](docs/screenshots/performance-plugins.png)
+
+![The thread-switch benchmark run with plugin CSS on and off: the second row of bars is the run without it](docs/screenshots/performance-compare.png)
+
+![Where the time of slow frames went, what started BB's own script, and the places in the bundle that forced layout](docs/screenshots/performance-forced-layout.png)
 
 ## Install
 
