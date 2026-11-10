@@ -2,6 +2,10 @@
 
 Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 1.1.1 (2026-11-10)
+
+- Typing in the composer no longer runs any of Diff Plus's code: it only listens for typing in the Diff tab's own filter box.
+
 ## 1.1.0 (2026-11-02)
 
 - Works in a split workspace: each pane's Diff tab shows the tree for that pane's own thread. Before, the tree in a right-hand pane could list the left pane's files while BB's cards showed the right pane's.

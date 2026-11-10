@@ -149,18 +149,34 @@ function useDiffTabs(fallbackThread: string | null): TabState[] {
       if (next.length === current.length && next.every((state, i) => sameTab(state, current[i]!))) return;
       current = next;
       setTabs(next);
+      listen();
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(check);
     };
     const stop = watchDiffTabs(schedule, () => current.map((state) => state.tab.list));
-    // Typing in BB's filter box changes its value without touching the DOM.
+    // Typing in BB's filter box changes its value without touching the DOM. The box is in
+    // the tab's toolbar, so that is where this listens: a listener on the document would run
+    // for every key typed in the composer, and a long frame there is blamed on it.
     const typed = (event: Event) => isFilterInput(event.target) && schedule();
-    document.addEventListener("input", typed, true);
+    const toolbars = new Set<HTMLElement>();
+    const listen = () => {
+      const now = new Set(current.map((state) => state.tab.toolbar));
+      for (const toolbar of toolbars)
+        if (!now.has(toolbar)) {
+          toolbar.removeEventListener("input", typed, true);
+          toolbars.delete(toolbar);
+        }
+      for (const toolbar of now)
+        if (!toolbars.has(toolbar)) {
+          toolbar.addEventListener("input", typed, true);
+          toolbars.add(toolbar);
+        }
+    };
     check();
     return () => {
       stop();
-      document.removeEventListener("input", typed, true);
+      for (const toolbar of toolbars) toolbar.removeEventListener("input", typed, true);
       cancelAnimationFrame(frame);
     };
   }, [fallbackThread]);
