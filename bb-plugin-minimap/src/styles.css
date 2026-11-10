@@ -313,13 +313,10 @@
 }
 /* The note beside the strip with the row under the pointer; it never takes the pointer. */
 .minimap-tip {
-  position: var(--minimap-pos);
   top: 0;
-  right: 100%;
-  margin-right: 12px;
+  z-index: 40;
   box-sizing: content-box;
-  max-width: 320px;
-  padding: 5px 9px;
+  width: min(320px, 70vw);
   border-radius: 8px;
   border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
   background: var(--surface-raised-solid, var(--background));
@@ -329,16 +326,39 @@
   line-height: 1.35;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 90ms ease-out, translate 130ms cubic-bezier(0.2, 0.7, 0.2, 1), width 130ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition: opacity 90ms ease-out;
+  /* Its own layer: following the pointer moves a finished picture, and a change of text repaints only the text. */
+  will-change: translate;
 }
 .minimap-tip[data-on] {
   opacity: 1;
 }
-.minimap-tip[data-snap] {
-  transition: opacity 90ms ease-out;
+/* Holds the text, cut with an ellipsis, so it never spills out; the arrow sits outside it. */
+.minimap-tip-clip {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 9px;
+  border-radius: inherit;
+  white-space: nowrap;
+  overflow: clip;
+  contain: layout paint;
+}
+/* The kind of row, quiet beside its text. */
+.minimap-tip-icon {
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  margin-right: 6px;
+  vertical-align: top;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;
 }
 .minimap-tip-text {
-  max-width: 320px;
+  max-width: calc(100% - 20px);
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: clip;
@@ -355,12 +375,8 @@
   border-top: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
   border-right: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
   rotate: 45deg;
-  transition: translate 130ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-.minimap-tip[data-snap] .minimap-tip-arrow {
-  transition: none;
-}
-/* The rectangle under the pointer: an inset line in its own colour, solid where the strip is faded. */
+/* The rectangle under the pointer: an inset line in its own colour, solid where the strip is faded. It jumps from row to row, never slides. */
 .minimap-hot {
   position: var(--minimap-pos);
   top: 0;
@@ -368,12 +384,8 @@
   box-shadow: inset 0 0 0 1px var(--minimap-hot, var(--foreground));
   pointer-events: none;
   opacity: 0;
-  transition: opacity 90ms ease-out, translate 110ms cubic-bezier(0.2, 0.7, 0.2, 1), width 110ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    height 110ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: translate;
 }
 .minimap-hot[data-on] {
   opacity: 1;
-}
-.minimap-hot[data-snap] {
-  transition: opacity 90ms ease-out;
 }

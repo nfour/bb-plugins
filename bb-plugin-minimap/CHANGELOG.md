@@ -2,6 +2,12 @@
 
 Releases are the tags `minimap/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.3 (2026-11-11)
+
+- The hover note shows a small icon for what the row is (you, the agent, a command, a file read, a search and so on) in place of "You:" and "Agent:", and a row of work shows what ran or was read, such as the command. A finished turn shows how many steps it took.
+- The note keeps one width (320px, at most 70% of the window) and cuts long text with an ellipsis, so its size no longer jumps from row to row.
+- Moving along the strip is smooth: the note no longer makes the page redo its layout each time its text changes, and it switches rows at most every 100ms.
+
 ## 0.1.2 (2026-11-11)
 
 - The hover note is smoother. One note follows the pointer and slides from row to row, with no flicker in the gaps between rectangles, and an arrow on its right points at the rectangle it names. The hovered rectangle gets a thin line inside it in its own colour.

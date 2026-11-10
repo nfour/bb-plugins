@@ -89,3 +89,14 @@ test("messages carry a preview and tool rows do not", () => {
   assert.equal(items[1]!.tip, "On it.");
   assert.equal(items[2]!.tip, undefined);
 });
+
+test("work rows are named as BB names them, and a turn by its steps", () => {
+  const memo: Memo = new Map();
+  const ran = { ...work("w", 3, "t1"), status: "completed", presentation: { label: { pending: "Running command", completed: "Ran command" }, title: "pnpm test" } };
+  const going = { ...work("x", 4, "t1"), status: "pending", presentation: { label: { pending: "Running command", completed: "Ran command" }, title: "pnpm test" } };
+  const t = { ...turn("t", 2, "t1", "completed"), summaryCount: 3 };
+  const items = itemsOf([ran, going, t] as never, memo);
+  assert.deepEqual([items[0]!.label, items[0]!.tip], ["Ran command", "pnpm test"]);
+  assert.equal(items[1]!.label, "Running command");
+  assert.deepEqual([items[2]!.label, items[2]!.tip], ["Worked", "3 steps"]);
+});

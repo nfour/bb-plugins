@@ -38,4 +38,5 @@ test("the defaults are the ones the owner settled on", () => {
   );
   assert.equal(SETTINGS.hideScrollbar.default, true);
   assert.equal(SETTINGS.fadeIdle.default, true);
+  assert.equal(SETTINGS.hoverPreview.default, true);
 });

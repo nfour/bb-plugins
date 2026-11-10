@@ -1,4 +1,5 @@
 import type { useSdk } from "@get-bb/plugin-sdk/app";
+import { workIcon } from "./icons.ts";
 import { replyHeight, userSize, type Item } from "./model.ts";
 
 // `timeline` is overloaded; a read without `afterTag` is a full page, never a delta.
@@ -92,27 +93,47 @@ export function firstLine(text: string): string {
   return "";
 }
 
+/** The note's name for a row of work: BB's own label for it ("Ran command") and what it ran, read or touched. */
+function workNote(row: Row): { icon: string; label?: string; tip?: string } {
+  const presentation = (row as { presentation?: { label?: { pending?: string; completed?: string }; title?: string } | null }).presentation;
+  if (!presentation) return { icon: workIcon((row as { workKind?: unknown }).workKind) };
+  const live = (row as { status?: string }).status === "pending";
+  const label = live ? presentation.label?.pending : presentation.label?.completed;
+  const tip = typeof presentation.title === "string" ? firstLine(presentation.title) : "";
+  return { icon: workIcon((row as { workKind?: unknown }).workKind), ...(label ? { label } : {}), ...(tip ? { tip } : {}) };
+}
+
+/** A system row's own title ("Interrupted", a note's subject) when it has one. */
+function systemNote(row: Row): { tip?: string } {
+  const title = (row as { title?: unknown }).title;
+  const tip = typeof title === "string" ? firstLine(title) : "";
+  return tip ? { tip } : {};
+}
+
 function estimate(row: Row, finished: ReadonlySet<string>): Item {
   const id = row.id;
   switch (row.kind) {
     case "conversation": {
       if (row.role === "user") {
         const { h, w } = userSize(row.text.slice(0, TEXT_READ));
-        return { id, kind: "user", h, w, tip: firstLine(row.text) };
+        return { id, kind: "user", h, w, tip: firstLine(row.text), icon: "user" };
       }
-      return { id, kind: "reply", h: replyHeight(row.text.slice(0, TEXT_READ)), w: 1, tip: firstLine(row.text) };
+      return { id, kind: "reply", h: replyHeight(row.text.slice(0, TEXT_READ)), w: 1, tip: firstLine(row.text), icon: "agent" };
     }
-    case "turn":
-      return { id, kind: "work", h: SUMMARY_HEIGHT, w: 1 };
+    case "turn": {
+      const steps = (row as { summaryCount?: number }).summaryCount;
+      return { id, kind: "work", h: SUMMARY_HEIGHT, w: 1, label: "Worked", icon: "worked", ...(steps ? { tip: `${steps} ${steps === 1 ? "step" : "steps"}` } : {}) };
+    }
     case "work":
       // A finished turn's work is folded into its "Worked for" row; a live one shows each.
-      return { id, kind: "work", h: row.turnId !== null && finished.has(row.turnId) ? 0 : WORK_HEIGHT, w: 1 };
+      return { id, kind: "work", h: row.turnId !== null && finished.has(row.turnId) ? 0 : WORK_HEIGHT, w: 1, ...workNote(row) };
     case "system":
       if (row.systemKind === "error") return { id, kind: "error", h: ERROR_HEIGHT, w: 1 };
       if (row.systemKind === "operation" && row.operationKind === "reasoning" && row.status === "completed") {
-        return { id, kind: "work", h: row.turnId !== null && finished.has(row.turnId) ? 0 : WORK_HEIGHT, w: 1 };
+        const thought = firstLine(row.title ?? "");
+        return { id, kind: "work", h: row.turnId !== null && finished.has(row.turnId) ? 0 : WORK_HEIGHT, w: 1, label: "Thinking", icon: "think", ...(thought ? { tip: thought } : {}) };
       }
-      return { id, kind: "system", h: SYSTEM_HEIGHT, w: 1 };
+      return { id, kind: "system", h: SYSTEM_HEIGHT, w: 1, ...systemNote(row) };
   }
 }
 
@@ -125,7 +146,7 @@ export function itemsOf(rows: readonly Row[], memo: Memo): Item[] {
     seen.add(row.id);
     // What an estimate reads: the row's kind, how long its text is, and whether its turn is over.
     const length = row.kind === "conversation" ? row.text.length : 0;
-    const key = `${row.kind}|${length}|${row.turnId !== null && finished.has(row.turnId) ? 1 : 0}|${row.kind === "system" ? row.systemKind : ""}`;
+    const key = `${row.kind}|${length}|${row.turnId !== null && finished.has(row.turnId) ? 1 : 0}|${row.kind === "system" ? row.systemKind : ""}|${(row as { status?: string }).status ?? ""}`;
     const held = memo.get(row.id);
     if (held && held.key === key) return held.item;
     const item = estimate(row, finished);

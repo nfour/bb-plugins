@@ -1,7 +1,7 @@
 import type { Kind, Layout } from "./model.ts";
 
 /** The rectangles run to the strip's left edge and stop this far short of the right one, which breaks the strip up from the page. */
-export const RIGHT_MARGIN = 2;
+const RIGHT_MARGIN = 2;
 /** How wide each kind's rectangle is, as a share of the strip's inner width (a user's is its own). */
 const SHARE: Record<Kind, number> = { user: 1, reply: 1, work: 0.6, error: 1, system: 0.4 };
 const ALIGN: Record<Kind, "left" | "right"> = { user: "right", reply: "left", work: "left", error: "left", system: "left" };

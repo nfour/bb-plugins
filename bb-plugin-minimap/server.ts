@@ -12,7 +12,7 @@ export { BLOCKS, COLOR_KEYS, NUMBER_RANGES, SETTING_KEYS };
 export type { ColorKey, NumberKey, SettingKey } from "./src/shared";
 
 /** The viewport slider's colour: "#rrggbb", or empty for the theme's text colour. */
-export const COLOR_PATTERN = /^(#[0-9a-fA-F]{6})?$/;
+const COLOR_PATTERN = /^(#[0-9a-fA-F]{6})?$/;
 
 export const rpcContract = defineRpcContract({
   set_setting: { input: z.object({ key: z.enum(SETTING_KEYS), value: z.boolean() }), output: z.null() },

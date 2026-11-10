@@ -18,9 +18,9 @@ On a long thread the strip shows its shape at a glance: where your questions are
 
 Rectangles are drawn to scale, so the strip covers the same ground as the scrollbar and its slider sits where the scrollbar's thumb would. On a very long thread your messages and errors are painted over everything else and never get thinner than two device pixels, so you can still find them.
 
-Hover a rectangle and a note beside the strip names it with the start of its message. The note slides from row to row and its arrow points at the rectangle, which is outlined in its own colour.
+Hover a rectangle and a note beside the strip shows a small icon for what it is (you, the agent, a command, a file read, a search) and the start of its text, such as the command that ran. The note slides from row to row and its arrow points at the rectangle, which is outlined in its own colour (that line jumps, it doesn't slide).
 
-![Hovering the strip: a note beside it names the message under the pointer, with an arrow at its rectangle](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
+![Hovering the strip: a note beside it shows an icon for an agent reply and the start of its text, with an arrow at the rectangle](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
 
 BB's own scrollbar fades out and is thin to grab, so Minimap switches it off while the strip is there. If you would rather have both, turn off **Replace the scrollbar**; **Always show the scrollbar** then stops BB fading it. BB's thread-index button is removed by default; turn **Hide the thread-index button** off and it sits just left of the strip.
 

@@ -5,7 +5,7 @@ import type { Options as StripOptions } from "./strip";
 import { usePreview } from "./usePreview";
 
 /** What a setting is until the server says otherwise: the list's defaults. */
-export const DEFAULTS = Object.fromEntries(SETTING_KEYS.map((key) => [key, SETTINGS[key].default])) as Record<SettingKey, boolean>;
+const DEFAULTS = Object.fromEntries(SETTING_KEYS.map((key) => [key, SETTINGS[key].default])) as Record<SettingKey, boolean>;
 
 /** The settings of each kind of rectangle: its show switch and its colour. */
 export const BLOCK_KEYS: Record<Kind, { show: SettingKey; color: ColorKey }> = {

@@ -66,7 +66,7 @@ test("on a very long thread the work is bounded by the strip's rows, and every l
   assert.ok(lastReply < firstUser, "a reply is never painted over a message");
   // Every device row that held a user message still has one.
   const want = new Set<number>();
-  for (const [id, b] of boxes) if (b.kind === "user") want.add(Math.floor(b.y * dpr));
+  for (const b of boxes.values()) if (b.kind === "user") want.add(Math.floor(b.y * dpr));
   const got = new Set(list.filter((b) => b.kind === "user").map((b) => Math.floor(b.y * dpr)));
   assert.deepEqual([...got].sort((a, b) => a - b), [...want].sort((a, b) => a - b));
 });

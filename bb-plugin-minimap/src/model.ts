@@ -16,6 +16,10 @@ export interface Item {
   w: number;
   /** The first line of a message's text, for the preview under the pointer; a row without text has none. */
   tip?: string;
+  /** What the note calls the row instead of its kind's name ("Ran command", "Worked"); a row without one is named by its kind. */
+  label?: string;
+  /** The note's icon, a name in `src/icons.ts`; a row without one gets its kind's. */
+  icon?: string;
 }
 
 /** A row that is on screen now: its real place and size. */
