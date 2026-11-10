@@ -76,7 +76,7 @@ export interface Message {
   full: string;
   /** Whether the user typed a `user` row, or BB wrote it (a child thread finishing). */
   by: "user" | "system";
-  /** A reply's turn status, or "pending" on the user message whose turn is running; absent otherwise. */
+  /** A reply's turn status, or "pending" on the user message whose turn is in progress; absent otherwise. */
   status?: TurnStatus;
 }
 

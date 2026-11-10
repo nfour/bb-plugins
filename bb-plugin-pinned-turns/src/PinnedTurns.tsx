@@ -60,7 +60,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
   );
   const log = useRef(debug);
   log.current = debug;
-  // Rows and the outline are read only while the bar is on the page and the tab is in view.
+  // Rows and the tally are read only while the bar is on the page and the tab is in view.
   const active = useTabVisible() && host !== null;
   const { index, loadOlder } = useTimeline(threadId, debug, active);
   const live = useRef({ timeline: null as Timeline | null, index: null as TimelineIndex | null, frame: 0, jump: 0 });
@@ -103,7 +103,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
   }, [index, schedule]);
 
   const counter = options.showPosition && roomForCounter;
-  const outline = useOutline(threadId, counter, active, newestUser(index));
+  const tally = useOutline(threadId, counter, active, newestUser(index));
 
   // Park the row in the scroller and keep it parked. The scroller can be rebuilt
   // under a thread (a layout change), so a cheap check re-attaches when it is gone.
@@ -238,7 +238,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
   };
 
   if (!host) return null;
-  const ordinal = shown.message && outline?.ordinals.get(shown.message.id);
+  const nth = shown.message && tally?.ordinals.get(shown.message.id);
   return createPortal(
     // The message is the reader's own bubble, so it sits right at its own width; the
     // reply takes every pixel it leaves. Nothing is measured to keep them apart.
@@ -255,7 +255,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
         ink={MESSAGE_INK}
         status={options.showStatus}
         tooltip={options.showFullText}
-        position={outline && ordinal ? { ordinal, total: outline.total } : undefined}
+        position={tally && nth ? { nth, total: tally.total } : undefined}
       />
     </div>,
     host,
@@ -271,29 +271,29 @@ const MESSAGE_INK = "var(--surface-recessed-solid)";
  */
 const REPLY_INK = "color-mix(in oklab, var(--foreground) 3%, var(--background))";
 
-/** A mark for a turn that ended badly. A running turn is shown by pulsing the text instead. */
+/** A mark for a turn that ended badly. A turn in progress is shown by pulsing the text instead. */
 const STATUS_DOT: Record<Exclude<TurnStatus, "pending">, { color: string; label: string }> = {
   error: { color: "#d4493a", label: "This turn ended in an error" },
   interrupted: { color: "#c98a1a", label: "This turn was interrupted" },
 };
 
-/** How long a half takes to grow or shrink to its new text. */
+/** How long a half takes to change width for its new text. */
 const GLIDE_MS = 100;
 
 /**
  * Animates an element's width between texts. `key` is what the element shows (undefined
  * turns this off); when it changes, the width runs from where it was, or is still
- * running, to the width the new text needs. The element is only ever animated by the
+ * in flight, to the width the new text needs. The element is only ever animated by the
  * Web Animations API, so it stays `width: auto` the rest of the time.
  */
 function useGlide(box: React.RefObject<HTMLDivElement | null>, key: string | undefined) {
-  const state = useRef({ width: 0, running: null as Animation | null });
-  // Track the settled width so a window resize does not leave a stale starting point.
+  const state = useRef({ width: 0, anim: null as Animation | null });
+  // Track the settled width so a change of window size does not leave a stale starting point.
   useEffect(() => {
     const el = box.current;
     if (!el || key === undefined) return;
     const observer = new ResizeObserver(() => {
-      if (!state.current.running) state.current.width = el.getBoundingClientRect().width;
+      if (!state.current.anim) state.current.width = el.getBoundingClientRect().width;
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -303,16 +303,16 @@ function useGlide(box: React.RefObject<HTMLDivElement | null>, key: string | und
     if (!el || key === undefined) return;
     const s = state.current;
     // Mid-glide, start from the width on screen now; otherwise from the last settled one.
-    const from = s.running ? el.getBoundingClientRect().width : s.width;
-    s.running?.cancel();
-    s.running = null;
+    const from = s.anim ? el.getBoundingClientRect().width : s.width;
+    s.anim?.cancel();
+    s.anim = null;
     const to = el.getBoundingClientRect().width;
     s.width = to;
     if (from === 0 || Math.abs(from - to) < 1 || prefersReducedMotion()) return;
-    const animation = el.animate([{ width: `${from}px` }, { width: `${to}px` }], { duration: GLIDE_MS, easing: "ease-out" });
-    s.running = animation;
+    const animation = el.animate([{ width: `${from}px` }, { width: `${to}px` }], { duration: GLIDE_MS, easing: "cubic-bezier(0, 0, 0.58, 1)" });
+    s.anim = animation;
     const done = () => {
-      if (s.running === animation) s.running = null;
+      if (s.anim === animation) s.anim = null;
     };
     animation.onfinish = done;
     animation.oncancel = done;
@@ -342,7 +342,7 @@ function Half({
   /** Offer the full text on hover when the bar cut it short. */
   tooltip: boolean;
   /** Where this message sits among the thread's, drawn outside the half's right edge. */
-  position?: { ordinal: number; total: number };
+  position?: { nth: number; total: number };
   /**
    * Ease the half's width to the new text's when it changes, instead of snapping. Only
    * the message half sizes itself to its text; the reply takes what is left, so it
@@ -358,10 +358,10 @@ function Half({
   useGlide(box, glide ? text?.title : undefined);
   const turn = status ? text?.status : undefined;
   const dot = turn && turn !== "pending" ? STATUS_DOT[turn] : null;
-  const running = turn === "pending";
+  const busy = turn === "pending";
   const what = text?.role === "assistant" ? "the latest reply" : text?.by === "system" ? "a system message" : "your message";
   // The label stands in for the button's content, so everything the sighted see is said in it.
-  const notes = [running && "still running", dot?.label, position && `${position.ordinal} of ${position.total}`].filter(Boolean);
+  const notes = [busy && "still working", dot?.label, position && `${position.nth} of ${position.total}`].filter(Boolean);
   return (
     <div
       ref={box}
@@ -377,7 +377,7 @@ function Half({
         onClick={() => message && onJump(message)}
         // Lifted by its own radius so the top corners sit above the scroller's edge
         // and the bar reads as hanging from it; the top padding is the lift plus a
-        // small gap, so hiding the corners costs no visible space.
+        // small gap, so hiding the corners costs no space you can see.
         className="pinned-button"
         style={{ background: ink, marginTop: -RADIUS, paddingTop: RADIUS + 5 }}
       >
@@ -391,7 +391,7 @@ function Half({
         ) : null}
         <span
           className="pinned-text"
-          data-running={running ? "" : undefined}
+          data-busy={busy ? "" : undefined}
           // Only when the bar cut the text short; a native tooltip on a whole line is noise.
           onMouseEnter={(event) => {
             const el = event.currentTarget;
@@ -413,7 +413,7 @@ function Half({
           style={{ left: "100%", marginLeft: 10, top: 6, opacity: 0.33 }}
         >
           <span style={{ fontSize: "90%" }}>
-            <b>{position.ordinal}</b>/{position.total}
+            <b>{position.nth}</b>/{position.total}
           </span>
         </span>
       ) : null}

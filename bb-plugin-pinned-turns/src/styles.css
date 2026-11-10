@@ -83,7 +83,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pinned-text[data-running] {
+.pinned-text[data-busy] {
   animation: pinned-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 @keyframes pinned-pulse {
@@ -109,7 +109,7 @@
   .pinned-half {
     transition-property: none;
   }
-  .pinned-text[data-running] {
+  .pinned-text[data-busy] {
     animation: none;
   }
 }

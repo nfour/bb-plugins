@@ -7,12 +7,12 @@ export type { Debug, Outline, TimelineIndex };
 
 const EMPTY: TimelineIndex = { rank: new Map(), messages: [], hasOlder: false };
 
-/** Where a failed outline read waits before being tried again. */
+/** Where a failed tally read waits before being tried again. */
 const RETRY_MS = 3000;
 
 /**
  * The thread's timeline as an index, kept current by `watchTimeline` (`src/watch.ts`). `active` is
- * whether the bar is shown and the tab visible: while it is not, nothing is read.
+ * whether the bar is shown and the tab in view: while it is not, nothing is read.
  */
 export function useTimeline(threadId: string, debug: Debug, active: boolean) {
   const sdk = useSdk();
@@ -46,21 +46,21 @@ export function useTimeline(threadId: string, debug: Debug, active: boolean) {
 }
 
 /**
- * The thread's user messages in order, for the turn counter. BB's conversation
- * outline lists every one of them by the timeline's row id in one small response
+ * The thread's user messages in order, for the turn counter. BB's
+ * `conversationOutline` lists every one of them by the timeline's row id in one small response
  * (a few KB, against ~100KB a timeline page), so the counter does not need the
  * older pages fetched. It is fetched again when the newest user message changes,
  * which is the only time the count can. `active` is whether the bar is shown and
- * the tab visible: while it is not nothing is read (the outline held stays), and
+ * the tab in view: while it is not nothing is read (the tally held stays), and
  * becoming active reads once if the newest message changed meanwhile.
  */
 export function useOutline(threadId: string, enabled: boolean, active: boolean, newestUser: string | undefined): Outline | null {
   const sdk = useSdk();
-  const [outline, setOutline] = useState<Outline | null>(null);
-  // What the outline held was read for, so becoming active again does not read it twice.
+  const [tally, setTally] = useState<Outline | null>(null);
+  // What the tally held was read for, so becoming active again does not read it twice.
   const readFor = useRef<string | null>(null);
   useEffect(() => {
-    // Not before the timeline's first page: the outline is fetched once it can be read against it.
+    // Not before the timeline's first page: the tally is fetched once it can be read against it.
     if (!enabled || !active || newestUser === undefined) return;
     const key = `${threadId}|${newestUser}`;
     if (readFor.current === key) return;
@@ -71,7 +71,7 @@ export function useOutline(threadId: string, enabled: boolean, active: boolean, 
         const { items } = await sdk.threads.conversationOutline({ threadId, role: "user", signal: controller.signal });
         if (controller.signal.aborted) return;
         readFor.current = key;
-        setOutline(outlineOf(items));
+        setTally(outlineOf(items));
       } catch {
         if (!controller.signal.aborted) timer = window.setTimeout(load, RETRY_MS);
       }
@@ -82,5 +82,5 @@ export function useOutline(threadId: string, enabled: boolean, active: boolean, 
       window.clearTimeout(timer);
     };
   }, [sdk, threadId, enabled, active, newestUser]);
-  return enabled ? outline : null;
+  return enabled ? tally : null;
 }

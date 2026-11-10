@@ -6,7 +6,7 @@ Long threads stay oriented: you always see which question you are in the middle 
 
 ## Turn status and counter
 
-- While a turn is running, your message and its reply pulse. A dot on the reply marks a turn that failed or was interrupted.
+- While a turn is in progress, your message and its reply pulse. A dot on the reply marks a turn that failed or was interrupted.
 - A counter such as `7/23` hangs just outside your message, showing which turn you are on. It is left out when the thread view is under 840px wide.
 - Hovering a message the bar cut short shows its full text in a tooltip, on devices with a pointer that can hover.
 

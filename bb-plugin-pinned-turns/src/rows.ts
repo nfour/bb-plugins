@@ -125,7 +125,7 @@ export function indexOf(rows: readonly Row[], hasOlder: boolean): TimelineIndex 
   const close = () => {
     const status = turnStatus(events);
     if (status) for (const reply of replies) reply.status = status;
-    // The question only shows that its turn is still running; how it ended is the reply's to say.
+    // The question only shows that its turn is still in progress; how it ended is the reply's to say.
     if (status === "pending" && asked) asked.status = status;
     events = [];
     replies = [];
@@ -168,13 +168,13 @@ export interface Outline {
 }
 
 /**
- * How a message another agent sent (`bb thread tell`) begins. The outline has no
+ * How a message another agent sent (`bb thread tell`) begins. BB's `conversationOutline` has no
  * `initiator`, so this is how its items are told apart; BB itself marks such a
  * user row `initiator: "agent"` by the same pattern.
  */
 const AGENT_ENVELOPE = /^\[bb message from thread:[^;\]\s]+(?:;[^\]]*)?\]/;
 
-/** The turn counter from BB's conversation outline, counting the messages the bar names: not another agent's, not an empty one. */
+/** The turn counter from BB's `conversationOutline`, counting the messages the bar names: not another agent's, not an empty one. */
 export function outlineOf(items: readonly Pick<OutlineItem, "id" | "preview" | "attachmentSummary">[]): Outline {
   const counted = items.filter((item) => !AGENT_ENVELOPE.test(item.preview) && (item.preview !== "" || item.attachmentSummary));
   return { ordinals: new Map(counted.map((item, i) => [item.id, i + 1])), total: counted.length };

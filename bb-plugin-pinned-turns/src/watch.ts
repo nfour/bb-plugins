@@ -34,7 +34,7 @@ const REWRITES = new Set(["history-rewritten", "history-compacted"]);
 
 export interface Watch {
   /**
-   * Whether the bar is shown (and the tab visible). While it is not, nothing is fetched: signals only
+   * Whether the bar is shown (and the tab in view). While it is not, nothing is fetched: signals only
    * mark the held rows stale, and becoming active reads once if anything was missed.
    */
   setActive(on: boolean): void;

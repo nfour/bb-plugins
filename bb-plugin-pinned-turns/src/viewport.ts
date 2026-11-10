@@ -49,6 +49,6 @@ export function useTabVisible(): boolean {
       document.addEventListener("visibilitychange", listener);
       return () => document.removeEventListener("visibilitychange", listener);
     },
-    () => document.visibilityState !== "hidden",
+    () => !document.hidden,
   );
 }

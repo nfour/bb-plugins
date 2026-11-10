@@ -67,7 +67,7 @@ test("dataIdOf unwraps a folded work-summary row id", () => {
   assert.equal(dataIdOf("thr_a:da-t5:work-summary:thr_a:command:da-i217"), "thr_a:command:da-i217");
 });
 
-test("turnStatus: running wins, then the last of reply/failure/interruption", () => {
+test("turnStatus: in progress wins, then the last of reply/failure/interruption", () => {
   assert.equal(turnStatus([]), undefined);
   assert.equal(turnStatus(["assistant"]), undefined);
   assert.equal(turnStatus(["assistant", "pending"]), "pending");
@@ -85,13 +85,13 @@ const work = (status: string) => ({ kind: "work", id: `t:work:${status}`, status
 const interrupted = () => ({ kind: "system", id: "t:stop", systemKind: "operation", operationKind: "thread-interrupted", status: "complete" }) as never;
 const systemError = () => ({ kind: "system", id: "t:err", systemKind: "error", status: "complete" }) as never;
 
-test("indexOf: a running turn marks its question and its replies; a finished one marks neither", () => {
+test("indexOf: a turn in progress marks its question and its replies; a finished one marks neither", () => {
   const { messages } = indexOf([user(1), reply(1), user(2), reply(2), work("pending")], false);
   const byTitle = Object.fromEntries(messages.map((m) => [m.title, m.status]));
   assert.deepEqual(byTitle, { q1: undefined, a1: undefined, q2: "pending", a2: "pending" });
 });
 
-test("indexOf: a running turn with no reply yet still marks its question", () => {
+test("indexOf: a turn in progress with no reply yet still marks its question", () => {
   const { messages } = indexOf([user(1), reply(1), user(2), work("pending")], false);
   assert.equal(messages.find((m) => m.title === "q2")?.status, "pending");
   assert.equal(messages.find((m) => m.title === "q1")?.status, undefined);

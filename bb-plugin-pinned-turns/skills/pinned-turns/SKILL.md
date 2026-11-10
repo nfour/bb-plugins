@@ -16,7 +16,7 @@ Use the **Pinned turns** submenu in a thread's actions menu (⋯ in the thread h
 | `enabled` | on | The bar itself. |
 | `showStatus` | on | Your message and the reply pulse while the turn runs; a dot marks one that failed or was interrupted. |
 | `showPinButton` | on | The Pinned turns submenu in thread menus. |
-| `showPosition` | on (the turn counter) | `7/23` outside the message's right edge; counted from the thread's conversation outline (one small request). |
+| `showPosition` | on (the turn counter) | `7/23` outside the message's right edge; counted from the thread's `conversationOutline` (one small request). |
 | `showFullText` | on | Tooltip with the whole message when the bar cut it short. |
 | `debugLog` | off | Timing lines in the plugin log. |
 

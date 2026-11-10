@@ -2,6 +2,10 @@
 
 Releases are the tags `pinned-turns/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.4 (2026-11-11)
+
+- Lighter on BB's styling: the plugin no longer adds page-wide CSS rules. Earlier releases added nine, made from ordinary words in its own code and docs, which BB matched against every element on the page whenever it restyled. Nothing changes in how the bar looks or works.
+
 ## 0.1.3 (2026-11-11)
 
 - Much lighter on a working thread. While a turn works, the bar fetches only what changed in the timeline, usually about 1 KB, instead of the whole newest page (70 to 80 KB) each time. It still fetches the whole page now and then, at most once a minute.
