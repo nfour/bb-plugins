@@ -18,11 +18,11 @@ On a long thread the strip shows its shape at a glance: where your questions are
 
 Rectangles are drawn to scale, so the strip covers the same ground as the scrollbar and its slider sits where the scrollbar's thumb would. On a very long thread your messages and errors are painted over everything else and never get thinner than two device pixels, so you can still find them.
 
-Hover a rectangle and a note beside the strip names it with the start of its message.
+Hover a rectangle and a note beside the strip names it with the start of its message. The note slides from row to row and its arrow points at the rectangle, which is outlined in its own colour.
 
-![Hovering the strip: a note beside it names the agent reply under the pointer](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
+![Hovering the strip: a note beside it names the message under the pointer, with an arrow at its rectangle](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
 
-BB's own scrollbar fades out and is thin to grab, so Minimap switches it off while the strip is there. If you would rather have both, turn off **Replace the scrollbar**; **Always show the scrollbar** then stops BB fading it. BB's thread-index button moves to the left of the strip, or you can remove it.
+BB's own scrollbar fades out and is thin to grab, so Minimap switches it off while the strip is there. If you would rather have both, turn off **Replace the scrollbar**; **Always show the scrollbar** then stops BB fading it. BB's thread-index button is removed by default; turn **Hide the thread-index button** off and it sits just left of the strip.
 
 A thread short enough to have nothing to scroll gets no strip (**Hide when the thread fits**). A thread you have opened recently comes back with the row sizes Minimap already measured, so its strip is right straight away.
 
@@ -45,7 +45,7 @@ Sliders and colours preview on the strip as you drag and are saved when you let 
 
 ## Narrow windows
 
-The full strip needs room beside the message column, about 920px of thread width with the thread-index button. When there is less, the strip drops to its narrow width (14px by default) and may overlap the edge of the column. Turn off **Keep on narrow windows** to hand back to BB's scrollbar there instead.
+The full strip needs room beside the message column, about 880px of thread width (more if you keep the thread-index button). When there is less, the strip drops to its narrow width (12px by default) and may overlap the edge of the column. Turn off **Keep on narrow windows** to hand back to BB's scrollbar there instead.
 
 ## What it reads
 

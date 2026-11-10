@@ -28,7 +28,7 @@ export const SETTINGS = {
     type: "boolean",
     label: "Hide the thread-index button",
     description: "BB's thread-index button beside the scrollbar. Off: it sits just left of the minimap, which keeps the right edge.",
-    default: false,
+    default: true,
   },
   width: { type: "number", label: "Width (px)", description: "How wide the minimap is, from 6 to 120.", default: 26, min: 6, max: 120 },
   showOutline: {
@@ -100,7 +100,7 @@ export const SETTINGS = {
     type: "number",
     label: "Narrow width (px)",
     description: "How wide the minimap is on a window too narrow for the full width, from 4 to 60. Only with the minimap kept on narrow windows.",
-    default: 14,
+    default: 12,
     min: 4,
     max: 60,
   },

@@ -28,7 +28,7 @@ test("a number read is rounded, held to its range, and falls back to its default
   assert.equal(readNumber({ width: 9999 }, "width"), 120);
   assert.equal(readNumber({ width: "wide" }, "width"), 26);
   assert.equal(readNumber({ width: Number.NaN }, "width"), 26);
-  assert.equal(readNumber(undefined, "narrowWidth"), 14);
+  assert.equal(readNumber(undefined, "narrowWidth"), 12);
 });
 
 test("the defaults are the ones the owner settled on", () => {

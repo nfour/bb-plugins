@@ -17,7 +17,7 @@ import {
 import { bubbleShare, findTimeline, mountedRows, type Timeline } from "./dom.ts";
 import type { Rows } from "./timeline.ts";
 import { recall, remember } from "./remember.ts";
-import { boxesOf } from "./boxes.ts";
+import { boxAt, boxesOf } from "./boxes.ts";
 import { createPainter } from "./painter.ts";
 import { createSteering } from "./steering.ts";
 import { createTip } from "./tip.ts";
@@ -402,6 +402,8 @@ export function createStrip(threadId: string, initial: Options): Strip {
     layout: () => layout,
     scale: () => scale,
     enabled: () => options.hoverPreview,
+    box: (index) => (options.show[layout.kinds[index]!] ? boxAt(layout, index, scale, width, window.devicePixelRatio || 1) : null),
+    ink: (kind) => inks()[kind],
   });
   const steering = createSteering({
     timeline: () => timeline,

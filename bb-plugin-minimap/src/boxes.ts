@@ -23,22 +23,26 @@ export interface Box {
   a: number;
 }
 
+/** One row's rectangle on the strip, as it is drawn. */
+export function boxAt(layout: Layout, i: number, scale: number, width: number, dpr: number): Box {
+  const kind = layout.kinds[i]!;
+  const inner = width - RIGHT_MARGIN;
+  const h = layout.h[i]! * scale;
+  // A gap between rectangles that are big enough to show one; tiny ones merge into a band.
+  let drawnH = Math.max(1, h >= 4 ? h - 1 : h);
+  if (LANDMARK[kind]) drawnH = Math.max(drawnH, 2 / dpr);
+  const w = Math.min(inner, Math.max(kind === "user" ? 8 : 2, inner * (kind === "user" ? layout.w[i]! : SHARE[kind])));
+  const x = ALIGN[kind] === "right" ? width - RIGHT_MARGIN - w : 0;
+  return { kind, x, y: layout.y[i]! * scale, w, h: drawnH, a: 1 };
+}
+
 /** The layout as boxes on the strip, only those that are on it and of a kind that is shown. */
 export function boxesOf(layout: Layout, scale: number, width: number, height: number, show: Record<Kind, boolean>, dpr: number): Map<string, Box> {
   const out = new Map<string, Box>();
-  const inner = width - RIGHT_MARGIN;
   for (let i = 0; i < layout.y.length; i++) {
-    const kind = layout.kinds[i]!;
-    const y = layout.y[i]! * scale;
-    if (y > height) break;
-    if (!show[kind]) continue;
-    const h = layout.h[i]! * scale;
-    // A gap between rectangles that are big enough to show one; tiny ones merge into a band.
-    let drawnH = Math.max(1, h >= 4 ? h - 1 : h);
-    if (LANDMARK[kind]) drawnH = Math.max(drawnH, 2 / dpr);
-    const w = Math.min(inner, Math.max(kind === "user" ? 8 : 2, inner * (kind === "user" ? layout.w[i]! : SHARE[kind])));
-    const x = ALIGN[kind] === "right" ? width - RIGHT_MARGIN - w : 0;
-    out.set(layout.ids[i]!, { kind, x, y, w, h: drawnH, a: 1 });
+    if (layout.y[i]! * scale > height) break;
+    if (!show[layout.kinds[i]!]) continue;
+    out.set(layout.ids[i]!, boxAt(layout, i, scale, width, dpr));
   }
   return out;
 }
