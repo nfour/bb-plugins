@@ -41,3 +41,14 @@ export function useCanHover(): boolean {
     () => window.matchMedia("(any-hover: hover)").matches,
   );
 }
+
+/** Whether the tab is in view; nothing is read for a bar nobody can see. */
+export function useTabVisible(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      document.addEventListener("visibilitychange", listener);
+      return () => document.removeEventListener("visibilitychange", listener);
+    },
+    () => document.visibilityState !== "hidden",
+  );
+}

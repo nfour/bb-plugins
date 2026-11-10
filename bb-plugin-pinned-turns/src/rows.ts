@@ -24,6 +24,41 @@ export function flatten(rows: readonly Row[], out: Row[] = []): Row[] {
   return out;
 }
 
+/** How a delta lists the page's order: a `[from, to]` stretch of the rows already held (to exclusive), or the id of one row. */
+export type RowOrder = readonly (string | readonly [number, number])[];
+
+/**
+ * The page a delta read stands for: `page` (the rows as the last read left them) with `upsertRows`
+ * put in their places. Without `rowOrder` the order is unchanged and every upsert must already be on
+ * the page; with it, the page is rebuilt from the stretches and ids listed. Returns null when the
+ * delta does not fit what is held (a stretch out of range, an id nowhere), and the caller reads a
+ * full page instead.
+ */
+export function applyDelta<T extends { id: string }>(page: readonly T[], delta: { upsertRows: readonly T[]; rowOrder?: RowOrder }): T[] | null {
+  const upserts = new Map(delta.upsertRows.map((row) => [row.id, row]));
+  if (!delta.rowOrder) {
+    const out = page.map((row) => upserts.get(row.id) ?? row);
+    for (const id of upserts.keys()) if (!page.some((row) => row.id === id)) return null;
+    return out;
+  }
+  const held = new Map(page.map((row) => [row.id, row]));
+  const out: T[] = [];
+  for (const entry of delta.rowOrder) {
+    if (typeof entry === "string") {
+      const row = upserts.get(entry) ?? held.get(entry);
+      if (!row) return null;
+      out.push(row);
+      continue;
+    }
+    const [from, to] = entry;
+    if (!(from >= 0 && from <= to && to <= page.length)) return null;
+    for (let i = from; i < to; i++) out.push(upserts.get(page[i]!.id) ?? page[i]!);
+  }
+  // Every upsert must have a place, or a row would be lost.
+  for (const id of upserts.keys()) if (!out.some((row) => row.id === id)) return null;
+  return out;
+}
+
 /**
  * The held rows brought up to date with a refetch of the newest page. `fresh` is
  * the page's rows; `updates` are rows older than the page that changed (a work row

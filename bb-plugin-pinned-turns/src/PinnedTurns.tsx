@@ -6,7 +6,7 @@ import { findTimeline, mountedRows, prefersReducedMotion, rankOfRow, rowById, ty
 import { PIN_ROW_HEIGHT, bandAt, jumpOffset, lastAtOrAbove, type Message, type TurnStatus } from "./model";
 import { useOptions } from "./options";
 import { useOutline, useTimeline, type Debug, type TimelineIndex } from "./timeline";
-import { COUNTER_ROOM, setCounterRoom, useCounterRoom } from "./viewport";
+import { COUNTER_ROOM, setCounterRoom, useCounterRoom, useTabVisible } from "./viewport";
 
 /**
  * Where a jump leaves a row, as an offset from the scroller's top. The bar's
@@ -60,7 +60,9 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
   );
   const log = useRef(debug);
   log.current = debug;
-  const { index, loadOlder } = useTimeline(threadId, debug);
+  // Rows and the outline are read only while the bar is on the page and the tab is in view.
+  const active = useTabVisible() && host !== null;
+  const { index, loadOlder } = useTimeline(threadId, debug, active);
   const live = useRef({ timeline: null as Timeline | null, index: null as TimelineIndex | null, frame: 0, jump: 0 });
   const paint = useRef(() => {});
 
@@ -101,7 +103,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
   }, [index, schedule]);
 
   const counter = options.showPosition && roomForCounter;
-  const outline = useOutline(threadId, counter, newestUser(index));
+  const outline = useOutline(threadId, counter, active, newestUser(index));
 
   // Park the row in the scroller and keep it parked. The scroller can be rebuilt
   // under a thread (a layout change), so a cheap check re-attaches when it is gone.
