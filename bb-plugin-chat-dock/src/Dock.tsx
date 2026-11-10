@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useDebug } from "./debug";
-import { findPanel, findShell, holdsShell, moveInto, observePanel, onShellHome, panelHidden, park } from "./dom";
+import { dockInto, findPanel, findShell, heldShell, holdsShell, observePanel, onShellHome, panelHidden, park } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -37,7 +37,7 @@ export function Dock({ threadId }: { threadId: string }) {
       if (restore) return;
       const shell = findShell(threadId);
       if (!shell) return;
-      restore = moveInto(shell, slot);
+      restore = dockInto(shell, slot, where);
       log.current("dock", { to: "tab", height: shell.getBoundingClientRect().height });
     };
     check();
@@ -52,7 +52,7 @@ export function Dock({ threadId }: { threadId: string }) {
       stop();
       // Leaving because the lock went on: hand the shell to the strip rather than
       // bounce it through the column while the overlay catches up.
-      const shell = slot.querySelector<HTMLElement>("[data-app-composer]");
+      const shell = heldShell(slot);
       if (restore && shell && lockedNow.current && where && !panelHidden(where)) {
         restore();
         restore = null;

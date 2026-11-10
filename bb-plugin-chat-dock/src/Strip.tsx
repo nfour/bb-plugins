@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useBbContext } from "@get-bb/plugin-sdk/app";
 import { useDebug } from "./debug";
-import { adopt, createStripHost, findPanes, holdsShell, moveInto, observePage, onShellHome, panelHidden, type Panel } from "./dom";
+import { adopt, createStripHost, dockInto, findPanes, holdsShell, isDrawer, observePage, onShellHome, panelHidden, type Panel } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -40,13 +40,16 @@ export function Strip() {
     const hold = (root: HTMLElement, shell: HTMLElement, panel: Panel) => {
       const host = createStripHost();
       panel.column.appendChild(host);
-      const restore = moveInto(shell, host);
+      const restore = dockInto(shell, host, panel);
       held.set(root, { host, panel, restore });
       log.current("dock", { to: "strip", height: shell.getBoundingClientRect().height });
     };
     // The tab parked the shell in a strip host when the lock went on: take it over.
+    // The phone drawer is outside the grid, so its host is looked for in the drawer.
     const takeOver = (root: HTMLElement, panel: Panel) => {
-      const host = root.querySelector<HTMLElement>("[data-chat-dock-host=strip]");
+      const host =
+        root.querySelector<HTMLElement>("[data-chat-dock-host=strip]") ??
+        (isDrawer(panel) ? panel.panel.querySelector<HTMLElement>("[data-chat-dock-host=strip]") : null);
       const restore = host && adopt(host);
       if (!host || !restore) return;
       held.set(root, { host, panel, restore });

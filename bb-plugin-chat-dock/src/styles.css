@@ -64,3 +64,41 @@
   border-top: 1px solid var(--border-seam);
   padding: 0.5rem 0.75rem 0.75rem;
 }
+
+/*
+ * BB fades the composer's footer (environment, permission mode, context meter)
+ * out while the composer is 30rem wide or less, until it is expanded. Docked in
+ * the split panel it is nearly always that narrow, so there the fade is undone:
+ * BB's rule is unlayered (in a container style query), the footer's own values
+ * are layered utilities, and this file is unlayered too, so `revert-layer`
+ * drops BB's rule and nothing else. `all` rather than a list of properties, so
+ * whatever the fade sets is undone; should BB rename any of these attributes,
+ * the footer just fades as BB intends. The compact variable itself is left
+ * alone: BB's composer also reads it for its one-line layout. The phone's
+ * overlay frame is left out: there the footer shows on focus, as under the timeline.
+ */
+[data-chat-dock-host="strip"] [data-follow-up-composer]:not([data-follow-up-composer-footer-visible]) [data-follow-up-composer-footer],
+[data-chat-dock-host="tab"] [data-follow-up-composer]:not([data-follow-up-composer-footer-visible]) [data-follow-up-composer-footer] {
+  all: revert-layer;
+}
+
+/*
+ * The phone drawer's dock (`overlay.ts`): a layer in BB's React root, sized to
+ * the drawer by script, with the frame holding the shell at its bottom. The
+ * frame takes the host's class too, so it is drawn as the host would be.
+ */
+.chat-dock-overlay {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.chat-dock-overlay-frame {
+  background-color: var(--sidebar);
+  pointer-events: auto;
+}
+/* The host left in the drawer keeps the frame's height, border and padding included. */
+[data-chat-dock-spacer] {
+  box-sizing: border-box;
+}

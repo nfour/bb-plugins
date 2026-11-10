@@ -2,6 +2,11 @@
 
 Releases are the tags `chat-dock/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.4 (2026-11-10)
+
+- On a phone, the composer docked in the drawer works: send, the pickers and the cards respond, tapping the box expands it and shows its footer (and tapping away hides it, as under the timeline), and it stays above the on-screen keyboard.
+- In a narrow side panel on desktop, the composer's footer (environment, permission mode, context meter) stays visible instead of fading out.
+
 ## 0.1.3 (2026-10-30)
 
 - The dock button shows where a click sends the composer: a chevron pointing right, toward the panel, while the composer is under the timeline, and pointing left once it is docked.

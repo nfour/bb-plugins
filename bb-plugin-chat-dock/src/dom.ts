@@ -12,6 +12,8 @@
  * non-turn UI.
  */
 
+import { createOverlay, overlayOf } from "./overlay";
+
 const SHELL = '[data-scroll-footer] [data-app-composer][data-app-composer-role="primary"]';
 /** On a phone-width viewport the right panel is this drawer instead, fixed over the page and outside the grid. */
 const SHELF = "[data-testid=secondary-panel-shelf]";
@@ -164,7 +166,7 @@ const parked = new Map<HTMLElement, { restore: () => void; timer: number }>();
 export function park(shell: HTMLElement, panel: Panel): void {
   const host = createStripHost();
   panel.column.appendChild(host);
-  const restore = moveInto(shell, host);
+  const restore = dockInto(shell, host, panel);
   const timer = window.setTimeout(() => {
     parked.delete(host);
     host.remove();
@@ -217,7 +219,38 @@ export function moveInto(shell: HTMLElement, host: HTMLElement): () => void {
   };
 }
 
-/** Whether `host` still holds a composer shell (BB can rebuild the shell under a thread, leaving the host empty). */
+/** Whether a panel is the phone drawer rather than the split panel. */
+export function isDrawer({ panel }: Panel): boolean {
+  return panel.matches(SHELF);
+}
+
+/**
+ * Docks `shell` in `host`, and returns what puts it back. In the split panel
+ * that is `moveInto`; in the phone drawer, which is outside BB's React root,
+ * the shell goes into an overlay laid over the host instead (`overlay.ts`).
+ */
+export function dockInto(shell: HTMLElement, host: HTMLElement, panel: Panel | null): () => void {
+  if (!panel || !isDrawer(panel)) return moveInto(shell, host);
+  const overlay = createOverlay(host, panel.panel);
+  const restore = moveInto(shell, overlay.frame);
+  return () => {
+    restore();
+    overlay.dispose();
+  };
+}
+
+/**
+ * The composer shell `host` holds, or null (BB can rebuild the shell under a
+ * thread, leaving the host empty). A drawer's host holds it in its overlay; one
+ * whose drawer BB replaced counts as empty, so it is docked again over the new one.
+ */
+export function heldShell(host: HTMLElement): HTMLElement | null {
+  const overlay = overlayOf(host);
+  if (overlay && !overlay.live()) return null;
+  return (overlay?.frame ?? host).querySelector<HTMLElement>('[data-app-composer][data-app-composer-role="primary"]');
+}
+
+/** Whether `host` still holds a composer shell. */
 export function holdsShell(host: HTMLElement): boolean {
-  return host.querySelector('[data-app-composer][data-app-composer-role="primary"]') !== null;
+  return heldShell(host) !== null;
 }
