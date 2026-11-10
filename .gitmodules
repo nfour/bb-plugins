@@ -1,3 +1,6 @@
 [submodule "forks/floating-notes"]
 	path = forks/floating-notes
 	url = https://github.com/nfour/bb-plugin-floating-notes.git
+[submodule "forks/genui"]
+	path = forks/genui
+	url = https://github.com/nfour/bb-plugin-genui.git
