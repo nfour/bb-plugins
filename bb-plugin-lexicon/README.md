@@ -10,6 +10,13 @@ built-in set of outcomes and actions, and names learned from the project's sourc
 Ask for `bb lexicon export --format md` (or json, yaml, txt) to keep a copy in the
 codebase. `examples/lexicon.json` shows the shape; `bb lexicon import` loads one.
 
+## Switching a term off
+
+Each term on the Lexicon page has a Disable button. A disabled term stays in the
+list, keeps its wordings (nothing else can claim them) and can be enabled again, but
+it is no longer coloured, offered after `~` or shown to agents, and agents cannot
+change it. Disabling a built-in word applies to every project.
+
 ## Typing a term
 
 Type `~` in the composer to list the project's terms (best match first). Picking one inserts a pill; the agent receives the term's wording, kind, meaning, aliases and code identifiers with the message, so it uses the project's own name for what you meant.

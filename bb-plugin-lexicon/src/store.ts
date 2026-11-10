@@ -197,6 +197,7 @@ function plan(store: Store, input: AgentOp, ctx: Context): Plan {
     case "alias": {
       const target = findEntry(store, trimmed(input.term));
       if (!target) return { error: `"${trimmed(input.term)}" is not in the lexicon; add it first` };
+      if (target.disabled) return { error: `"${target.term}" was switched off by the user; leave it alone` };
       const alias = houseForm(input.alias ?? "", target.kind);
       const bad = checkWording(alias, "alias") ?? taken(alias, target);
       if (bad) return { error: bad };
@@ -214,6 +215,7 @@ function plan(store: Store, input: AgentOp, ctx: Context): Plan {
       const target = findEntry(store, trimmed(input.term));
       const reason = trimmed(input.reason);
       if (!target) return { error: `"${trimmed(input.term)}" is not in the lexicon` };
+      if (target.disabled) return { error: `"${target.term}" was switched off by the user; leave it alone` };
       const to = houseForm(input.to ?? "", target.kind);
       if (target.status !== "auto") return { error: `"${target.term}" was added by the user; ask them to rename it` };
       const bad = checkWording(to, "new term") ?? taken(to, target);
@@ -232,6 +234,7 @@ function plan(store: Store, input: AgentOp, ctx: Context): Plan {
       const target = findEntry(store, trimmed(input.term));
       const reason = trimmed(input.reason);
       if (!target) return { error: `"${trimmed(input.term)}" is not in the lexicon` };
+      if (target.disabled) return { error: `"${target.term}" was switched off by the user; leave it alone` };
       if (target.status !== "auto") return { error: `"${target.term}" was added by the user; ask them to remove it` };
       if (reason.length < 8) return { error: "give the reason it no longer applies (8+ characters)" };
       return {
@@ -258,9 +261,48 @@ export function applyOp(store: Store, input: AgentOp, ctx: Context): Outcome {
 }
 
 /** What the user can do to the store. */
-export type UserAction = "pin" | "remove" | "approve" | "reject" | "keep";
+export type UserAction = "pin" | "remove" | "approve" | "reject" | "keep" | "disable" | "enable";
 
 /** The user's edit of a term (`id` is its id) or of a pending proposal (`id` is the proposal's). */
+/** A term the user types in. Unlike an agent's, it may be a plain word and needs no note; it is pinned, and a wording another term owns is still refused. */
+export interface UserTerm {
+  term: string;
+  kind: Kind;
+  note?: string | undefined;
+  aliases?: string[] | undefined;
+  tone?: Tone | undefined;
+}
+
+export function userAdd(store: Store, input: UserTerm, ctx: Pick<Context, "now" | "defaults">): Outcome {
+  const fail = (reply: string): Outcome => ({ store, ok: false, reply });
+  if (!KINDS.includes(input.kind)) return fail(`Kind must be one of ${KINDS.join(", ")}.`);
+  const term = houseForm(input.term, input.kind);
+  const aliases = [...new Set((input.aliases ?? []).map((a) => houseForm(a, input.kind)).filter(Boolean))].slice(0, 16);
+  const note = trimmed(input.note).slice(0, MAX_NOTE);
+  for (const word of [term, ...aliases]) {
+    const bad = checkWording(word, "wording");
+    if (bad) return fail(`${bad[0]!.toUpperCase()}${bad.slice(1)}.`);
+    const owner = ownerOf([...store.terms, ...ctx.defaults], word);
+    if (owner) return fail(`"${word}" already belongs to "${owner.term}".`);
+  }
+  if (new Set([term, ...aliases].map(lower)).size !== 1 + aliases.length) return fail("A wording is listed twice.");
+  const entry: Entry = {
+    id: idFor(store, term),
+    term,
+    kind: input.kind,
+    aliases,
+    code: [],
+    status: "pinned",
+    by: "user",
+    added: ctx.now,
+    seen: ctx.now,
+    ...(note ? { note } : {}),
+    ...(input.kind === "outcome" && input.tone && TONES.includes(input.tone) ? { tone: input.tone } : {}),
+  };
+  const done = withChange(store, { at: ctx.now, by: "user", op: "add", id: entry.id, summary: `added ${term}`, before: null, after: entry }, [...store.terms, entry]);
+  return { ...done, ok: true, reply: `Added ${term}.` };
+}
+
 export function userEdit(store: Store, action: UserAction, id: string, ctx: Pick<Context, "now" | "defaults">): Outcome {
   if (action === "approve" || action === "reject") {
     const pending = store.pending.find((p) => p.id === id);
@@ -275,6 +317,11 @@ export function userEdit(store: Store, action: UserAction, id: string, ctx: Pick
   const by = { at: ctx.now, by: "user" as const, id };
   if (action === "remove") {
     return { ...withChange(store, { ...by, op: "remove", summary: `removed ${target.term}`, before: target, after: null }, store.terms.filter((e) => e !== target)), ok: true, reply: "Removed." };
+  }
+  if (action === "disable" || action === "enable") {
+    const { disabled: _off, ...rest } = target;
+    const after: Entry = action === "disable" ? { ...rest, disabled: true } : rest;
+    return { ...withChange(store, { ...by, op: action, summary: `${action}d ${target.term}`, before: target, after }, store.terms.map((e) => (e === target ? after : e))), ok: true, reply: action === "disable" ? "Disabled." : "Enabled." };
   }
   // pin: the user keeps it, agents can no longer change it; keep: clears a stale flag.
   const { stale: _stale, staleAt: _staleAt, ...rest } = target;
@@ -304,7 +351,7 @@ export function sweep(store: Store, now: number, exported: ReadonlySet<string> |
   let next = store;
   let changed = false;
   for (const entry of store.terms) {
-    if (entry.status !== "auto") continue;
+    if (entry.status !== "auto" || entry.disabled) continue;
     if (entry.stale && entry.staleAt !== undefined && now - entry.staleAt > RETIRE_AFTER_MS) {
       next = withChange(next, { at: now, by: "system", op: "retire", id: entry.id, summary: `retired ${entry.term}: ${entry.stale}`, before: entry, after: null }, next.terms.filter((e) => e.id !== entry.id)).store;
       changed = true;
@@ -343,6 +390,7 @@ export function suggest(store: Store, query: string, limit = 12): Entry[] {
     return words.some((w) => w.includes(q)) ? 2 : 9;
   };
   return store.terms
+    .filter((e) => !e.disabled)
     .map((e) => ({ e, r: rank(e) }))
     .filter(({ r }) => r < 9)
     .sort((a, b) => a.r - b.r || (b.e.seen ?? 0) - (a.e.seen ?? 0))
@@ -362,7 +410,7 @@ export function briefing(e: Entry): string {
 
 export function describe(e: Entry): string {
   const q = (w: string) => JSON.stringify(w);
-  const parts = [`${q(e.term)} [${e.kind}${e.status === "auto" ? ", auto" : ""}${e.stale ? ", stale" : ""}]`];
+  const parts = [`${q(e.term)} [${e.kind}${e.status === "auto" ? ", auto" : ""}${e.stale ? ", stale" : ""}${e.disabled ? ", disabled by the user" : ""}]`];
   if (e.note) parts.push(`- ${q(e.note.slice(0, 80))}`);
   if (e.aliases.length) parts.push(`also: ${e.aliases.slice(0, 4).map(q).join(", ")}`);
   if (e.retired?.length) parts.push(`not: ${e.retired.slice(-3).map(q).join(", ")}`);
@@ -375,7 +423,7 @@ export function digest(store: Store, budget: number): string {
   const rank = (e: Entry) => (e.seen ?? e.added ?? 0) + (e.status === "auto" ? 0 : 1e13);
   const lines: string[] = [];
   let used = 0;
-  for (const e of [...store.terms].sort((a, b) => rank(b) - rank(a))) {
+  for (const e of store.terms.filter((t) => !t.disabled).sort((a, b) => rank(b) - rank(a))) {
     const line = describe(e);
     if (used + line.length + 3 > budget) break;
     lines.push(`- ${line}`);

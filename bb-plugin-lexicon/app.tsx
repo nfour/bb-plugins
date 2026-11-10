@@ -14,6 +14,8 @@ export default definePluginApp((app) => {
   app.slots.experimental_appOverlay({ id: "loader", component: Loader });
   app.slots.experimental_threadAction(threadMenu);
   app.slots.settingsSection({ id: "review", title: "Terms", description: "What agents added, what waits for your approval, and what went stale.", component: Settings });
+  // The same page as a tab of its own; BB gives a nav panel no scroller, so it scrolls itself.
+  app.slots.navPanel({ id: "terms", title: "Lexicon", icon: "News01", path: "terms", component: () => <Settings standalone /> });
   app.contentScripts.register({
     id: "paint",
     mount({ signal }) {

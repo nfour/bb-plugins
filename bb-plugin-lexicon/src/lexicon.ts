@@ -55,6 +55,8 @@ export interface Entry {
   note?: string;
   /** Who stands behind it: `pinned` (the user's, agents cannot change or remove it; the default) or `auto` (an agent's, painted lighter until the user pins it). */
   status?: "pinned" | "auto";
+  /** Switched off by the user: kept, and its wordings stay reserved, but it is not painted, suggested or told to agents. */
+  disabled?: boolean;
   by?: "user" | "agent";
   /** The thread an agent wrote it in, and when (ms), and when it last came up (ms). */
   thread?: string;
@@ -141,6 +143,7 @@ export function parseLexicon(text: string): Parsed {
     if (typeof raw.note === "string" && raw.note.trim()) entry.note = raw.note.trim().slice(0, 200);
     if (raw.status === "auto" || raw.status === "pinned") entry.status = raw.status;
     if (raw.by === "user" || raw.by === "agent") entry.by = raw.by;
+    if (raw.disabled === true) entry.disabled = true;
     if (typeof raw.thread === "string") entry.thread = raw.thread.slice(0, 40);
     if (typeof raw.stale === "string") entry.stale = raw.stale.slice(0, 120);
     for (const key of ["added", "seen", "staleAt"] as const) if (typeof raw[key] === "number" && Number.isFinite(raw[key])) entry[key] = raw[key];
@@ -334,6 +337,7 @@ export function compile(entries: readonly Entry[]): Matcher {
     hits.set(word.toLowerCase(), { entry, via, look });
   };
   for (const entry of entries) {
+    if (entry.disabled) continue;
     add(entry.term, entry, "term");
     for (const alias of entry.aliases) add(alias, entry, "alias");
     for (const identifier of entry.code) add(identifier, entry, "code");

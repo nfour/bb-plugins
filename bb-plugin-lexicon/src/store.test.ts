@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { briefing, suggest, applyOp, digest, emptyStore, isPlainWord, sweep, undo, userEdit, STALE_AFTER_MS, RETIRE_AFTER_MS, type AgentOp, type Context, type Store } from "./store.ts";
+import { userAdd, briefing, suggest, applyOp, digest, emptyStore, isPlainWord, sweep, undo, userEdit, STALE_AFTER_MS, RETIRE_AFTER_MS, type AgentOp, type Context, type Store } from "./store.ts";
 import { mineTerms, tokensOf } from "./mine.ts";
 import { DEFAULT_TERMS } from "./defaults.ts";
 import { compile, findTerms, highlightRule } from "./lexicon.ts";
@@ -154,4 +154,36 @@ test("a ~ pick lists the best matches first and briefs the agent with quoted dat
   const text = briefing(store.terms[0]!);
   assert.match(text, /"Sync View Order" \(option\)/);
   assert.ok(text.includes('\\"this\\"') && text.includes('"syncOrder"'));
+});
+
+test("the user adds a term: pinned, any word, no note needed, undoable; owned wordings are refused", () => {
+  const c = { now: NOW, defaults: DEFAULT_TERMS };
+  const out = userAdd(emptyStore(), { term: "sync order", kind: "option", aliases: ["order sync"] }, c);
+  assert.ok(out.ok, out.reply);
+  assert.deepEqual([out.store.terms[0]?.term, out.store.terms[0]?.status, out.store.terms[0]?.by, out.store.terms[0]?.aliases], ["Sync Order", "pinned", "user", ["Order Sync"]]);
+  assert.ok(userAdd(out.store, { term: "Billing", kind: "feature" }, c).ok, "a plain word is fine for the user");
+  assert.equal(userAdd(out.store, { term: "other", kind: "feature", aliases: ["order sync"] }, c).ok, false);
+  assert.equal(userAdd(out.store, { term: "reverted", kind: "feature" }, c).ok, false, "built-in wordings stay owned");
+  assert.equal(undo(out.store).store.terms.length, 0);
+});
+
+test("a disabled term is kept and still owns its wordings, but is not painted, suggested or digested, and agents leave it alone", () => {
+  const made = must(emptyStore(), add({ aliases: ["pinned folders"] }));
+  const off = userEdit(made, "disable", "frozen-folders", { now: NOW, defaults: DEFAULT_TERMS });
+  assert.ok(off.ok, off.reply);
+  assert.equal(off.store.terms[0]?.disabled, true);
+  assert.equal(off.store.log.length, 2);
+  assert.equal(findTerms("the frozen folders and pinned folders", compile(off.store.terms)).length, 0);
+  assert.equal(suggest(off.store, "frozen").length, 0);
+  assert.doesNotMatch(digest(off.store, 2000), /Frozen Folders/);
+  for (const op of [{ op: "alias", term: "Frozen Folders", alias: "stuck folders" }, { op: "rename", term: "Frozen Folders", to: "Stuck Folders", reason: "the team says stuck now" }, { op: "retire", term: "Frozen Folders", reason: "no longer in use here" }] as AgentOp[]) {
+    const out = applyOp(off.store, op, ctx());
+    assert.equal(out.ok, false);
+    assert.match(out.reply, /switched off/);
+  }
+  assert.equal(applyOp(off.store, add({ term: "Pinned Folders" }), ctx()).ok, false);
+  const on = userEdit(off.store, "enable", "frozen-folders", { now: NOW, defaults: DEFAULT_TERMS });
+  assert.equal(on.store.terms[0]?.disabled, undefined);
+  assert.equal(findTerms("the frozen folders", compile(on.store.terms)).length, 1);
+  assert.equal(undo(off.store).store.terms[0]?.disabled, undefined);
 });

@@ -24,7 +24,7 @@ import { DEFAULT_REVISION, DEFAULT_TERMS } from "./src/defaults.ts";
 import { exportTerms, FORMATS } from "./src/export.ts";
 import { KINDS, lintOwnership, parseLexicon, TONES, type Entry, type Issue } from "./src/lexicon.ts";
 import { mineTerms } from "./src/mine.ts";
-import { applyOp, byteSize, describe, digest, emptyStore, MAX_OPS_PER_THREAD, MAX_STORE_BYTES, briefing, search, suggest, sweep, undo, userEdit, ownerOf, type AgentOp, type Outcome, type Store } from "./src/store.ts";
+import { applyOp, byteSize, describe, digest, emptyStore, MAX_OPS_PER_THREAD, MAX_STORE_BYTES, briefing, search, suggest, sweep, undo, userAdd, userEdit, ownerOf, type AgentOp, type Outcome, type Store } from "./src/store.ts";
 import { exportedNames, isCompound, packageName, symbolEntries } from "./src/symbols.ts";
 
 /** Larger imports are refused: a vocabulary is a few hundred lines. */
@@ -51,6 +51,7 @@ const entry = z.object({
   hue: z.number().optional(),
   note: z.string().optional(),
   status: z.enum(["pinned", "auto"]).optional(),
+  disabled: z.boolean().optional(),
   by: z.enum(["user", "agent"]).optional(),
   thread: z.string().optional(),
   added: z.number().optional(),
@@ -100,9 +101,24 @@ export const rpcContract = defineRpcContract({
       log: z.array(z.object({ at: z.number(), by: z.enum(["agent", "user", "system"]), summary: z.string() })),
     }),
   },
+  /** One line per project that keeps terms: what the settings page lists before a project is opened. */
+  overview: {
+    input: z.object({}),
+    output: z.object({ projects: z.array(z.object({ id: z.string(), terms: z.number(), yours: z.number(), agents: z.number(), stale: z.number(), pending: z.number() })), off: z.array(z.string()) }),
+  },
+  /** Switches a built-in term off or on for every project. */
+  set_default: {
+    input: z.object({ id: z.string().min(1), disabled: z.boolean() }),
+    output: z.null(),
+  },
+  /** A term the user adds to a project, pinned. */
+  add_term: {
+    input: z.object({ projectId: z.string().min(1), term: z.string().max(80), kind: z.enum(KINDS), note: z.string().max(400).optional(), aliases: z.array(z.string().max(80)).max(16).optional(), tone: z.enum(TONES).optional() }),
+    output: z.object({ ok: z.boolean(), reply: z.string() }),
+  },
   /** The user's edit of a term or a proposal. `undo` takes back the newest change. */
   edit: {
-    input: z.object({ projectId: z.string().min(1), action: z.enum(["pin", "keep", "remove", "approve", "reject", "undo"]), id: z.string().optional() }),
+    input: z.object({ projectId: z.string().min(1), action: z.enum(["pin", "keep", "remove", "approve", "reject", "undo", "disable", "enable"]), id: z.string().optional() }),
     output: z.object({ ok: z.boolean(), reply: z.string() }),
   },
 });
@@ -110,6 +126,7 @@ export const rpcContract = defineRpcContract({
 const storeKey = (projectId: string) => `store:${projectId}`;
 const legacyKey = (projectId: string) => `terms:${projectId}`;
 const KEY_PREFIX = "store:";
+const OFF_KEY = "defaults-off";
 
 /** The protocol agents get with the `lexicon` tool. */
 const PROTOCOL = `The project keeps a lexicon: its names, features, options (settings and modes), code identifiers, user actions and outcomes, painted the same way in every reply. You can maintain it with the lexicon tool.
@@ -158,6 +175,8 @@ export default async function plugin(bb: BbPluginApi) {
 
   // --- stores ---------------------------------------------------------------
 
+  /** Built-in terms the user switched off, for every project. */
+  const off = new Set<string>(((await kv.get<string[]>(OFF_KEY)) ?? []).filter((id) => typeof id === "string"));
   const stores = new Map<string, Store>();
   /** What agents are told about each project's terms, rebuilt whenever its store changes. */
   const digests = new Map<string, string>();
@@ -293,11 +312,23 @@ export default async function plugin(bb: BbPluginApi) {
       const { projectId, path } = await environmentOf(environmentId);
       const store = await load(projectId);
       const learned = symbolsFor(environmentId, projectId, path, symbols);
-      const revision = `${store.rev}-${learned.revision}-${DEFAULT_REVISION}`;
+      const revision = `${store.rev}-${learned.revision}-${DEFAULT_REVISION}-${hash([...off].sort().join(","))}`;
       const source = store.terms.length ? ("project" as const) : ("defaults" as const);
       if (known === revision) return { source, revision, unchanged: true, entries: [], issues: [] };
       report(projectId, revision, []);
-      return { source, revision, unchanged: false, entries: assemble(store.terms, learned.entries), issues: [] };
+      return { source, revision, unchanged: false, entries: assemble(store.terms, learned.entries, off), issues: [] };
+    },
+    async overview() {
+      const ids = new Set<string>();
+      for (const key of await kv.list(KEY_PREFIX)) ids.add(key.slice(KEY_PREFIX.length));
+      for (const key of await kv.list("terms:")) ids.add(key.slice("terms:".length));
+      const projects = [];
+      for (const id of ids) {
+        const { terms, pending } = await load(id);
+        const agents = terms.filter((t) => t.status === "auto");
+        projects.push({ id, terms: terms.length, yours: terms.length - agents.length, agents: agents.length, stale: terms.filter((t) => t.stale).length, pending: pending.length });
+      }
+      return { projects, off: [...off] };
     },
     async review({ projectId }) {
       const store = await load(projectId);
@@ -306,6 +337,17 @@ export default async function plugin(bb: BbPluginApi) {
         pending: store.pending.map((p) => ({ id: p.id, at: p.at, ...(p.thread ? { thread: p.thread } : {}), summary: summarize(p.op) })),
         log: store.log.slice(-20).reverse().map((c) => ({ at: c.at, by: c.by, summary: c.summary })),
       };
+    },
+    async set_default({ id, disabled }) {
+      if (!DEFAULT_TERMS.some((e) => e.id === id)) return null;
+      if (disabled) off.add(id);
+      else off.delete(id);
+      await kv.set(OFF_KEY, [...off]);
+      return null;
+    },
+    async add_term({ projectId, ...term }) {
+      const { reply, ok } = await mutate<Outcome>(projectId, (store) => userAdd(store, term, { now: Date.now(), defaults: DEFAULT_TERMS }));
+      return { ok, reply };
     },
     async edit({ projectId, action, id }) {
       const { reply, ok } = await mutate<Outcome>(projectId, (store) => (action === "undo" ? undo(store) : userEdit(store, action, id ?? "", { now: Date.now(), defaults: DEFAULT_TERMS })));
@@ -485,9 +527,10 @@ export default async function plugin(bb: BbPluginApi) {
 }
 
 /** The project's terms first, then the built-in set, then learned names: where two claim a wording the earlier keeps it. */
-function assemble(project: Entry[], learned: Entry[]): Entry[] {
+function assemble(project: Entry[], learned: Entry[], off: ReadonlySet<string> = new Set()): Entry[] {
   const ids = new Set(project.map((e) => e.id));
-  const all = [...project, ...DEFAULT_TERMS.filter((e) => !ids.has(e.id)), ...learned].map((e) => ({ ...e }));
+  const defaults = DEFAULT_TERMS.filter((e) => !ids.has(e.id)).map((e) => (off.has(e.id) ? { ...e, disabled: true } : e));
+  const all = [...project, ...defaults, ...learned].map((e) => ({ ...e }));
   lintOwnership(all, []);
   return all;
 }
