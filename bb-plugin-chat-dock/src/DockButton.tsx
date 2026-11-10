@@ -44,7 +44,7 @@ export function DockButton() {
   return (
     <button
       type="button"
-      title={on ? "Put the composer back under the timeline" : "Dock the composer in the right panel"}
+      title={on ? "Stop docking: keep the composer under the timeline" : "Dock the composer in the right panel"}
       aria-label="Dock the composer in the right panel"
       aria-pressed={on}
       {...{ [BUTTON_ATTR]: "" }}

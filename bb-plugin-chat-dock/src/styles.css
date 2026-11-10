@@ -31,12 +31,15 @@
   height: 1rem;
 }
 
-/* `>` in the chat column, `<` once docked in one of the plugin's hosts (see icons.tsx). */
+/* `>` while docking is off, `<` while it is on, wherever the composer is now (see icons.tsx). */
 .chat-dock-glyph-docked {
   display: none;
 }
-[data-chat-dock-host] .chat-dock-glyph-column {
+.chat-dock-button[aria-pressed="true"] .chat-dock-glyph-column {
   display: none;
+}
+.chat-dock-button[aria-pressed="true"] .chat-dock-glyph-docked {
+  display: inline;
 }
 [data-chat-dock-host] .chat-dock-glyph-docked {
   display: inline;

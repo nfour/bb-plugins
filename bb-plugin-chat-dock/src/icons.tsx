@@ -4,12 +4,14 @@
  * has no dock, so the plugin registers it under its own name; `experimental_Icon`
  * resolves a registration before the built-ins.
  *
- * Both arrangements are drawn and `styles.css` shows one: `>` on the right while
- * the composer is in the chat column, `<` on the left while it sits in one of the
- * plugin's hosts (`[data-chat-dock-host]`). The composer is moved in the DOM, not
- * re-rendered, so CSS is what notices the move in the same frame. The chevron is
- * the taller, full-strength mark; the dock beside it is smaller and faded, with a
- * small gap between them, and the pair fits the one icon.
+ * Both arrangements are drawn and `styles.css` shows one by the button's
+ * `aria-pressed`: `>` on the right while docking is off (a click docks), `<` on
+ * the left while it is on (a click undoes it). It follows the setting, not where
+ * the composer is this moment: on a phone with the drawer closed the composer is
+ * under the timeline, and a chevron that followed it would point right for a
+ * click that only switches docking off. The chevron is the taller,
+ * full-strength mark; the dock beside it is smaller and faded, with a small gap
+ * between them, and the pair fits the one icon.
  */
 export const DOCK_ICON = "chat-dock/dock";
 

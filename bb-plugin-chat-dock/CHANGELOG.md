@@ -2,6 +2,10 @@
 
 Releases are the tags `chat-dock/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.5 (2026-11-10)
+
+- The dock button's chevron follows the docking setting instead of where the composer is right now: it points left while docking is on and right while it is off. On a phone with the drawer closed, a composer under the timeline used to show a right chevron whose tap seemed to do nothing.
+
 ## 0.1.4 (2026-11-10)
 
 - On a phone, the composer docked in the drawer works: send, the pickers and the cards respond, tapping the box expands it and shows its footer (and tapping away hides it, as under the timeline), and it stays above the on-screen keyboard.
