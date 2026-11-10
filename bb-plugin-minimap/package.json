@@ -1,0 +1,41 @@
+{
+  "name": "bb-plugin-minimap",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nfour/bb-plugins.git",
+    "directory": "bb-plugin-minimap"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bb": ">=0.49",
+    "bbPluginSdk": ">=0.6.94"
+  },
+  "scripts": {
+    "build": "bb plugin build",
+    "dev": "bb plugin dev",
+    "check": "tsc --noEmit",
+    "test": "node --test src/*.test.ts"
+  },
+  "bb": {
+    "name": "Minimap",
+    "description": "A strip along the edge of each thread that stands in for the scrollbar: one rectangle per message, sized like the message, with a slider over what is on screen that you drag to scrub.",
+    "branding": {
+      "icon": "Menu"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.94",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

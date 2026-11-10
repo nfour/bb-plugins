@@ -1,0 +1,339 @@
+/* The strip sits over the right gutter of the thread's timeline and is placed by script
+   (top, height, right). It takes the pointer so a drag is not a text selection. */
+.minimap {
+  position: var(--minimap-pos);
+  z-index: 20;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+.minimap[data-off] {
+  display: none;
+}
+/* Opacity and fading belong to the rectangles only: the slider stays fully solid, so
+   where you are is never lost. Fading is opt-in: dim to the idle opacity, back under the pointer. */
+.minimap-canvas {
+  vertical-align: top;
+  width: 100%;
+  height: 100%;
+  opacity: var(--minimap-opacity, 0.66);
+}
+.minimap[data-fade] .minimap-canvas {
+  opacity: var(--minimap-idle, 0.2);
+  transition: opacity 180ms ease-out;
+}
+.minimap[data-fade]:hover .minimap-canvas,
+.minimap[data-fade][data-drag] .minimap-canvas {
+  opacity: var(--minimap-opacity, 0.66);
+}
+/* The slider: a line box over what is on screen, with no fill; its colour, strength, thickness and corners are options. */
+.minimap-view {
+  position: var(--minimap-pos);
+  inset: 0 0 auto 0;
+  border-radius: var(--minimap-slider-radius, 3px);
+  box-shadow: inset 0 0 0 var(--minimap-slider-thickness, 1px)
+    color-mix(in oklab, var(--minimap-slider-color, var(--foreground)) var(--minimap-slider-strength, 20%), transparent);
+  cursor: grab;
+}
+.minimap[data-flat] .minimap-view {
+  display: none;
+}
+.minimap[data-drag] .minimap-view {
+  cursor: grabbing;
+}
+/* BB's thread-index button: moved left of the strip, or removed from view. */
+[data-minimap-toc="left"] {
+  translate: calc(var(--minimap-shift) * -1) 0;
+}
+[data-minimap-toc="hide"] {
+  display: none;
+}
+/* The colours the canvas paints with: read back as computed colours, since a canvas cannot take var() or light-dark(). */
+.minimap-ink {
+  display: none;
+}
+.minimap-ink[data-kind="user"] {
+  color: light-dark(#aaa, #bbb);
+}
+.minimap-ink[data-kind="reply"] {
+  color: color-mix(in oklab, var(--foreground) 22%, var(--background));
+}
+.minimap-ink[data-kind="work"] {
+  color: light-dark(#d9a441, #b98a36);
+}
+.minimap-ink[data-kind="error"] {
+  color: light-dark(#d4493a, #f06a5a);
+}
+.minimap-ink[data-kind="system"] {
+  color: color-mix(in oklab, var(--foreground) 12%, var(--background));
+}
+
+/* The settings panel floats over the chat window, dragged by its title bar. */
+.minimap-panel {
+  position: var(--minimap-float);
+  z-index: 40;
+  width: 760px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  display: var(--minimap-row);
+  flex-direction: column;
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--foreground);
+  background: var(--surface-raised-solid, var(--background));
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--foreground) 14%, transparent),
+    0 12px 36px color-mix(in oklab, black 26%, transparent);
+}
+.minimap-titlebar {
+  display: var(--minimap-row);
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 8px 0 14px;
+  flex: none;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  background: color-mix(in oklab, var(--foreground) 5%, var(--surface-raised-solid, var(--background)));
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.minimap-titlebar:active {
+  cursor: grabbing;
+}
+.minimap-titlebar b {
+  flex: 1;
+  font-weight: 600;
+}
+.minimap-titlebar button {
+  display: var(--minimap-row);
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.minimap-titlebar .minimap-reset {
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.minimap-titlebar .minimap-reset[data-sure] {
+  opacity: 1;
+  color: var(--destructive, #e5484d);
+}
+.minimap-titlebar button:hover {
+  opacity: 1;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+.minimap-panel-body {
+  padding: 4px 16px 12px;
+  overflow-y: auto;
+}
+.minimap-opt {
+  display: var(--minimap-row);
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 9px 0;
+}
+.minimap-opt + .minimap-opt {
+  border-top: 1px solid color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+.minimap-opt[data-dim] {
+  opacity: 0.45;
+}
+.minimap-opt-text {
+  display: var(--minimap-row);
+  flex-direction: column;
+  gap: 2px;
+}
+.minimap-opt b {
+  font-weight: 500;
+}
+.minimap-opt-text span {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.6;
+}
+/* One line for each description; the whole text is in the title. */
+.minimap-opt-text {
+  min-width: 0;
+  flex: 1;
+}
+.minimap-opt-text span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.minimap-slide {
+  display: var(--minimap-row);
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.minimap-slide output {
+  width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+/* The tabs: a segmented control under the title bar. */
+.minimap-tabs {
+  display: var(--minimap-row);
+  gap: 2px;
+  margin: 10px 16px 0;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+.minimap-tab {
+  flex: 1;
+  padding: 4px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.65;
+}
+.minimap-tab[aria-selected="true"] {
+  opacity: 1;
+  font-weight: 500;
+  background: var(--surface-raised-solid, var(--background));
+  box-shadow: 0 1px 2px color-mix(in oklab, black 18%, transparent);
+}
+/* The switch: a pill with a knob that slides. */
+.minimap-switch {
+  flex: none;
+  position: var(--minimap-rel);
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
+  transition: background 120ms ease-out;
+}
+.minimap-switch::after {
+  content: "";
+  position: var(--minimap-pos);
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow: 0 1px 2px color-mix(in oklab, black 30%, transparent);
+  transition: translate 120ms ease-out;
+}
+.minimap-switch[aria-checked="true"] {
+  background: var(--foreground);
+}
+.minimap-switch[aria-checked="true"]::after {
+  translate: 16px 0;
+}
+.minimap-switch:disabled,
+.minimap-range:disabled {
+  cursor: default;
+}
+/* The range: a thin track filled up to the handle. */
+.minimap-range {
+  appearance: none;
+  width: 400px;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.minimap-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--foreground) var(--minimap-fill),
+    color-mix(in oklab, var(--foreground) 20%, transparent) var(--minimap-fill)
+  );
+}
+.minimap-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow:
+    0 0 0 2px var(--foreground),
+    0 1px 3px color-mix(in oklab, black 30%, transparent);
+}
+.minimap-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--foreground) 20%, transparent);
+}
+.minimap-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--foreground);
+}
+.minimap-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--foreground);
+  border-radius: 50%;
+  background: var(--background);
+}
+.minimap-color-row {
+  display: var(--minimap-row);
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.minimap-reset {
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.minimap-reset:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.minimap-reset:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.minimap-color {
+  width: 36px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+/* The note beside the strip with the row under the pointer; it never takes the pointer. */
+.minimap-tip {
+  position: var(--minimap-pos);
+  top: 0;
+  right: 100%;
+  margin-right: 10px;
+  width: max-content;
+  max-width: 320px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+  background: var(--surface-raised-solid, var(--background));
+  color: var(--foreground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: clip;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+.minimap-tip[data-on] {
+  opacity: 1;
+}

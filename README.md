@@ -10,6 +10,7 @@ Plugins for [BB](https://getbb.app), one folder each.
 | [Lexicon](bb-plugin-lexicon) | Colours a project's key terms in chat, the same way every time: plugin names, features, code identifiers, actions and outcomes. |
 | [Guest View](bb-plugin-guest-view) | Shares one thread with someone who has no BB account through a public link: they follow it live and suggest prompts you approve. |
 | [Performance](bb-plugin-performance) | A nav tab measuring how far BB is from feeling native in your real sessions (frames, typing, thread switches, start, idle, memory) and which plugin is behind a slowdown. |
+| [Minimap](bb-plugin-minimap) | A scrollbar replacement: a strip along the edge of each thread, one rectangle per row sized and coloured by kind, with a slider you drag to scrub. |
 | [Stay at bottom](bb-plugin-stay-at-bottom) | Keeps a streaming thread scrolled to its bottom when BB's own keeper slips. |
 
 ## Screenshots
@@ -19,6 +20,12 @@ Plugins for [BB](https://getbb.app), one folder each.
 ![The bar pinned at the top of a long thread, naming the reply and the question, with the turn counter](docs/screenshots/pinned-turns-bar.png)
 
 ![The Pinned turns submenu in the thread's actions menu](docs/screenshots/pinned-turns-menu.png)
+
+**Minimap**
+
+![The minimap beside a long thread, light theme](docs/screenshots/minimap-light.jpg)
+
+![The minimap beside a long thread, dark theme](docs/screenshots/minimap-dark.jpg)
 
 **Chat Dock**
 
