@@ -24,9 +24,7 @@ On a dark theme a soft shade falls from the strip's edge over the thread. Its st
 
 ## Settings
 
-Pick **Minimap** in a thread's actions menu. A settings panel opens over the chat, so you can watch the strip change as you edit. The same panel is the Minimap section of the plugin's page in BB's settings. Its six tabs:
-
-Behaviour, Strip (size, fading, the scrollbar, the shade), Scrolling, Blocks (a colour and a switch for each kind of rectangle), Slider and Note.
+Pick **Minimap** in a thread's actions menu. A settings panel opens over the chat, so you can watch the strip change as you edit. Its six tabs are Behaviour, Strip (size, fading, the scrollbar, the shade), Scrolling, Blocks (a colour and a switch for each kind of rectangle), Slider and Note. The same panel is the Minimap section of the plugin's page in BB's settings.
 
 Sliders and colours preview on the strip as you drag. The tabs work from the keyboard. On a phone the panel opens as a sheet from the bottom. **Reset all** asks twice before it puts everything back.
 
