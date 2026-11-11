@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { definePluginApp, useBbContext } from "@get-bb/plugin-sdk/app";
 import { Minimap } from "./src/Minimap";
-import { Panel } from "./src/Panel";
+import { Panel, SettingsPage } from "./src/Panel";
 import { stripOptions, useOptions } from "./src/options";
 import { threadMenu } from "./src/ThreadMenu";
 import "./src/styles.css";
@@ -74,4 +74,5 @@ function Overlay() {
 export default definePluginApp((app) => {
   app.slots.experimental_appOverlay({ id: "minimap", component: Overlay });
   app.slots.experimental_threadAction(threadMenu);
+  app.slots.settingsSection({ id: "minimap", title: "Minimap", description: "The strip that stands in for the scrollbar.", component: SettingsPage });
 });

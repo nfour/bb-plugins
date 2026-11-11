@@ -44,3 +44,25 @@ test("the defaults are the ones the owner settled on", () => {
     [1, 2, true, 420, 6, 66],
   );
 });
+
+test("the shade defaults: on, from the strip edge, 44% strong, half the strip wide", () => {
+  assert.equal(SETTINGS.edgeShadow.default, true);
+  assert.equal(SETTINGS.edgeOver.default, false);
+  assert.equal(SETTINGS.edgeStrength.default, 44);
+  assert.equal(SETTINGS.edgeReach.default, 50);
+});
+
+test("the scrolling defaults: smooth clicks, smooth wheel, three times the wheel's distance", () => {
+  assert.equal(SETTINGS.clickSmooth.default, true);
+  assert.equal(SETTINGS.wheelSmooth.default, true);
+  assert.equal(SETTINGS.wheelSpeed.default, 300);
+});
+
+test("the shade starts at the strip's edge and is black", () => {
+  assert.equal(SETTINGS.edgeRight.default, false);
+  assert.equal(SETTINGS.edgeTheme.default, false);
+});
+
+test("the shade is off on a light theme by default", () => {
+  assert.equal(SETTINGS.edgeDarkOnly.default, true);
+});

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  glideStep,
+  shadeAlpha,
   bbOf,
   buildLayout,
   dataIdOf,
@@ -189,4 +191,34 @@ test("a row measured while its turn worked and folded away since leaves no ghost
   const cache = new Map<string, Measure>([["tool", { h: 28, w: 1 }]]);
   const layout = buildLayout({ items, mounted: [mounted("c", 3, 200, 100)], cache, total: 300 });
   assert.deepEqual(layout.ids, ["a", "b", "c"]);
+});
+
+test("glideStep lands exactly, so a glide ends even where the scroller rounds to whole pixels", () => {
+  let pos = 0;
+  let frames = 0;
+  while (pos !== 1000 && frames < 200) {
+    pos = glideStep(pos, 1000, 16, 90);
+    frames++;
+  }
+  assert.equal(pos, 1000);
+  assert.ok(frames < 80, `took ${frames} frames`);
+  assert.equal(glideStep(10, 10.3, 16, 90), 10.3);
+  assert.equal(glideStep(500, 500, 16, 90), 500);
+  assert.ok(glideStep(0, 1000, 16, 90) > 0 && glideStep(0, 1000, 16, 90) < 1000);
+  assert.equal(glideStep(1000, 0, 0, 90), 1000);
+});
+
+test("shadeAlpha reaches 1, never decreases, and keeps the old default's darkness", () => {
+  assert.equal(shadeAlpha(0), 0);
+  assert.equal(shadeAlpha(1), 1);
+  assert.equal(shadeAlpha(5), 1);
+  let last = -1;
+  for (let s = 0; s <= 1; s += 0.05) {
+    const a = shadeAlpha(s);
+    assert.ok(a >= last);
+    last = a;
+  }
+  assert.ok(Math.abs(shadeAlpha(0.44) - 0.7) < 0.02);
+  // The top of the slider still changes the shade (it was flat above 0.63 before).
+  assert.ok(shadeAlpha(0.9) > shadeAlpha(0.7));
 });

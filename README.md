@@ -23,15 +23,17 @@ Plugins for [BB](https://getbb.app), one folder each.
 
 **Minimap**
 
-![A thread with the minimap along its right edge: rectangles for replies, your messages and work, with the slider over the part on screen](docs/screenshots/minimap-light.jpg)
+![A thread in the dark theme with the minimap along its right edge: rectangles for replies, your messages and work, with the slider over the part on screen](docs/screenshots/minimap-dark.jpg)
 
-![The same thread in the dark theme](docs/screenshots/minimap-dark.jpg)
+![The same thread in the light theme](docs/screenshots/minimap-light.jpg)
 
-![Hovering the strip names a rectangle with the start of its message](docs/screenshots/minimap-hover.jpg)
+![Hovering the strip: the note shows the pointer's row and its neighbours, each with an icon](docs/screenshots/minimap-hover.jpg)
 
-![The settings panel on its Strip tab](docs/screenshots/minimap-settings-strip.jpg)
+![The shade beside the strip, at full strength](docs/screenshots/minimap-shade.jpg)
 
-![The Blocks tab: a colour and a switch for each kind of rectangle](docs/screenshots/minimap-settings-blocks.jpg)
+![The settings panel on the Note tab](docs/screenshots/minimap-settings-note.jpg)
+
+![The Strip tab's Shade group](docs/screenshots/minimap-settings-shade.jpg)
 
 **Chat Dock**
 

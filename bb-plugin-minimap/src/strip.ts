@@ -9,6 +9,7 @@ import {
   kindOfDomId,
   ownOf,
   scaleFor,
+  shadeAlpha,
   type Kind,
   type Layout,
   type Measure,
@@ -50,6 +51,25 @@ export interface Options {
   showOutline: boolean;
   /** Dim the strip until the pointer is over it. */
   fadeIdle: boolean;
+  edgeShadow: boolean;
+  /** A click glides to its place instead of jumping. */
+  clickSmooth: boolean;
+  /** The wheel over the strip glides and adds up. */
+  wheelSmooth: boolean;
+  /** Percent of the wheel's own distance the wheel over the strip scrolls. */
+  wheelSpeed: number;
+  /** Whether the shade also falls across the strip. */
+  edgeOver: boolean;
+  /** The shade starts at the right edge of the strip, not its left. */
+  edgeRight: boolean;
+  /** The shade is not drawn while the theme is light. */
+  edgeDarkOnly: boolean;
+  /** The shade is the theme's background colour, not black. */
+  edgeTheme: boolean;
+  /** 0 to 1: how dark the shade is. */
+  edgeStrength: number;
+  /** Percent of the strip's width the shade reaches. */
+  edgeReach: number;
   /** 0 to 1: the strip's opacity, and with fading on the one it returns to under the pointer. */
   opacity: number;
   /** 0 to 1: the opacity while faded. */
@@ -240,6 +260,16 @@ export function createStrip(threadId: string, initial: Options): Strip {
     colors = null;
     host.style.setProperty("--minimap-opacity", String(options.opacity));
     host.style.setProperty("--minimap-idle", String(options.idleOpacity));
+    if (options.edgeShadow) host.dataset.cast = options.edgeRight ? "right" : "strip";
+    else delete host.dataset.cast;
+    if (options.edgeOver) host.dataset.layer = "over";
+    else delete host.dataset.layer;
+    if (options.edgeDarkOnly) host.dataset.dark = "";
+    else delete host.dataset.dark;
+    if (options.edgeTheme) host.dataset.tone = "theme";
+    else delete host.dataset.tone;
+    host.style.setProperty("--minimap-shade", String(shadeAlpha(options.edgeStrength)));
+    host.style.setProperty("--minimap-reach", String(options.edgeReach / 100));
     if (options.fadeIdle) host.dataset.fade = "";
     else delete host.dataset.fade;
     host.style.setProperty("--minimap-slider-color", options.sliderColor || "var(--foreground)");
@@ -297,6 +327,7 @@ export function createStrip(threadId: string, initial: Options): Strip {
     if (drawn.hostW !== width) {
       drawn.hostW = width;
       host.style.width = `${width}px`;
+      host.style.setProperty("--minimap-w", `${width}px`);
     }
     if (fits !== shown) {
       shown = fits;
@@ -429,6 +460,7 @@ export function createStrip(threadId: string, initial: Options): Strip {
     layout: () => layout,
     scale: () => scale,
     request: () => request(),
+    config: () => options,
   });
 
   /** ---- life ---- */

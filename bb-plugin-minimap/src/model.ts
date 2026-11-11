@@ -324,3 +324,22 @@ export function scrollForClick(layout: Layout, y: number, scale: number, viewpor
 export function scrollForDrag(layout: Layout, y: number, grab: number, scale: number): number {
   return bbOf(layout, (y - grab) / scale);
 }
+
+/**
+ * One frame of the wheel's glide: moves `pos` a share of the way to `target`, the share growing with the time the frame took
+ * (`tau` ms is the time to cover about two thirds of the distance). Lands exactly once within half a pixel, so the glide ends
+ * even where the browser rounds the scroller's position to whole pixels.
+ */
+export function glideStep(pos: number, target: number, dtMs: number, tau: number): number {
+  const next = pos + (target - pos) * (1 - Math.exp(-Math.max(0, dtMs) / Math.max(1, tau)));
+  return Math.abs(target - next) < 0.5 ? target : next;
+}
+
+/**
+ * The darkest the shade gets, from the strength slider (0 to 1). A curve rather than a straight share, so the
+ * slider keeps doing something to its end and the old default (0.44) still gives about 0.70.
+ */
+export function shadeAlpha(strength: number): number {
+  const s = Math.min(1, Math.max(0, strength));
+  return Math.pow(s, 0.434);
+}

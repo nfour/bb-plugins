@@ -138,6 +138,10 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
     const text = tip?.text ?? "";
     const icon = tip?.icon ?? "";
     line.dataset.id = layout.ids[index] ?? "";
+    // The icon wears the colour of its row's kind, as drawn on the strip (the user's own where they chose one).
+    const tone = env.ink(layout.kinds[index]!);
+    const glyph = line.firstElementChild as SVGElement | null;
+    if (glyph && glyph.style.color !== tone) glyph.style.color = tone;
     line.style.translate = `0 ${place * slot}px`;
     if (line.dataset.icon !== icon) {
       line.dataset.icon = icon;
@@ -210,7 +214,7 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
   const show = () => {
     frame = 0;
     const host = env.host();
-    if (!host || !note || !list || !arrow || !mark || !env.enabled() || "drag" in host.dataset || "off" in host.dataset) return hide();
+    if (!host || !note || !list || !arrow || !mark || !env.enabled() || "off" in host.dataset) return hide();
     const layout = env.layout();
     if (env.scale() <= 0 || layout.y.length === 0) return hide();
     // The rows the strip draws, worked out again only when the layout or the kinds shown change.
@@ -303,8 +307,12 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
       }
     } else {
       // The same row: its text can still have changed (a reply streaming), so its line is brought up to date.
-      const line = lines.get(near.place);
-      if (line) fill(line, near.place, layout);
+      // Its context lines too: they are other rows, and a pass or a stream can change them as well.
+      const from = Math.max(0, pos);
+      for (let place = from; place < Math.min(drawn.length, from + span); place++) {
+        const line = lines.get(place);
+        if (line) fill(line, place, layout);
+      }
       shownPlace = near.place;
     }
     // The line round the rectangle follows the one it names, which a pass can move or change in size under a resting pointer.
@@ -362,7 +370,6 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
       document.body.append(note);
       host.addEventListener("pointermove", onMove);
       host.addEventListener("pointerleave", hide);
-      host.addEventListener("pointerdown", hide);
     },
     refresh() {
       if (note && "on" in note.dataset && frame === 0) frame = requestAnimationFrame(show);
@@ -372,7 +379,6 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
       hide();
       at?.removeEventListener("pointermove", onMove);
       at?.removeEventListener("pointerleave", hide);
-      at?.removeEventListener("pointerdown", hide);
       note?.remove();
       mark?.remove();
       hostLeft = NaN;

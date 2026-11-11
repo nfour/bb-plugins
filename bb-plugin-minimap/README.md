@@ -2,9 +2,9 @@
 
 A scrollbar you can read. Minimap puts a strip along the right edge of each BB thread, drawn like VS Code's minimap: one rectangle per message, as tall as the message, coloured by who wrote it. A slider marks the part you are reading. Drag it to scrub, click anywhere on the strip to jump there, or scroll the wheel over it.
 
-![A thread with the minimap along its right edge: grey rectangles for replies, lighter right-aligned ones for your messages, amber marks for work, and the slider over the part on screen](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-light.jpg)
+![A thread in the dark theme with the minimap along its right edge: grey rectangles for replies, lighter right-aligned ones for your messages, amber marks for work, and the slider over the part on screen](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-dark.jpg)
 
-![The same thread in the dark theme](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-dark.jpg)
+![The same thread in the light theme](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-light.jpg)
 
 ## What you get
 
@@ -20,9 +20,11 @@ Rectangles are drawn to scale, so the strip covers the same ground as the scroll
 
 Hover a rectangle and a note beside the strip shows a small icon for what it is (you, the agent, a command, a file read, a search) and the start of its text, such as the command that ran. The note is a window onto a list: moving to another row glides the list there, softening a little when it passes many rows, and its arrow points at the rectangle, which is outlined in its own colour (that line jumps, it doesn't slide).
 
-![Hovering the strip: a note beside it shows an icon for an agent reply and the start of its text, with an arrow at the rectangle](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
+![Hovering the strip: the note shows the pointer's row bright and its neighbours dimmed above and below, each with an icon, and an arrow at the rectangle](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
 
-BB's own scrollbar fades out and is thin to grab, so Minimap switches it off while the strip is there. If you would rather have both, turn off **Replace the scrollbar**; **Always show the scrollbar** then stops BB fading it. BB's thread-index button is removed by default; turn **Hide the thread-index button** off and it sits just left of the strip.
+BB's own scrollbar fades out and is thin to grab, so Minimap switches it off while the strip is there. If you would rather have both, turn off **Replace the scrollbar**; **Always show the scrollbar** then stops BB fading it. BB's thread-index button is removed by default; turn **Hide the thread-index button** off and it sits just left of the strip. A soft shade falls from the strip's edge over the thread (**Shade the thread beside the strip**, on by default): **Layer** puts it over or under the rectangles, and **Shade strength** and **Shade reach** set how dark and how far. **Cast from** starts it at the strip's edge or the window's, and **Colour** is black or the theme's background. The shade is off on a light theme unless you turn **No shade on a light theme** off. On a phone the settings open as a sheet from the bottom. Clicks and the wheel glide (each can jump instead, on the Scrolling tab), and the wheel over the strip goes **Wheel speed** (default 300%, three times the thread's own) as far.
+
+![The shade at full strength and four times its default reach, laid over the strip's rectangles](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-shade.jpg)
 
 A thread short enough to have nothing to scroll gets no strip (**Hide when the thread fits**). A thread you have opened recently comes back with the row sizes Minimap already measured, so its strip is right straight away.
 
@@ -30,17 +32,20 @@ A thread short enough to have nothing to scroll gets no strip (**Hide when the t
 
 Pick **Minimap** in a thread's actions menu (the ⋯ in the thread header, or a thread's menu in the sidebar). A settings panel opens over the top left of the chat, so you can watch the strip change while you edit. Drag it by its title bar; Esc or × closes it. **Reset all** asks twice before it puts every option back.
 
-![The settings panel on its Strip tab: switches for replacing and showing the scrollbar and for keeping the strip on narrow windows, and sliders for width, narrow width, opacity and idle opacity](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-strip.jpg)
+![The settings panel on the Note tab's Preview group: the hover note switch, context rows, text lines and hover delay](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-note.jpg)
 
-The panel has five tabs:
+The panel has six tabs (the same panel is also the Minimap section of BB's settings page):
 
 - **Behaviour**: showing the strip, removing the thread-index button, hiding the strip on short threads, and loading the whole history.
-- **Strip**: replacing or keeping the scrollbar, width (6 to 120px, 26 by default), opacity, fading when the pointer is elsewhere, and what happens on a narrow window.
+- **Strip**: replacing or keeping the scrollbar, width (6 to 120px, 26 by default), opacity, fading when the pointer is elsewhere, what happens on a narrow window, and the shade beside the strip.
+- **Scrolling**: whether a click glides or jumps, whether the wheel glides, and how far the wheel scrolls.
 - **Blocks**: a colour and an on/off switch for each kind of rectangle. **Theme** puts a colour back to the theme's own.
 - **Slider**: the slider's corners, thickness, opacity and colour, or no slider at all.
 - **Note**: the hover note on or off, how many rows of context it shows above and below the pointer's (0 to 6, 1 by default; the others are quieter; at the top or bottom of a thread the window moves inward so it is always full), how many lines of each message it shows (1 to 6, 2 by default), whether it glides at all, how long it glides between rows (0 to 1000ms, 420 by default; 0 swaps at once), how soft it gets at the start of a long glide (0 to 12px, 6 by default) and the least time between rows (0 to 500ms, 66 by default).
 
-![The Blocks tab: your messages, agent replies, work, errors and system notes, each with a Theme button, a colour swatch and a switch](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-blocks.jpg)
+![The Strip tab's Shade group: the shade switch, light-theme switch, Cast from, Colour and Layer pairs, strength and reach](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-shade.jpg)
+
+![The Scrolling tab: whether a click and the wheel glide or jump, and the wheel speed](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-scrolling.jpg)
 
 Sliders and colours preview on the strip as you drag and are saved when you let go. To take the entry out of the thread menu, switch off **Show in thread menus** on the plugin's page in BB's settings.
 

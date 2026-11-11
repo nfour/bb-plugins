@@ -7,6 +7,53 @@
   user-select: none;
   cursor: pointer;
 }
+/* A shade cast over the timeline (its reach is a share of the strip's width, its strength a fraction). It is black, or the
+   theme's background with data-tone. The clip keeps it to the strip's height. From "strip" it is a blur of the strip's own
+   box that falls from its left edge, and with data-layer="over" the same blur is drawn from a zero-width line at that edge,
+   so it also falls across the rectangles. From "right" it fades from the window's edge across the strip and as far beyond
+   it as the reach, over the rectangles with data-layer and under them without. All sit below the slider. */
+.minimap[data-cast] {
+  --minimap-reachpx: calc(var(--minimap-w, 26px) * var(--minimap-reach, 1));
+  --minimap-tint: light-dark(rgb(0 0 0 / calc(var(--minimap-shade, 0.7) * 0.35)), rgb(0 0 0 / var(--minimap-shade, 0.7)));
+  --minimap-spill: var(--minimap-reachpx);
+  clip-path: inset(0 0 0 calc(var(--minimap-spill) * -1));
+}
+.minimap[data-cast][data-tone] {
+  --minimap-tint: color-mix(in oklab, var(--background) min(100%, calc(var(--minimap-shade, 0.7) * 125%)), transparent);
+}
+/* With data-dark the tint is clear on a light theme, so nothing is drawn there. */
+.minimap[data-cast][data-dark] {
+  --minimap-tint: light-dark(transparent, rgb(0 0 0 / var(--minimap-shade, 0.7)));
+}
+.minimap[data-cast][data-dark][data-tone] {
+  --minimap-tint: light-dark(transparent, color-mix(in oklab, var(--background) min(100%, calc(var(--minimap-shade, 0.7) * 125%)), transparent));
+}
+.minimap[data-cast="strip"]:not([data-layer]) {
+  box-shadow: 0 0 var(--minimap-reachpx) 0 var(--minimap-tint);
+}
+.minimap[data-cast="strip"][data-layer]::before {
+  content: "";
+  position: var(--minimap-pos);
+  inset: 0 auto 0 0;
+  width: 0;
+  pointer-events: none;
+  box-shadow: 0 0 calc(var(--minimap-reachpx) * 0.75) calc(var(--minimap-reachpx) / 4) var(--minimap-tint);
+}
+.minimap[data-cast="right"] {
+  --minimap-spill: calc(var(--minimap-w, 26px) + var(--minimap-reachpx));
+}
+.minimap[data-cast="right"]::before {
+  content: "";
+  position: var(--minimap-pos);
+  inset: 0 0 0 auto;
+  width: var(--minimap-spill);
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to left, var(--minimap-tint), color-mix(in oklab, var(--minimap-tint) 40%, transparent) 35%, transparent);
+}
+.minimap[data-cast="right"][data-layer]::before {
+  z-index: auto;
+}
 .minimap[data-off] {
   display: none;
 }
@@ -84,6 +131,16 @@
   box-shadow:
     0 0 0 1px color-mix(in oklab, var(--foreground) 14%, transparent),
     0 12px 36px color-mix(in oklab, black 26%, transparent);
+}
+/* On BB's settings page the same panel sits in the page's flow. */
+.minimap-panel[data-page] {
+  position: var(--minimap-rel);
+  z-index: auto;
+  max-height: none;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+.minimap-titlebar[data-page] {
+  cursor: default;
 }
 .minimap-titlebar {
   display: var(--minimap-row);
@@ -212,6 +269,40 @@
   font-weight: 500;
   background: var(--surface-raised-solid, var(--background));
   box-shadow: 0 1px 2px color-mix(in oklab, black 18%, transparent);
+}
+/* A choice between two ways, drawn like the tabs: the same pill with the chosen one raised. */
+.minimap-seg {
+  flex: none;
+  display: var(--minimap-row);
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+.minimap-seg-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0.65;
+}
+.minimap-seg-btn[aria-checked="true"],
+.minimap-seg-btn[aria-selected="true"] {
+  opacity: 1;
+  font-weight: 500;
+  background: var(--surface-raised-solid, var(--background));
+  box-shadow: 0 1px 2px color-mix(in oklab, black 18%, transparent);
+}
+/* The groups inside a tab: the same pair-of-tabs look, across the page. */
+.minimap-groups {
+  margin: 8px 0 2px;
+}
+.minimap-groups .minimap-seg-btn {
+  flex: 1;
+}
+.minimap-opt[data-dim] .minimap-seg-btn {
+  cursor: default;
 }
 /* The switch: a pill with a knob that slides. */
 .minimap-switch {
@@ -395,7 +486,7 @@
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.5;
+  opacity: 0.9;
 }
 /* The text beside the icon, cut after as many lines as the Text lines option allows. */
 .minimap-tip-text {
@@ -431,4 +522,83 @@
 }
 .minimap-hot[data-on] {
   opacity: 1;
+}
+
+/* On a narrow window the panel is a sheet from the bottom, as wide as the screen. Its tabs wrap into rows, and a control
+   that needs room (a slider, a choice) goes under its text, as wide as the sheet; a switch stays beside its text. */
+@media (max-width: 640px) {
+  .minimap-panel:not([data-page]) {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100vw;
+    max-width: 100vw;
+    height: min(80dvh, calc(var(--bb-shell-height, 100vh) - 24px));
+    max-height: min(80dvh, calc(var(--bb-shell-height, 100vh) - 24px));
+    border-radius: 14px 14px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .minimap-titlebar {
+    height: 46px;
+    border-radius: 14px 14px 0 0;
+    cursor: default;
+  }
+  .minimap-titlebar button {
+    width: 34px;
+    height: 34px;
+  }
+  .minimap-titlebar .minimap-reset {
+    width: auto;
+  }
+  .minimap-tabs {
+    flex-wrap: wrap;
+    margin: 10px 12px 0;
+    flex: none;
+  }
+  .minimap-tab {
+    flex: 1 1 30%;
+    padding: 8px 4px;
+  }
+  .minimap-panel-body {
+    padding: 4px 14px 16px;
+  }
+  .minimap-opt {
+    padding: 12px 0;
+    gap: 12px;
+  }
+  .minimap-opt[data-stack] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .minimap-opt[data-indent="1"] {
+    padding-left: 14px;
+  }
+  .minimap-opt[data-indent="2"] {
+    padding-left: 28px;
+  }
+  .minimap-opt[data-stack] .minimap-slide {
+    width: 100%;
+  }
+  .minimap-opt[data-stack] .minimap-range,
+  .minimap-opt[data-indent] .minimap-range {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+  .minimap-opt[data-stack] .minimap-seg {
+    width: 100%;
+  }
+  .minimap-seg-btn {
+    flex: 1;
+    padding: 8px 6px;
+  }
+}
+
+/* On the plugin's own page in BB's settings, the tabbed section replaces the plain list BB generates from the setting
+   definitions (both write the same settings): everything in the page's detail box but the plugin's sections. Scoped to
+   this plugin's page; the two test ids are BB's own. */
+[data-testid="plugin-detail-minimap"] > :not([data-testid="plugin-settings-sections"]) {
+  display: none;
 }
