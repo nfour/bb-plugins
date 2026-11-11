@@ -39,4 +39,8 @@ test("the defaults are the ones the owner settled on", () => {
   assert.equal(SETTINGS.hideScrollbar.default, true);
   assert.equal(SETTINGS.fadeIdle.default, true);
   assert.equal(SETTINGS.hoverPreview.default, true);
+  assert.deepEqual(
+    [SETTINGS.hoverContext.default, SETTINGS.hoverLines.default, SETTINGS.hoverAnimate.default, SETTINGS.hoverSlideMs.default, SETTINGS.hoverBlur.default, SETTINGS.hoverDelay.default],
+    [1, 2, true, 420, 6, 66],
+  );
 });

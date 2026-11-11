@@ -20,7 +20,7 @@ import { recall, remember } from "./remember.ts";
 import { boxAt, boxesOf } from "./boxes.ts";
 import { createPainter } from "./painter.ts";
 import { createSteering } from "./steering.ts";
-import { createTip } from "./tip.ts";
+import { createTip, type TipConfig } from "./tip.ts";
 
 export interface Options {
   /** Hide the scroller's own scrollbar while the strip shows; the strip takes its place. */
@@ -36,6 +36,13 @@ export interface Options {
   hideWhenFits: boolean;
   /** Show a note with the row under the pointer. */
   hoverPreview: boolean;
+  /** The note's look and motion: rows of context above and below (0 to 6), lines of text per row (1 to 6), whether it glides, glide time in ms, softness in px, and the least ms between rows. */
+  hoverContext: number;
+  hoverLines: number;
+  hoverAnimate: boolean;
+  hoverSlideMs: number;
+  hoverBlur: number;
+  hoverDelay: number;
   /** Which kinds of rectangle are drawn, and a colour for each ("" is the theme's). */
   show: Record<Kind, boolean>;
   colors: Record<Kind, string>;
@@ -311,7 +318,10 @@ export function createStrip(threadId: string, initial: Options): Strip {
       else scroller.style.removeProperty("scrollbar-color");
     }
     placeToc(parent, fits);
-    if (!fits) return;
+    if (!fits) {
+      tip.hide();
+      return;
+    }
 
     // Where the strip sits: the scroller's own box, at the right edge, clear of the slider.
     // The track starts and ends below and above the scrollbar's arrow buttons, which are as tall as the bar is wide.
@@ -351,6 +361,8 @@ export function createStrip(threadId: string, initial: Options): Strip {
     stripH = height;
     draw(height);
     place();
+    // A pass can change what is under a resting pointer.
+    tip.refresh();
     if (debug) Object.assign(window, { __minimap: { layout, scale, passes: ++passes, rows: rows?.items.length ?? 0, hasOlder: rows?.hasOlder, lead } });
   };
 
@@ -396,12 +408,17 @@ export function createStrip(threadId: string, initial: Options): Strip {
     idleTimer = window.setTimeout(request, SCROLL_IDLE_MS);
   }
 
+  /** What the note reads each frame, made again only when the options change. */
+  const configOf = (): TipConfig => ({ context: options.hoverContext, lines: options.hoverLines, animate: options.hoverAnimate, slideMs: options.hoverSlideMs, soft: options.hoverBlur, delay: options.hoverDelay });
+  let tipConfig = configOf();
   const tip = createTip({
     host: () => host,
     rows: () => rows,
     layout: () => layout,
     scale: () => scale,
     enabled: () => options.hoverPreview,
+    config: () => tipConfig,
+    shown: (kind) => options.show[kind],
     box: (index) => (options.show[layout.kinds[index]!] ? boxAt(layout, index, scale, width, window.devicePixelRatio || 1) : null),
     ink: (kind) => inks()[kind],
   });
@@ -445,6 +462,7 @@ export function createStrip(threadId: string, initial: Options): Strip {
     },
     setOptions(next) {
       options = next;
+      tipConfig = configOf();
       applyOptions();
       request(true);
     },

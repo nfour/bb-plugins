@@ -4,7 +4,7 @@ Minimap is a scrollbar you can read. It puts a strip along the right edge of eac
 
 - Drag the slider to scrub through the thread, click anywhere on the strip to jump there, or scroll the wheel over it.
 - Your messages are light grey and right-aligned, as wide as the bubble. Agent replies are grey, work is amber, errors are red and system notes are faint, so a long thread shows where you asked something, where the agent worked for a while and where something failed.
-- Hover a rectangle to see an icon for what it is and the start of its text (a message, the command that ran) in a note beside the strip, which slides from row to row and points at the rectangle, outlined in its own colour (that line jumps, it doesn't slide).
+- Hover a rectangle to see an icon for what it is and the start of its text (a message, the command that ran) in a note beside the strip, which glides from row to row (rows, speed, softness and delay are options) and points at the rectangle, outlined in its own colour (that line jumps, it doesn't slide).
 - The strip is drawn to scale, so its slider sits where the scrollbar's thumb would. On a very long thread your messages and errors are painted on top and stay at least two device pixels tall.
 
 ## The scrollbar
@@ -13,12 +13,13 @@ BB's scrollbar fades out and is thin to grab, so Minimap switches it off while t
 
 ## Settings
 
-Pick **Minimap** in a thread's actions menu. A settings panel opens over the chat, so you can watch the strip change as you edit, with four tabs:
+Pick **Minimap** in a thread's actions menu. A settings panel opens over the chat, so you can watch the strip change as you edit, with five tabs:
 
-- **Behaviour**: showing the strip, the thread-index button, the hover preview, short threads, and loading the whole history.
+- **Behaviour**: showing the strip, the thread-index button, short threads, and loading the whole history.
 - **Strip**: the scrollbar, width (6 to 120px), opacity, fading when the pointer is elsewhere, and narrow windows.
 - **Blocks**: a colour and an on/off switch for each kind of rectangle.
 - **Slider**: the slider's corners, thickness, opacity and colour.
+- **Note**: the hover note on or off, how many rows of context it shows above and below (0 to 6), how many lines of each message (1 to 6), whether it glides, the glide time, the glide softness and the delay between rows.
 
 Sliders and colours preview on the strip as you drag. **Reset all** asks twice before it puts everything back.
 

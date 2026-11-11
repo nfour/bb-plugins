@@ -100,3 +100,11 @@ test("work rows are named as BB names them, and a turn by its steps", () => {
   assert.equal(items[1]!.label, "Running command");
   assert.deepEqual([items[2]!.label, items[2]!.tip], ["Worked", "3 steps"]);
 });
+
+import { moreLines } from "./rows.ts";
+test("moreLines joins the first lines that say something, without Markdown marks, and cuts the end", () => {
+  assert.equal(moreLines("\n## **Fix** the `build`\n\n- then ship\n"), "Fix the build then ship");
+  assert.equal(moreLines("   \n"), "");
+  const long = moreLines(("word ".repeat(30) + "\n").repeat(5));
+  assert.ok(long.length <= 420 && long.endsWith("…"));
+});

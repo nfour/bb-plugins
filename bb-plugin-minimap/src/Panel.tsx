@@ -24,7 +24,7 @@ interface Setting {
   text: string;
 }
 
-const TABS = ["Behaviour", "Strip", "Blocks", "Slider"] as const;
+const TABS = ["Behaviour", "Strip", "Blocks", "Slider", "Note"] as const;
 
 const SCROLLBAR: Setting[] = [
   {
@@ -49,11 +49,6 @@ const BEHAVIOUR: Setting[] = [
     key: "hideToc",
     label: "Hide the thread-index button",
     text: "On removes it; off moves it left of the strip",
-  },
-  {
-    key: "hoverPreview",
-    label: "Preview on hover",
-    text: "A note beside the strip with the start of the message under the pointer",
   },
   {
     key: "hideWhenFits",
@@ -103,12 +98,12 @@ function usePreviewed<T extends number | string>(key: string, saved: T | undefin
   return { shown: preview, change, commit };
 }
 
-function Toggle({ item, dim }: { item: Setting; dim?: boolean }) {
+function Toggle({ item, dim, indent }: { item: Setting; dim?: boolean; indent?: number }) {
   const rpc = useRpc<typeof rpcContract>();
   const options = useOptions();
   const on = options[item.key];
   return (
-    <div className="minimap-opt" data-dim={dim ? "" : undefined}>
+    <div className="minimap-opt" data-dim={dim ? "" : undefined} data-indent={indent}>
       <div className="minimap-opt-text">
         <b>{item.label}</b>
         <span title={item.text}>{item.text}</span>
@@ -118,7 +113,7 @@ function Toggle({ item, dim }: { item: Setting; dim?: boolean }) {
   );
 }
 
-function Slider({ label, text, unit, name, value, dim }: { label: string; text: string; unit: string; name: NumberKey; value: number; dim?: boolean }) {
+function Slider({ label, text, unit, name, value, dim, indent }: { label: string; text: string; unit: string; name: NumberKey; value: number; dim?: boolean; indent?: number }) {
   const rpc = useRpc<typeof rpcContract>();
   const { values } = useSettings();
   const [min, max] = NUMBER_RANGES[name];
@@ -133,7 +128,7 @@ function Slider({ label, text, unit, name, value, dim }: { label: string; text: 
   }, [commit]);
   const shown = previewed ?? value;
   return (
-    <div className="minimap-opt" data-dim={dim ? "" : undefined}>
+    <div className="minimap-opt" data-dim={dim ? "" : undefined} data-indent={indent}>
       <div className="minimap-opt-text">
         <b>{label}</b>
         <span title={text}>{text}</span>
@@ -260,9 +255,9 @@ function ColorPick({ name, label, value, dim, from }: { name: ColorKey; label: s
   );
 }
 
-function ColorRow({ value, dim, from }: { value: string; dim?: boolean; from: React.RefObject<HTMLElement | null> }) {
+function ColorRow({ value, dim, from, indent }: { value: string; dim?: boolean; from: React.RefObject<HTMLElement | null>; indent?: number }) {
   return (
-    <div className="minimap-opt" data-dim={dim ? "" : undefined}>
+    <div className="minimap-opt" data-dim={dim ? "" : undefined} data-indent={indent}>
       <div className="minimap-opt-text">
         <b>Slider colour</b>
         <span title="Follows the theme's text colour until you pick one">Follows the theme's text colour until you pick one</span>
@@ -335,6 +330,7 @@ function Body() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Behaviour");
   const off = !options.enabled;
   const sliderOff = off || !options.showOutline;
+  const noteOff = off || !options.hoverPreview;
   return (
     <div ref={box} className="minimap-panel" role="dialog" aria-label="Minimap settings" style={style}>
       <div className="minimap-titlebar" {...handlers} title="Drag to move">
@@ -365,14 +361,14 @@ function Body() {
         {tab === "Strip" && (
           <>
             {SCROLLBAR.map((item) => (
-              <Toggle key={item.key} item={item} dim={off || (item.key === "keepScrollbar" && options.hideScrollbar)} />
+              <Toggle key={item.key} item={item} dim={off || (item.key === "keepScrollbar" && options.hideScrollbar)} indent={item.key === "keepScrollbar" ? 1 : undefined} />
             ))}
             <Slider label="Width" text="6 to 120 pixels" unit="px" name="width" value={options.width} dim={off} />
             <Toggle
               item={{ key: "keepNarrow", label: "Keep on narrow windows", text: "Instead of handing back to the scrollbar when there is no room" }}
               dim={off}
             />
-            <Slider label="Narrow width" text="4 to 60 pixels, used when there is no room" unit="px" name="narrowWidth" value={options.narrowWidth} dim={off || !options.keepNarrow} />
+            <Slider label="Narrow width" text="4 to 60 pixels, used when there is no room" unit="px" name="narrowWidth" value={options.narrowWidth} dim={off || !options.keepNarrow} indent={1} />
             <Slider label="Opacity" text="How solid the rectangles are" unit="%" name="opacity" value={Math.round(options.opacity * 100)} dim={off} />
             <Toggle
               item={{ key: "fadeIdle", label: "Fade when not hovered", text: "Dims the rectangles until hovered; the slider stays solid" }}
@@ -385,6 +381,7 @@ function Body() {
               name="idleOpacity"
               value={Math.round(options.idleOpacity * 100)}
               dim={off || !options.fadeIdle}
+              indent={1}
             />
           </>
         )}
@@ -395,14 +392,32 @@ function Body() {
             ))}
           </>
         )}
+        {tab === "Note" && (
+          <>
+            <Toggle
+              item={{ key: "hoverPreview", label: "Preview on hover", text: "A note beside the strip with the start of the message under the pointer" }}
+              dim={off}
+            />
+            <Slider label="Context rows" text="Rows above and below the pointer's, 0 to 6" unit="" name="hoverContext" value={options.hoverContext} dim={noteOff} indent={1} />
+            <Slider label="Text lines" text="1 to 6 lines of each message" unit="" name="hoverLines" value={options.hoverLines} dim={noteOff} indent={1} />
+            <Slider label="Hover delay" text="Least time between rows, 0 to 500 ms" unit="ms" name="hoverDelay" value={options.hoverDelay} dim={noteOff} indent={1} />
+            <Toggle
+              item={{ key: "hoverAnimate", label: "Animate the note", text: "Glides from row to row; off swaps the text at once" }}
+              dim={noteOff}
+              indent={1}
+            />
+            <Slider label="Glide time" text="Between rows, 0 to 1000 ms; 0 is instant" unit="ms" name="hoverSlideMs" value={options.hoverSlideMs} dim={noteOff || !options.hoverAnimate} indent={2} />
+            <Slider label="Glide softness" text="Softening at the start of a long glide, 0 to 12" unit="px" name="hoverBlur" value={options.hoverBlur} dim={noteOff || !options.hoverAnimate || options.hoverSlideMs === 0} indent={2} />
+          </>
+        )}
         {tab === "Slider" && (
           <>
             <Toggle
               item={{ key: "showOutline", label: "Show the viewport slider", text: "The box over what is on screen; drag it to scrub" }}
               dim={off}
             />
-            <Toggle item={{ key: "sliderRound", label: "Round the corners", text: "Off gives square corners" }} dim={sliderOff} />
-            <Slider label="Thickness" text="1 to 6 pixels" unit="px" name="sliderThickness" value={options.sliderThickness} dim={sliderOff} />
+            <Toggle item={{ key: "sliderRound", label: "Round the corners", text: "Off gives square corners" }} dim={sliderOff} indent={1} />
+            <Slider label="Thickness" text="1 to 6 pixels" unit="px" name="sliderThickness" value={options.sliderThickness} dim={sliderOff} indent={1} />
             <Slider
               label="Opacity"
               text="Fading the strip never changes it"
@@ -410,8 +425,9 @@ function Body() {
               name="sliderOpacity"
               value={Math.round(options.sliderOpacity * 100)}
               dim={sliderOff}
+              indent={1}
             />
-            <ColorRow value={options.sliderColor} dim={sliderOff} from={box} />
+            <ColorRow value={options.sliderColor} dim={sliderOff} from={box} indent={1} />
           </>
         )}
       </div>

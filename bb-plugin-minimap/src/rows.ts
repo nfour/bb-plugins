@@ -83,6 +83,8 @@ const TEXT_READ = 20000;
 
 /** The longest preview kept for a row. */
 const TIP_CHARS = 90;
+/** How much of a message a note of several lines can show. */
+const MORE_CHARS = 420;
 
 /** A message's first line that says something, without its Markdown marks, cut for a preview; "" if there is none. */
 export function firstLine(text: string): string {
@@ -91,6 +93,27 @@ export function firstLine(text: string): string {
     if (line.length > 0) return line.length > TIP_CHARS ? line.slice(0, TIP_CHARS - 1) + "…" : line;
   }
   return "";
+}
+
+/** A message's first lines that say something, joined with spaces, cut for a note of several lines; "" if there is none. */
+export function moreLines(text: string): string {
+  const parts: string[] = [];
+  let length = 0;
+  for (const raw of text.slice(0, 4000).split("\n")) {
+    const line = raw.replace(/^[\s>#*+\-`|]+/, "").replace(/[*_`]+/g, "").trim();
+    if (line.length === 0) continue;
+    parts.push(line);
+    length += line.length + 1;
+    if (length > MORE_CHARS) break;
+  }
+  const joined = parts.join(" ");
+  return joined.length > MORE_CHARS ? joined.slice(0, MORE_CHARS - 1) + "…" : joined;
+}
+
+/** `more` for a message: its text from the first line on, only when it adds to `tip`. */
+function moreOf(text: string, tip: string): { more?: string } {
+  const more = moreLines(text);
+  return more.length > tip.length ? { more } : {};
 }
 
 /** The note's name for a row of work: BB's own label for it ("Ran command") and what it ran, read or touched. */
@@ -116,9 +139,11 @@ function estimate(row: Row, finished: ReadonlySet<string>): Item {
     case "conversation": {
       if (row.role === "user") {
         const { h, w } = userSize(row.text.slice(0, TEXT_READ));
-        return { id, kind: "user", h, w, tip: firstLine(row.text), icon: "user" };
+        const tip = firstLine(row.text);
+        return { id, kind: "user", h, w, tip, icon: "user", ...moreOf(row.text, tip) };
       }
-      return { id, kind: "reply", h: replyHeight(row.text.slice(0, TEXT_READ)), w: 1, tip: firstLine(row.text), icon: "agent" };
+      const tip = firstLine(row.text);
+      return { id, kind: "reply", h: replyHeight(row.text.slice(0, TEXT_READ)), w: 1, tip, icon: "agent", ...moreOf(row.text, tip) };
     }
     case "turn": {
       const steps = (row as { summaryCount?: number }).summaryCount;

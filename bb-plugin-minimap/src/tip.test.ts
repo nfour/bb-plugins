@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { tipOf } from "./tip.ts";
+import { drawnRows, firstAtOrAfter, tipOf } from "./tip.ts";
 import type { Layout } from "./model.ts";
 import type { Rows } from "./timeline.ts";
 
@@ -28,4 +28,20 @@ test("a row without text is named, and one the data no longer holds gets its kin
 
 test("a point on no row has no note", () => {
   assert.equal(tipOf(rows, layout, -1), null);
+});
+
+test("the drawn rows leave out a kind that is switched off", () => {
+  assert.deepEqual(drawnRows(layout, () => true), [0, 1, 2]);
+  assert.deepEqual(drawnRows(layout, (kind) => kind !== "work"), [0, 2]);
+  assert.deepEqual(drawnRows(layout, () => false), []);
+});
+
+test("the first drawn row at or after an index is found by place", () => {
+  const drawn = [0, 2, 5, 9];
+  assert.equal(firstAtOrAfter(drawn, 0), 0);
+  assert.equal(firstAtOrAfter(drawn, 1), 1);
+  assert.equal(firstAtOrAfter(drawn, 5), 2);
+  assert.equal(firstAtOrAfter(drawn, 6), 3);
+  assert.equal(firstAtOrAfter(drawn, 10), 4);
+  assert.equal(firstAtOrAfter([], 3), 0);
 });

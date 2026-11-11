@@ -18,7 +18,7 @@ On a long thread the strip shows its shape at a glance: where your questions are
 
 Rectangles are drawn to scale, so the strip covers the same ground as the scrollbar and its slider sits where the scrollbar's thumb would. On a very long thread your messages and errors are painted over everything else and never get thinner than two device pixels, so you can still find them.
 
-Hover a rectangle and a note beside the strip shows a small icon for what it is (you, the agent, a command, a file read, a search) and the start of its text, such as the command that ran. The note slides from row to row and its arrow points at the rectangle, which is outlined in its own colour (that line jumps, it doesn't slide).
+Hover a rectangle and a note beside the strip shows a small icon for what it is (you, the agent, a command, a file read, a search) and the start of its text, such as the command that ran. The note is a window onto a list: moving to another row glides the list there, softening a little when it passes many rows, and its arrow points at the rectangle, which is outlined in its own colour (that line jumps, it doesn't slide).
 
 ![Hovering the strip: a note beside it shows an icon for an agent reply and the start of its text, with an arrow at the rectangle](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-hover.jpg)
 
@@ -32,12 +32,13 @@ Pick **Minimap** in a thread's actions menu (the ⋯ in the thread header, or a 
 
 ![The settings panel on its Strip tab: switches for replacing and showing the scrollbar and for keeping the strip on narrow windows, and sliders for width, narrow width, opacity and idle opacity](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-strip.jpg)
 
-The panel has four tabs:
+The panel has five tabs:
 
-- **Behaviour**: showing the strip, removing the thread-index button, the hover preview, hiding the strip on short threads, and loading the whole history.
+- **Behaviour**: showing the strip, removing the thread-index button, hiding the strip on short threads, and loading the whole history.
 - **Strip**: replacing or keeping the scrollbar, width (6 to 120px, 26 by default), opacity, fading when the pointer is elsewhere, and what happens on a narrow window.
 - **Blocks**: a colour and an on/off switch for each kind of rectangle. **Theme** puts a colour back to the theme's own.
 - **Slider**: the slider's corners, thickness, opacity and colour, or no slider at all.
+- **Note**: the hover note on or off, how many rows of context it shows above and below the pointer's (0 to 6, 1 by default; the others are quieter; at the top or bottom of a thread the window moves inward so it is always full), how many lines of each message it shows (1 to 6, 2 by default), whether it glides at all, how long it glides between rows (0 to 1000ms, 420 by default; 0 swaps at once), how soft it gets at the start of a long glide (0 to 12px, 6 by default) and the least time between rows (0 to 500ms, 66 by default).
 
 ![The Blocks tab: your messages, agent replies, work, errors and system notes, each with a Theme button, a colour swatch and a switch](https://raw.githubusercontent.com/nfour/bb-plugins/master/docs/screenshots/minimap-settings-blocks.jpg)
 
