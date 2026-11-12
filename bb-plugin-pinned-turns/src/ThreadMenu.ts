@@ -5,7 +5,8 @@ import {
   useRpc,
   type PluginThreadActionRegistration,
 } from "@get-bb/plugin-sdk/app";
-import { HALVES, type Halves, type SettingKey, type rpcContract } from "../server";
+import type { SettingKey, rpcContract } from "../server";
+import { HALVES, type Halves } from "./halves";
 import { useOptions, type Options } from "./options";
 import { useCanHover, useCounterRoom } from "./viewport";
 

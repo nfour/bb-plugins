@@ -6,14 +6,12 @@
 // over debug lines (the frontend has no plugin logger).
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { HALVES } from "./src/halves";
 
 /** The boolean settings the thread menu switches. */
 export const SETTING_KEYS = ["enabled", "showStatus", "showPosition", "showFullText", "debugLog", "showPinButton"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
-/** Which halves of the bar are drawn. */
-export const HALVES = ["both", "message", "reply"] as const;
-export type Halves = (typeof HALVES)[number];
 
 export const rpcContract = defineRpcContract({
   set_setting: { input: z.object({ key: z.enum(SETTING_KEYS), value: z.boolean() }), output: z.null() },

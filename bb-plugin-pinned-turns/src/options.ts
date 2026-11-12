@@ -1,5 +1,6 @@
 import { useSettings } from "@get-bb/plugin-sdk/app";
-import { HALVES, type Halves, type SettingKey } from "../server";
+import type { SettingKey } from "../server";
+import { HALVES, type Halves } from "./halves";
 
 /** What a setting is until the server says otherwise; the same defaults as `server.ts`. */
 export const DEFAULTS: Record<SettingKey, boolean> = {
