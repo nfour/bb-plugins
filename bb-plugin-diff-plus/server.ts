@@ -62,7 +62,7 @@ const moved = z.discriminatedUnion("ok", [
 
 export const rpcContract = defineRpcContract({
   files: { input: z.object({ environmentId: z.string().min(1), target }), output: files },
-  /** The files marked Viewed in the Diff tab, for its "Viewed files" filter. */
+  /** The files marked Viewed in the Diff tab, for its "Viewed files" choice. */
   viewed: { input: z.object({ environmentId: z.string().min(1), target }), output: viewed },
   /** The newest `count` commits of HEAD that have a parent, newest first (the root commit is left out). */
   recent_commits: { input: z.object({ environmentId: z.string().min(1), count: z.number().int().min(1).max(50) }), output: commits },

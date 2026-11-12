@@ -8,7 +8,7 @@
 //     [data-testid=git-diff-toolbar-actions]  Search filenames, Filter files, Collapse all, Diff settings
 //   (its wrapper's next sibling)              the box around the file list's scroller
 //
-// The filter box ("Search filenames") takes globs: `docs/**`, `*.md`, `!*.test.ts`.
+// The search box ("Search filenames") takes globs: `docs/**`, `*.md`, `!*.test.ts`.
 //
 // The "Filter files" menu (extensions, deleted, viewed) is not in the markup
 // while closed. bb--git keeps its choices in a module of its own, per
@@ -18,7 +18,7 @@
 import type { DiffFilters } from "./folders";
 
 export interface DiffTab {
-  /** The toolbar's wrapper; the filter box appears inside it. */
+  /** The toolbar's wrapper; the search box appears inside it. */
   toolbar: HTMLElement;
   /** The toolbar's action buttons; the tree's toggle goes first. */
   actions: HTMLElement;
@@ -67,6 +67,9 @@ function threadPane(tab: DiffTab): Element | null {
     if (!pane.closest(PANE_PANEL)) return pane;
   return null;
 }
+
+/** Whether the tab is in a split pane's own right panel, where only that pane's thread is its thread. */
+export const inPanePanel = (tab: DiffTab) => tab.toolbar.closest(PANE_PANEL) !== null;
 
 /** The thread whose rows are in the tab's pane, when the pane shows a timeline. */
 export function paneThread(tab: DiffTab): string | null {
@@ -167,8 +170,8 @@ async function waitFor<T>(find: () => T | null | undefined, frames = 20): Promis
 }
 
 /**
- * Types `value` into BB's filter box, opening it if it is closed. An empty value
- * closes the box, which clears the filter. The box is a React input, so the
+ * Types `value` into BB's search box, opening it if it is closed. An empty value
+ * closes the box, which clears the search. The box is a React input, so the
  * value goes through the native setter and an `input` event, as typing would.
  */
 export async function setFilter(tab: DiffTab, value: string): Promise<boolean> {
@@ -197,7 +200,7 @@ export function listScroller(tab: DiffTab): HTMLElement | null {
   return null;
 }
 
-/** Scrolls the file list back to its first card, where a new filter's matches start. */
+/** Scrolls the file list back to its first card, where a new search's matches start. */
 export function scrollListToTop(tab: DiffTab): void {
   const scroller = listScroller(tab);
   if (scroller) scroller.scrollTop = 0;
@@ -337,7 +340,7 @@ export async function restoreListPlace(tab: DiffTab, place: ListPlace, cancelled
   }
 }
 
-/** Opens the file's card in the list once the filter has brought it in. */
+/** Opens the file's card in the list once the search has brought it in. */
 export async function expandFile(tab: DiffTab, path: string): Promise<void> {
   const button = await waitFor(() =>
     [...tab.list.querySelectorAll<HTMLElement>("button[aria-label]")].find((b) => {
@@ -354,7 +357,7 @@ export async function expandFile(tab: DiffTab, path: string): Promise<void> {
  * BB keeps the right panel's element across navigation and remounts what is
  * inside it, so the observer watches the panels (found again every second) and
  * skips changes inside a tab's file list, where scrolling mounts and unmounts
- * cards all the time. The filter menu is portalled outside the panel, and a
+ * cards all the time. The Filter files menu is portalled outside the panel, and a
  * pick there may change nothing else in the panel (".css" for ".json", one file
  * each), so its checkmarks (`aria-checked`) are watched page-wide too.
  */
@@ -375,13 +378,20 @@ export function watchDiffTabs(onChange: () => void, lists: () => readonly HTMLEl
   attach();
   const picks = new MutationObserver(onChange);
   picks.observe(document.body, { attributes: true, attributeFilter: ["aria-checked"], subtree: true });
-  const timer = setInterval(() => {
+  const rescan = () => {
     const before = observed.size;
     attach();
     if (observed.size !== before) onChange();
-  }, 1000);
+  };
+  // Nothing is looked for while the page is out of sight; once when it is back. (The state's
+  // name is matched by prefix: the build reads the bare word as a utility.)
+  const away = () => document.visibilityState.startsWith("hid");
+  const timer = setInterval(() => away() || rescan(), 1000);
+  const shown = () => away() || rescan();
+  document.addEventListener("visibilitychange", shown);
   return () => {
     clearInterval(timer);
+    document.removeEventListener("visibilitychange", shown);
     observer.disconnect();
     picks.disconnect();
   };

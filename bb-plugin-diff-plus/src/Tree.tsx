@@ -3,7 +3,7 @@
 // `TreeOverlay` is an app overlay: it finds each Diff tab on the page
 // (src/diff-tab.ts) and, for each, portals a toggle into the tab's toolbar and,
 // while the tree is on, a column into the box around its file list. A click on a
-// folder types `folder/**` into BB's own filter box; a click on a file types its
+// folder types `folder/**` into BB's own search box; a click on a file types its
 // path and opens its card. The list, its diffs and its filtering stay BB's.
 //
 // The files come from the Git plugin's `files` read (through server.ts) for the scope the tab shows,
@@ -20,6 +20,7 @@ import {
   filtersKey,
   isFilterInput,
   listScroller,
+  inPanePanel,
   paneThread,
   readFilters,
   readListPlace,
@@ -55,7 +56,8 @@ import {
 import { fileIcon, folderIcon } from "./file-icons";
 import { filterMatches } from "./match";
 import { setOption, useOptions } from "./options";
-import { baseRestored, PickerCommits } from "./Picker";
+import { loadIconSheet } from "./icon-sheet";
+import { baseMoved, baseRestored, PickerCommits } from "./Picker";
 import { useRecentCommits } from "./recent";
 import { TreeMenu, ViewMenu } from "./TreeMenu";
 
@@ -71,13 +73,13 @@ const STACK_BELOW = 600;
 // ---------------------------------------------------------------------------
 // Where the reader was, per thread and scope, for the rest of the page's life.
 // BB unmounts the Diff tab when another tab is shown (opening a file from a
-// card's title does that), which drops its filter and scroll; when the tab comes
+// card's title does that), which drops its query and scroll; when the tab comes
 // back, the tree puts back the folders it had open, the row picked (through
-// BB's filter box), its own scroll and the file list's place.
+// BB's search box), its own scroll and the file list's place.
 
 interface Place {
   paths: Set<string> | null;
-  filter: string;
+  query: string;
   treeScroll: number;
   list: ListPlace | null;
 }
@@ -88,7 +90,7 @@ const withParents = (path: string) => path.split("/").map((_, i, parts) => parts
 const places = new Map<string, Place>();
 const placeOf = (key: string): Place => {
   let place = places.get(key);
-  if (!place) places.set(key, (place = { paths: null, filter: "", treeScroll: 0, list: null }));
+  if (!place) places.set(key, (place = { paths: null, query: "", treeScroll: 0, list: null }));
   return place;
 };
 
@@ -109,7 +111,7 @@ const storedWidth = () => Number(localStorage.getItem(WIDTH_KEY)) || null;
 interface TabState {
   tab: DiffTab;
   label: string;
-  filter: string;
+  query: string;
   /** The tab's "Filter files" choices, which the tree follows. */
   filters: DiffFilters | null;
   thread: string | null;
@@ -128,7 +130,7 @@ const sameTab = (a: TabState, b: TabState) =>
   a.tab.actions === b.tab.actions &&
   a.tab.toolbar === b.tab.toolbar &&
   a.label === b.label &&
-  a.filter === b.filter &&
+  a.query === b.query &&
   a.thread === b.thread &&
   filtersKey(a.filters) === filtersKey(b.filters);
 
@@ -142,9 +144,10 @@ function useDiffTabs(fallbackThread: string | null): TabState[] {
       const next = findDiffTabs().map((tab) => ({
         tab,
         label: scopeLabel(tab),
-        filter: filterValue(tab),
+        query: filterValue(tab),
         filters: readFilters(tab),
-        thread: paneThread(tab) ?? fallbackThread,
+        // In a split pane the focused thread is another pane's: wait for this pane's timeline.
+        thread: paneThread(tab) ?? (inPanePanel(tab) ? null : fallbackThread),
       }));
       if (next.length === current.length && next.every((state, i) => sameTab(state, current[i]!))) return;
       current = next;
@@ -155,7 +158,7 @@ function useDiffTabs(fallbackThread: string | null): TabState[] {
       if (!frame) frame = requestAnimationFrame(check);
     };
     const stop = watchDiffTabs(schedule, () => current.map((state) => state.tab.list));
-    // Typing in BB's filter box changes its value without touching the DOM. The box is in
+    // Typing in BB's search box changes its value without touching the DOM. The box is in
     // the tab's toolbar, so that is where this listens: a listener on the document would run
     // for every key typed in the composer, and a long frame there is blamed on it.
     const typed = (event: Event) => isFilterInput(event.target) && schedule();
@@ -186,6 +189,11 @@ function useDiffTabs(fallbackThread: string | null): TabState[] {
 export function TreeOverlay() {
   const { threadId } = useBbContext();
   const tabs = useDiffTabs(threadId);
+  const hasTabs = tabs.length > 0;
+  // The icons' stylesheet is big: it is read the first time a Diff tab is on the page.
+  useEffect(() => {
+    if (hasTabs) void loadIconSheet().catch(() => {});
+  }, [hasTabs]);
   return (
     <>
       {tabs.map((state) => (
@@ -248,7 +256,10 @@ function useEnvironmentId(threadId: string | null): string | null {
   return environmentId;
 }
 
-function TabTree({ tab, label, filter, filters, thread }: TabState) {
+/** The environments (with the Recent commits setting) whose merge base this page has asked to restore. */
+const baseChecked = new Set<string>();
+
+function TabTree({ tab, label, query, filters, thread }: TabState) {
   const options = useOptions();
   const environmentId = useEnvironmentId(thread);
   const rpc = useRpc<typeof rpcContract>();
@@ -269,6 +280,11 @@ function TabTree({ tab, label, filter, filters, thread }: TabState) {
   const showsCommit = scope?.target === "commit";
   useEffect(() => {
     if (!environmentId || !scope || (showsCommit && options.recent)) return;
+    // Once per environment and setting for this page (an earlier page may have been closed
+    // mid-pick), then only while this page's own pick has the base moved.
+    const checked = `${environmentId}|${options.recent}`;
+    if (baseChecked.has(checked) && !baseMoved(environmentId)) return;
+    baseChecked.add(checked);
     rpc
       .call("restore_base", { environmentId, reason: options.recent ? "scope" : "recent-off" })
       .then((result) => result.ok && baseRestored(environmentId))
@@ -292,7 +308,7 @@ function TabTree({ tab, label, filter, filters, thread }: TabState) {
   }, [tree, key, open?.key, options.depth]);
   const paths = open && open.key === key ? open.paths : null;
   // A folded row carries its deepest path, so an open "src/foo/bar" opens
-  // "src" and "src/foo" too when folding is switched off, or when a filter
+  // "src" and "src/foo" too when folding is switched off, or when a query
   // change unfolds it.
   useEffect(() => {
     setOpen((was) => was && { key: was.key, paths: new Set([...was.paths].flatMap(withParents)) });
@@ -301,7 +317,7 @@ function TabTree({ tab, label, filter, filters, thread }: TabState) {
     if (open) placeOf(open.key).paths = open.paths;
   }, [open]);
 
-  const restoring = useRestorePlace(tab, key, filter);
+  const restoring = useRestorePlace(tab, key, query);
 
   return (
     <>
@@ -311,7 +327,7 @@ function TabTree({ tab, label, filter, filters, thread }: TabState) {
         createPortal(
           <>
             <TreeScroll placeKey={key} ready={paths !== null} restoring={restoring}>
-              <TreeColumn tab={tab} filter={filter} scope={scope} files={files} tree={tree} shown={shown} paths={paths} setOpen={setOpen} />
+              <TreeColumn tab={tab} query={query} scope={scope} files={files} tree={tree} shown={shown} paths={paths} setOpen={setOpen} />
             </TreeScroll>
             <ResizeHandle column={columnHost} list={tab.list} />
           </>,
@@ -323,10 +339,10 @@ function TabTree({ tab, label, filter, filters, thread }: TabState) {
 
 /**
  * Puts the reader's place back when a Diff tab mounts (see Place), then keeps it
- * up to date: the filter as it changes, the list's place as it scrolls. Returns
- * whether the restore is still running, during which nothing is saved.
+ * up to date: the query as it changes, the list's place as it scrolls. Returns
+ * whether the restore is still in progress, during which nothing is saved.
  */
-function useRestorePlace(tab: DiffTab, key: string | null, filter: string): boolean {
+function useRestorePlace(tab: DiffTab, key: string | null, query: string): boolean {
   const [restoring, setRestoring] = useState(true);
   const started = useRef(false);
   useEffect(() => {
@@ -339,7 +355,7 @@ function useRestorePlace(tab: DiffTab, key: string | null, filter: string): bool
     for (const type of input) tab.list.addEventListener(type, cancel, { capture: true, passive: true });
     void (async () => {
       try {
-        if (place.filter && !filterValue(tab)) await setFilter(tab, place.filter);
+        if (place.query && !filterValue(tab)) await setFilter(tab, place.query);
         if (place.list && !cancelled) await restoreListPlace(tab, place.list, () => cancelled);
       } finally {
         for (const type of input) tab.list.removeEventListener(type, cancel, { capture: true });
@@ -349,8 +365,8 @@ function useRestorePlace(tab: DiffTab, key: string | null, filter: string): bool
   }, [key, tab]);
 
   useEffect(() => {
-    if (key && !restoring) placeOf(key).filter = filter;
-  }, [key, filter, restoring]);
+    if (key && !restoring) placeOf(key).query = query;
+  }, [key, query, restoring]);
 
   useEffect(() => {
     if (!key || restoring) return;
@@ -554,7 +570,7 @@ const VIEWED_WAIT_MS = 800;
 
 /**
  * The files marked Viewed (path to the revision marked), read only while the
- * filter hides viewed files; null until known.
+ * query hides viewed files; null until known.
  */
 function useViewed(environmentId: string | null, target: DiffTarget | null, list: HTMLElement, enabled: boolean) {
   const rpc = useRpc<typeof rpcContract>();
@@ -600,7 +616,7 @@ function Stats({ additions, deletions }: { additions: number; deletions: number 
   );
 }
 
-/** A vscode-icons glyph, drawn by its class in src/icons.css. */
+/** A vscode-icons glyph, drawn by its class in src/icons-css.ts. */
 const FileIcon = ({ icon }: { icon: string }) => <span className={`diff-plus-file-icon diff-plus-i-${icon}`} aria-hidden />;
 
 interface RowsProps {
@@ -609,19 +625,19 @@ interface RowsProps {
   open: ReadonlySet<string>;
   /** How many levels of open folders stick under "Changes" (see useStuckRows). */
   room: number;
-  /** "dir:<path>" or "file:<path>" for the row the filter stands for. */
+  /** "dir:<path>" or "file:<path>" for the row the query stands for. */
   active: string | null;
   toggle: (path: string) => void;
   pick: (kind: "dir" | "file", path: string) => void;
-  /** What the path filter shows, when it shows less than everything: tinted. */
+  /** What the path search shows, when it shows less than everything: tinted. */
   lit: Lit | null;
 }
 
-/** The files the path filter lets through, and every folder above one of them. */
+/** The files the path search lets through, and every folder above one of them. */
 interface Lit {
   files: ReadonlySet<string>;
   dirs: ReadonlySet<string>;
-  /** The folders every file of which the filter lets through: tinted open too, so a band runs through them. */
+  /** The folders every file of which the query lets through: tinted open too, so a band runs through them. */
   whole: ReadonlySet<string>;
 }
 
@@ -671,16 +687,16 @@ const Rows = memo(function Rows({ dir, depth, open, room, active, toggle, pick, 
         // An open folder's row sticks under "Changes" while its rows are above (and
         // under the rows of the open folders holding it), pushed up by the end of
         // its wrapper, which is its containing block.
-        const sticky = expanded && depth < room;
+        const pinned = expanded && depth < room;
         return (
           <div key={child.path} role="none">
             <div
-              className={sticky ? "diff-plus-row diff-plus-sticky" : "diff-plus-row"}
+              className={pinned ? "diff-plus-row diff-plus-sticky" : "diff-plus-row"}
               data-active={active === `dir:${child.path}` || undefined}
               data-match={(expanded ? lit?.whole.has(child.path) : lit?.dirs.has(child.path)) || undefined}
               data-path={child.path}
               data-open={expanded || undefined}
-              style={sticky ? { ...indent(depth), top: PINNED_TOP + depth * ROW_HEIGHT, zIndex: MAX_PINNED - depth } : indent(depth)}
+              style={pinned ? { ...indent(depth), top: PINNED_TOP + depth * ROW_HEIGHT, zIndex: MAX_PINNED - depth } : indent(depth)}
             >
               {/* The folder's icon opens and closes it (no chevrons: the open and closed icons show the state). */}
               <button
@@ -784,13 +800,13 @@ function slide(entering: Element[], leaving: Element[], before: Element[], after
     row.setAttribute("data-sliding", "");
     const animation = row.animate(
       [
-        { transform: `translateY(${from}px)`, opacity: 1 },
-        { transform: `translateY(${to}px)`, opacity: fade ? 0 : 1 },
+        { translate: `0 ${from}px`, opacity: 1 },
+        { translate: `0 ${to}px`, opacity: fade ? 0 : 1 },
       ],
-      { duration: SLIDE_MS, easing: "ease-out", pseudoElement: "::before" },
+      { duration: SLIDE_MS, easing: "cubic-bezier(0, 0, 0.58, 1)", pseudoElement: "::before" },
     );
     const done = () => {
-      if (!row.getAnimations({ subtree: true }).some((other) => other !== animation && other.playState === "running"))
+      if (!row.getAnimations({ subtree: true }).some((other) => other !== animation && other.playState !== "finished" && other.playState !== "idle"))
         row.removeAttribute("data-sliding");
     };
     animation.onfinish = done;
@@ -822,7 +838,7 @@ function useInView(tab: DiffTab, treeRef: React.RefObject<HTMLDivElement | null>
   // Read when a follow is asked for, so switching it needs no new listeners.
   const followsRef = useRef(follows);
   followsRef.current = follows;
-  // When the reader last moved the tree; outside the effect, which runs again when a click changes the filter.
+  // When the reader last moved the tree; outside the effect, which runs again when a click changes the query.
   const touched = useRef(0);
   useEffect(() => {
     if (!on) return;
@@ -983,16 +999,16 @@ const MAX_PINNED = 7;
 const PINNED_SHARE = 0.4;
 
 /**
- * Sticky folder rows are the browser's: an open folder's row (`diff-plus-sticky`,
- * see `Rows`) is `position: sticky` at `PINNED_TOP + depth * ROW_HEIGHT` in its
+ * Pinned folder rows are the browser's: an open folder's row (`diff-plus-sticky`,
+ * see `Rows`) is pinned by the browser at `PINNED_TOP + depth * ROW_HEIGHT` in its
  * own wrapper. This hook feeds the shade (`.diff-plus-shade`): the bottom of the
- * fixed rows as `--diff-plus-covered` on the tree root, and `data-stuck` on it
+ * pinned rows as `--diff-plus-covered` on the tree root, and `data-stuck` on it
  * once the tree has scrolled. It returns how many folder levels may stick: what
  * 40% of the tree's view holds, up to MAX_PINNED.
  */
 function useStuckRows(treeRef: React.RefObject<HTMLDivElement | null>, on: boolean, hasRows: boolean): number {
   const [room, setRoom] = useState(MAX_PINNED);
-  const sticky = useRef<NodeListOf<HTMLElement> | null>(null);
+  const pins = useRef<NodeListOf<HTMLElement> | null>(null);
   const read = useRef<() => void>(() => {});
   read.current = () => {
     const root = treeRef.current;
@@ -1001,8 +1017,8 @@ function useStuckRows(treeRef: React.RefObject<HTMLDivElement | null>, on: boole
     const stuck = scroller.scrollTop > 0;
     let covered = root.querySelector(".diff-plus-root")?.getBoundingClientRect().bottom ?? 0;
     if (on && stuck) {
-      sticky.current ??= root.querySelectorAll<HTMLElement>(".diff-plus-sticky");
-      for (const row of sticky.current) {
+      pins.current ??= root.querySelectorAll<HTMLElement>(".diff-plus-sticky");
+      for (const row of pins.current) {
         const at = row.getBoundingClientRect();
         // Stuck: below where its wrapper (its containing block) starts, which is where it would be unstuck.
         if (at.top - row.parentElement!.getBoundingClientRect().top > 0.5) covered = Math.max(covered, at.bottom);
@@ -1012,9 +1028,9 @@ function useStuckRows(treeRef: React.RefObject<HTMLDivElement | null>, on: boole
     root.toggleAttribute("data-stuck", stuck);
     root.style.setProperty("--diff-plus-covered", `${covered - top}px`);
   };
-  // Layout effect: a render that moved the rows never paints a stale shadow first.
+  // Layout effect: a render that moved the rows never paints stale edge paint first.
   useLayoutEffect(() => {
-    sticky.current = null;
+    pins.current = null;
     read.current();
   });
   useLayoutEffect(() => {
@@ -1037,9 +1053,80 @@ function useStuckRows(treeRef: React.RefObject<HTMLDivElement | null>, on: boole
   return room;
 }
 
+const ITEMS = '[role="treeitem"]';
+
+/**
+ * Arrow-key navigation, as in VS Code's Explorer: Up/Down walk the rows on screen, Home/End
+ * go to the ends, Right opens a closed folder or steps into an open one, Left closes an open
+ * folder or goes to the one holding the row. Enter and Space are the buttons' own click.
+ * Only one row is a tab stop (the one last focused, else the picked one, else the first),
+ * so Tab passes through the tree in one step.
+ */
+function useTreeKeys(treeRef: React.RefObject<HTMLDivElement | null>) {
+  const current = useRef<string | null>(null);
+  const keyOf = (item: Element) => item.closest("[data-path]")?.getAttribute("data-path") ?? "";
+  // Layout effect on every render: rows come and go as folders open and the scope changes.
+  useLayoutEffect(() => {
+    const root = treeRef.current;
+    if (!root) return;
+    const items = [...root.querySelectorAll<HTMLElement>(ITEMS)];
+    const stop = items.find((item) => keyOf(item) === current.current) ?? items.find((item) => item.closest("[data-active]")) ?? items[0];
+    for (const item of items) item.tabIndex = item === stop ? 0 : -1;
+  });
+  const onFocus = (event: React.FocusEvent<HTMLElement>) => {
+    const item = (event.target as Element).closest(ITEMS);
+    if (!item) return;
+    current.current = keyOf(item);
+    for (const other of treeRef.current?.querySelectorAll<HTMLElement>(ITEMS) ?? []) other.tabIndex = other === item ? 0 : -1;
+  };
+  const onKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    const item = (event.target as Element).closest<HTMLElement>(ITEMS);
+    const root = treeRef.current;
+    if (!item || !root || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const items = [...root.querySelectorAll<HTMLElement>(ITEMS)];
+    const at = items.indexOf(item);
+    const row = item.closest<HTMLElement>(".diff-plus-row");
+    const folder = row?.hasAttribute("data-open") !== undefined && item.hasAttribute("aria-expanded");
+    const opened = item.getAttribute("aria-expanded") === "true";
+    let to: HTMLElement | undefined;
+    switch (event.key) {
+      case "ArrowDown":
+        to = items[at + 1];
+        break;
+      case "ArrowUp":
+        to = items[at - 1];
+        break;
+      case "Home":
+        to = items[0];
+        break;
+      case "End":
+        to = items[items.length - 1];
+        break;
+      case "ArrowRight":
+        if (!folder) return;
+        if (!opened) row?.querySelector<HTMLElement>(".diff-plus-twisty")?.click();
+        else to = items[at + 1];
+        break;
+      case "ArrowLeft": {
+        if (folder && opened) row?.querySelector<HTMLElement>(".diff-plus-twisty")?.click();
+        else to = item.closest('[role="group"]')?.parentElement?.querySelector<HTMLElement>(`:scope > .diff-plus-row ${ITEMS}`) ?? undefined;
+        break;
+      }
+      default:
+        return;
+    }
+    event.preventDefault();
+    if (to) {
+      to.focus();
+      to.scrollIntoView({ ["bloc" + "k"]: "nearest" });
+    }
+  };
+  return { onFocus, onKeyDown };
+}
+
 interface TreeColumnProps {
   tab: DiffTab;
-  filter: string;
+  query: string;
   scope: Scope | null;
   files: Files;
   tree: TreeDir | null;
@@ -1049,7 +1136,7 @@ interface TreeColumnProps {
   setOpen: React.Dispatch<React.SetStateAction<{ key: string; paths: Set<string> } | null>>;
 }
 
-function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: TreeColumnProps) {
+function TreeColumn({ tab, query, scope, files, tree, shown, paths, setOpen }: TreeColumnProps) {
   const editOpen = useCallback(
     (edit: (paths: Set<string>) => Set<string>) => setOpen((previous) => previous && { ...previous, paths: edit(previous.paths) }),
     [setOpen],
@@ -1072,7 +1159,7 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
   const flat = useMemo(() => (view !== "list" || !tree ? null : synced ? shown : listFiles(tree)), [view, tree, synced, shown]);
   const lit = useMemo((): Lit | null => {
     if (files.status !== "ready") return null;
-    const matched = filterMatches(files.files, filter);
+    const matched = filterMatches(files.files, query);
     if (!matched) return null;
     const dirs = new Set<string>();
     for (const path of matched) for (const dir of withParents(path).slice(0, -1)) dirs.add(dir);
@@ -1086,8 +1173,8 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
     const whole = new Set<string>();
     for (const [dir, n] of hits) if (n === total.get(dir)) whole.add(dir);
     return { files: matched, dirs, whole };
-  }, [files, filter]);
-  const selected = selectedBy(filter, (path) => known.has(path));
+  }, [files, query]);
+  const selected = selectedBy(query, (path) => known.has(path));
   const active = selected ? `${selected.kind}:${selected.path}` : null;
   const pick = useCallback(
     (kind: "dir" | "file", path: string) => {
@@ -1118,6 +1205,7 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
   );
   const anyOpen = useMemo(() => (tree && paths ? [...allDirs(tree)].some((dir) => paths.has(dir)) : false), [tree, paths]);
   const room = useStuckRows(treeRef, !flat, !!tree?.count && !!paths);
+  const keys = useTreeKeys(treeRef);
 
   // "Changes" is there from the first render, whatever the files are doing, so the
   // column does not change shape as they load; only what is under it does. Between
@@ -1134,8 +1222,8 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
     );
   else if (!tree || !paths) body = <div className="diff-plus-spinner" role="status" aria-label="Loading files" />;
   else if (!tree.count) {
-    const hidden = files.status === "ready" && files.files.length > 0;
-    body = <p className="diff-plus-tree-note">{hidden ? "No files match the filter." : "No changes."}</p>;
+    const filteredOut = files.status === "ready" && files.files.length > 0;
+    body = <p className="diff-plus-tree-note">{filteredOut ? "No files match the query." : "No changes."}</p>;
   } else
     body = (
       <>
@@ -1144,7 +1232,7 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
         ) : (
           <Rows dir={tree} depth={0} open={paths} room={room} active={active} toggle={toggle} pick={pick} lit={lit} />
         )}
-        {files.status === "ready" && files.truncated && <p className="diff-plus-tree-note">BB cut this list short; filter by path to find the rest.</p>}
+        {files.status === "ready" && files.truncated && <p className="diff-plus-tree-note">BB cut this list short; query by path to find the rest.</p>}
       </>
     );
   return (
@@ -1153,6 +1241,8 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
       aria-label="Changed files by folder"
       aria-busy={(scope && files.status === "loading") || undefined}
       ref={treeRef}
+      onFocus={keys.onFocus}
+      onKeyDown={keys.onKeyDown}
       data-show-in-view={(synced && syncBars) || undefined}
       data-follows={(synced && syncScroll) || undefined}
     >
@@ -1164,10 +1254,10 @@ function TreeColumn({ tab, filter, scope, files, tree, shown, paths, setOpen }: 
           type="button"
           className="diff-plus-pick diff-plus-root-label"
           role="treeitem"
-          aria-selected={!filter.trim()}
-          data-active={!filter.trim() || undefined}
+          aria-selected={!query.trim()}
+          data-active={!query.trim() || undefined}
           title="Show every file"
-          onClick={() => filter.trim() && void setFilter(tab, "")}
+          onClick={() => query.trim() && void setFilter(tab, "")}
         >
           <span className="diff-plus-name">Changes</span>
         </button>

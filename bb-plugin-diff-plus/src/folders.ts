@@ -149,7 +149,7 @@ export interface DiffFilters {
   showViewed: boolean;
 }
 
-/** A file's extension as BB's filter menu lists it: ".css", lower case, "" for none or a dotfile. */
+/** A file's extension as BB's Filter files menu lists it: ".css", lower case, "" for none or a dotfile. */
 export function extensionOf(path: string): string {
   const name = baseName(path);
   const dot = name.lastIndexOf(".");
@@ -157,7 +157,7 @@ export function extensionOf(path: string): string {
 }
 
 /**
- * The files the Diff tab's filter menu lets through, by BB's own rule: a file is
+ * The files the Diff tab's Filter files menu lets through, by BB's own rule: a file is
  * viewed while its revision is the one it was marked at. `viewed` null (not
  * known yet) hides nothing.
  */
@@ -241,7 +241,7 @@ export function scopeOf(label: string): Scope | null {
   return sha ? { target: "commit", sha } : null;
 }
 
-// BB's filter splits its value at commas and runs picomatch on each part, except
+// BB's search box splits its value at commas and runs picomatch on each part, except
 // that a part with no glob syntax matches anywhere in a path, ignoring case.
 
 /**
@@ -268,11 +268,11 @@ function unliteral(pattern: string): string | null {
   return path;
 }
 
-/** The filter for a folder: everything under it (`docs/**`). */
+/** The search text for a folder: everything under it (`docs/**`). */
 export const folderPattern = (path: string) => `${literal(path)}/**`;
 
 /**
- * The filter for one file. Its plain path reads best, but a plain filter also
+ * The search text for one file. Its plain path reads best, but a plain search also
  * matches longer paths (`README.md` shows `docs/README.md` too), so when another
  * changed file holds the path, or the path holds glob characters, it is written
  * as `<path>/**`, which matches the path itself and nothing else.
@@ -286,12 +286,12 @@ export function filePattern(path: string, files: readonly TreeFile[]): string {
   return `${literal(path)}/**`;
 }
 
-/** The folder or file a filter value stands for, when it is one this tree wrote. */
+/** The folder or file a search value stands for, when it is one this tree wrote. */
 export function selectedBy(
-  filter: string,
+  query: string,
   isFile: (path: string) => boolean,
 ): { kind: "dir" | "file"; path: string } | null {
-  const value = filter.trim();
+  const value = query.trim();
   if (!value) return null;
   if (value.endsWith("/**")) {
     const path = unliteral(value.slice(0, -3));

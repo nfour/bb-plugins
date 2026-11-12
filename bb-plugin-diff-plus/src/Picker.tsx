@@ -9,7 +9,7 @@
 // other scope puts the base back (TabTree), so All changes keeps its meaning.
 //
 // The menu belongs to BB's React tree. Its items are only given a CSS `order`
-// (the menu is made a flex column), and ours are a portal appended to it, so
+// (the menu is a column), and ours are a portal appended to it, so
 // nothing of BB's is moved. Ours are outside Radix's item collection, so the
 // arrow keys skip them.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +35,8 @@ const LIST_WAIT_MS = 8000;
  */
 const moved = new Set<string>();
 export const baseRestored = (environmentId: string) => moved.delete(environmentId);
+/** Whether this page moved the environment's merge base and has not put it back. */
+export const baseMoved = (environmentId: string) => moved.has(environmentId);
 
 /** Orders the menu's items; returns the recent commits BB lists itself and whether it lists any commit. */
 function arrange(menu: HTMLElement, recent: readonly string[], hideCommitted: boolean): { listed: Set<string>; commits: boolean } {

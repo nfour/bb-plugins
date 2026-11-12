@@ -95,14 +95,14 @@ test("folderPattern and filePattern escape glob characters", () => {
   assert.equal(folderPattern("a,b"), "a?b/**");
   const files = [file("README.md"), file("docs/README.md"), file("src/a.ts"), file("app/[slug]/page.tsx")];
   assert.equal(filePattern("src/a.ts", files), "src/a.ts");
-  // A plain filter matches anywhere in a path, so a path another file holds is written exactly.
+  // A plain search matches anywhere in a path, so a path another file holds is written exactly.
   assert.equal(filePattern("README.md", files), "README.md/**");
   assert.equal(filePattern("docs/README.md", files), "docs/README.md");
   assert.equal(filePattern("app/[slug]/page.tsx", files), "app/\\[slug\\]/page.tsx/**");
   assert.equal(filePattern("old.ts", [file("old.ts"), { ...file("src/new.ts"), previousPath: "src/old.ts" }]), "old.ts/**");
 });
 
-test("selectedBy maps a filter back to a folder or a file", () => {
+test("selectedBy maps a search back to a folder or a file", () => {
   const isFile = (path: string) => ["README.md", "app/[slug]/page.tsx"].includes(path);
   assert.deepEqual(selectedBy("apps/docs/**", isFile), { kind: "dir", path: "apps/docs" });
   assert.deepEqual(selectedBy("README.md", isFile), { kind: "file", path: "README.md" });
@@ -141,7 +141,7 @@ test("a folder's tone is its files' when they agree, modified when they do not",
   assert.equal(tree.tone, "modified");
 });
 
-test("extensionOf reads extensions as BB's filter menu lists them", () => {
+test("extensionOf reads extensions as BB's Filter files menu lists them", () => {
   assert.equal(extensionOf("src/styles.CSS"), ".css");
   assert.equal(extensionOf("a.b/Makefile"), "");
   assert.equal(extensionOf(".gitignore"), "");

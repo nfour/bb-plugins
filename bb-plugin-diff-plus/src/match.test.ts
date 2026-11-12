@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { filterMatches } from "./match.ts";
 
 const files = ["src/a.ts", "src/deep/b.tsx", "docs/readme.md", "app/[slug]/page.tsx", ".github/ci.yml"].map((path) => ({ path, previousPath: null }));
-const match = (filter: string) => {
-  const found = filterMatches(files, filter);
+const match = (value: string) => {
+  const found = filterMatches(files, value);
   return found && [...found].sort();
 };
 
-test("filterMatches follows BB's path filter", () => {
+test("filterMatches follows BB's path search", () => {
   assert.equal(match(""), null);
   assert.equal(match(" , ! "), null);
   assert.deepEqual(match("src/**"), ["src/a.ts", "src/deep/b.tsx"]);

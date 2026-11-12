@@ -8,7 +8,6 @@ import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { TreeOverlay } from "./src/Tree";
 import { LIST_ICON, LIST_TREE_ICON, ListIcon, ListTreeIcon, TREE_ICON, TreeIcon } from "./src/icons";
 import "./src/styles.css";
-import "./src/icons.css";
 
 export default definePluginApp((app) => {
   app.experimental_icons.register({ name: TREE_ICON, component: TreeIcon });

@@ -1,4 +1,4 @@
-// Which files BB's path filter ("Search filenames") lets through, by BB's own
+// Which files BB's path search ("Search filenames") lets through, by BB's own
 // rules (bb--git's `Fw`/`Mw`, bb-app 0.48): the value splits at commas; a part
 // that is not a glob matches as a case-insensitive substring; a glob is
 // picomatch with `dot` and `nocase`, on the base name when it has no "/"; when
@@ -31,9 +31,9 @@ function testsFor(part: string): { exact: Test; partial: Test } {
 
 const passes = (file: Matchable, test: Test) => test(file.path) || (file.previousPath !== null && test(file.previousPath));
 
-/** The paths of the files the filter shows; null when the filter is empty and shows them all. */
-export function filterMatches(files: readonly Matchable[], filter: string): Set<string> | null {
-  const parts = filter
+/** The paths of the files the search shows; null when it is empty and shows them all. */
+export function filterMatches(files: readonly Matchable[], query: string): Set<string> | null {
+  const parts = query
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part !== "" && part !== "!");
