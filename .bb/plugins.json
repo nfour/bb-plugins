@@ -8,7 +8,6 @@
     { "name": "diff-plus", "source": "./bb-plugin-diff-plus" },
     { "name": "lexicon", "source": "./bb-plugin-lexicon" },
     { "name": "guest-view", "source": "./bb-plugin-guest-view" },
-    { "name": "minimap", "source": "./bb-plugin-minimap" },
-    { "name": "stay-at-bottom", "source": "./bb-plugin-stay-at-bottom" }
+    { "name": "minimap", "source": "./bb-plugin-minimap" }
   ]
 }

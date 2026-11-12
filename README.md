@@ -11,7 +11,6 @@ Plugins for [BB](https://getbb.app), one folder each.
 | [Guest View](bb-plugin-guest-view) | Shares one thread with someone who has no BB account through a public link: they follow it live and suggest prompts you approve. |
 | [Performance](bb-plugin-performance) | A nav tab measuring how far BB is from feeling native in your real sessions (frames, typing, thread switches, start, idle, memory) and which plugin is behind a slowdown. |
 | [Minimap](bb-plugin-minimap) | A scrollbar replacement: a strip along the edge of each thread, one rectangle per row sized and coloured by kind, with a slider you drag to scrub. |
-| [Stay at bottom](bb-plugin-stay-at-bottom) | Keeps a streaming thread scrolled to its bottom when BB's own keeper slips. |
 
 ## Screenshots
 
