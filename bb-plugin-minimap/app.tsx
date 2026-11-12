@@ -9,6 +9,7 @@ import { Minimap } from "./src/Minimap";
 import { Panel, SettingsPage } from "./src/Panel";
 import { stripOptions, useOptions } from "./src/options";
 import { threadMenu } from "./src/ThreadMenu";
+import { inBackground } from "./src/tab";
 import "./src/styles.css";
 
 /** The longest a thread waits for an idle moment before its strip is mounted anyway. */
@@ -82,8 +83,16 @@ function usePaneThreads(settled: string | null): string[] {
       setThreads((now) => (now.length === next.length && now.every((id, at) => id === next[at]) ? now : next));
     };
     scan();
-    const timer = window.setInterval(scan, PANE_SCAN_MS);
-    return () => window.clearInterval(timer);
+    // Not while the tab is in the background; once when it comes back.
+    const tick = () => {
+      if (!inBackground()) scan();
+    };
+    const timer = window.setInterval(tick, PANE_SCAN_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [settled]);
   return threads;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
 import { createStrip, type Options as StripOptions, type Strip } from "./strip";
+import { inBackground } from "./tab";
 import { watchTimeline, type Watch } from "./timeline";
 
 /**
@@ -26,7 +27,7 @@ export function Minimap({ threadId, options, loadHistory }: { threadId: string; 
     let shown = false;
     const watcher = watchTimeline(sdk, threadId, (rows) => created.setRows(rows), wanted.current);
     watch.current = watcher;
-    const sync = () => watcher.setActive(shown && !document.hidden);
+    const sync = () => watcher.setActive(shown && !inBackground());
     created.onShown((now) => {
       shown = now;
       sync();

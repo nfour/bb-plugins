@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { experimental_Icon as Icon, useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import type { SettingKey, rpcContract } from "../server";
-import { BLOCKS, NUMBER_RANGES, type ColorKey, type NumberKey } from "./shared";
+import { BLOCKS, NUMBER_RANGES, SHARE_KEYS, hintOf, shortOf, unitOf, type ColorKey, type NumberKey } from "./shared";
 import type { Kind } from "./model.ts";
 import { BLOCK_KEYS, useOptions } from "./options";
 import { setPanelOpen, usePanelOpen } from "./panelState";
@@ -18,12 +18,6 @@ const SIZED = ["re", "size"].join("");
 const ABS = ["abs", "olute"].join("");
 const REL = ["rela", "tive"].join("");
 
-interface Setting {
-  key: SettingKey;
-  label: string;
-  text: string;
-}
-
 const TABS = ["Behaviour", "Strip", "Scrolling", "Blocks", "Slider", "Note"] as const;
 
 /** Tabs that hold groups of their own, shown as a second row of tabs inside the page. */
@@ -32,41 +26,9 @@ const GROUPS: Partial<Record<(typeof TABS)[number], readonly string[]>> = {
   Note: ["Preview", "Glide"],
 };
 
-const SCROLLBAR: Setting[] = [
-  {
-    key: "hideScrollbar",
-    label: "Replace the scrollbar",
-    text: "Hides the timeline scrollbar; off keeps both, lined up",
-  },
-  {
-    key: "keepScrollbar",
-    label: "Always show the scrollbar",
-    text: "With the scrollbar kept: stops BB fading it out",
-  },
-];
-
-const BEHAVIOUR: Setting[] = [
-  {
-    key: "enabled",
-    label: "Show the minimap",
-    text: "A strip along the right edge, one rectangle per message",
-  },
-  {
-    key: "hideToc",
-    label: "Hide the thread-index button",
-    text: "On removes it; off moves it left of the strip",
-  },
-  {
-    key: "hideWhenFits",
-    label: "Hide when the thread fits",
-    text: "Gone while there is nothing to scroll, like the scrollbar",
-  },
-  {
-    key: "loadHistory",
-    label: "Load the whole history",
-    text: "Reads every older page too; off reads the newest, far cheaper",
-  },
-];
+/** The switches of the Behaviour tab and of the Strip tab's Scrollbar group; their labels and hints are in `SETTINGS`. */
+const BEHAVIOUR: SettingKey[] = ["enabled", "hideToc", "hideWhenFits", "loadHistory"];
+const SCROLLBAR: SettingKey[] = ["hideScrollbar", "keepScrollbar"];
 
 function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: () => void }) {
   return (
@@ -120,39 +82,39 @@ const rove = (event: React.KeyboardEvent<HTMLElement>, role: "tab" | "radio") =>
   all[to]!.click();
 };
 
-function Toggle({ item, dim, indent }: { item: Setting; dim?: boolean; indent?: number }) {
+function Toggle({ name, dim, indent }: { name: SettingKey; dim?: boolean; indent?: number }) {
   const rpc = useRpc<typeof rpcContract>();
   const options = useOptions();
-  const on = options[item.key];
+  const on = options[name];
   return (
     <div className="minimap-opt" data-dim={dim ? "" : undefined} data-indent={indent}>
       <div className="minimap-opt-text">
-        <b>{item.label}</b>
-        <span title={item.text}>{item.text}</span>
+        <b>{shortOf(name)}</b>
+        <span title={hintOf(name)}>{hintOf(name)}</span>
       </div>
-      <Switch on={on} label={item.label} disabled={dim} onChange={() => void rpc.call("set_setting", { key: item.key, value: !on }).catch(() => {})} />
+      <Switch on={on} label={shortOf(name)} disabled={dim} onChange={() => void rpc.call("set_setting", { key: name, value: !on }).catch(() => {})} />
     </div>
   );
 }
 
 /** A two-way choice kept in a boolean setting, drawn as a pair of tabs: `no` is its label for off, `yes` for on. */
-function Segment({ item, no, yes, dim, indent }: { item: Setting; no: string; yes: string; dim?: boolean; indent?: number }) {
+function Segment({ name, no, yes, dim, indent }: { name: SettingKey; no: string; yes: string; dim?: boolean; indent?: number }) {
   const rpc = useRpc<typeof rpcContract>();
   const options = useOptions();
-  const on = options[item.key];
+  const on = options[name];
   const pick = (value: boolean) => {
-    if (!dim && value !== on) void rpc.call("set_setting", { key: item.key, value }).catch(() => {});
+    if (!dim && value !== on) void rpc.call("set_setting", { key: name, value }).catch(() => {});
   };
   return (
     <div className="minimap-opt" data-stack="" data-dim={dim ? "" : undefined} data-indent={indent}>
       <div className="minimap-opt-text">
-        <b>{item.label}</b>
-        <span title={item.text}>{item.text}</span>
+        <b>{shortOf(name)}</b>
+        <span title={hintOf(name)}>{hintOf(name)}</span>
       </div>
-      <div className="minimap-seg" role="radiogroup" aria-label={item.label} onKeyDown={(event) => rove(event, "radio")}>
-        {[no, yes].map((name, index) => (
+      <div className="minimap-seg" role="radiogroup" aria-label={shortOf(name)} onKeyDown={(event) => rove(event, "radio")}>
+        {[no, yes].map((choice, index) => (
           <button
-            key={name}
+            key={choice}
             type="button"
             role="radio"
             aria-checked={on === (index === 1)}
@@ -161,7 +123,7 @@ function Segment({ item, no, yes, dim, indent }: { item: Setting; no: string; ye
             className="minimap-seg-btn"
             onClick={() => pick(index === 1)}
           >
-            {name}
+            {choice}
           </button>
         ))}
       </div>
@@ -169,8 +131,14 @@ function Segment({ item, no, yes, dim, indent }: { item: Setting; no: string; ye
   );
 }
 
-function Slider({ label, text, unit, name, value, dim, indent }: { label: string; text: string; unit: string; name: NumberKey; value: number; dim?: boolean; indent?: number }) {
+function Slider({ name, dim, indent }: { name: NumberKey; dim?: boolean; indent?: number }) {
   const rpc = useRpc<typeof rpcContract>();
+  const options = useOptions();
+  const label = shortOf(name);
+  const text = hintOf(name);
+  const unit = unitOf(name);
+  // The options hold a share (0 to 1) for the percentages; the panel and the saved value are 0 to 100.
+  const value = (SHARE_KEYS as readonly string[]).includes(name) ? Math.round(options[name] * 100) : options[name];
   const { values } = useSettings();
   const [min, max] = NUMBER_RANGES[name];
   const savedValue = typeof values?.[name] === "number" ? (values[name] as number) : undefined;
@@ -431,41 +399,36 @@ function Content({ box, focusOnOpen }: { box: React.RefObject<HTMLElement | null
         )}
         {tab === "Behaviour" && (
           <>
-            {BEHAVIOUR.map((item) => (
-              <Toggle key={item.key} item={item} dim={off && item.key !== "enabled"} />
+            {BEHAVIOUR.map((key) => (
+              <Toggle key={key} name={key} dim={off && key !== "enabled"} />
             ))}
           </>
         )}
         {page === "Scrollbar" && (
           <>
-            {SCROLLBAR.map((item) => (
-              <Toggle key={item.key} item={item} dim={off || (item.key === "keepScrollbar" && options.hideScrollbar)} indent={item.key === "keepScrollbar" ? 1 : undefined} />
+            {SCROLLBAR.map((key) => (
+              <Toggle key={key} name={key} dim={off || (key === "keepScrollbar" && options.hideScrollbar)} indent={key === "keepScrollbar" ? 1 : undefined} />
             ))}
           </>
         )}
         {page === "Size" && (
           <>
-            <Slider label="Width" text="6 to 120 pixels" unit="px" name="width" value={options.width} dim={off} />
-            <Toggle
-              item={{ key: "keepNarrow", label: "Keep on narrow windows", text: "Instead of handing back to the scrollbar when there is no room" }}
-              dim={off}
+            <Slider name="width" dim={off} />
+            <Toggle name="keepNarrow" dim={off}
             />
-            <Slider label="Narrow width" text="4 to 60 pixels, used when there is no room" unit="px" name="narrowWidth" value={options.narrowWidth} dim={off || !options.keepNarrow} indent={1} />
+            <Slider name="narrowWidth" dim={off || !options.keepNarrow} indent={1} />
           </>
         )}
         {page === "Fade" && (
           <>
-            <Slider label="Opacity" text="How solid the rectangles are" unit="%" name="opacity" value={Math.round(options.opacity * 100)} dim={off} />
-            <Toggle
-              item={{ key: "fadeIdle", label: "Fade when not hovered", text: "Dims the rectangles until hovered; the slider stays solid" }}
-              dim={off}
+            <Slider name="opacity" dim={off} />
+            <Toggle name="fadeIdle" dim={off}
             />
             <Slider
-              label="Idle opacity"
-              text="How faint they get when not hovered"
-              unit="%"
+             
+             
+             
               name="idleOpacity"
-              value={Math.round(options.idleOpacity * 100)}
               dim={off || !options.fadeIdle}
               indent={1}
             />
@@ -473,20 +436,20 @@ function Content({ box, focusOnOpen }: { box: React.RefObject<HTMLElement | null
         )}
         {page === "Shade" && (
           <>
-            <Toggle item={{ key: "edgeShadow", label: "Shade the thread beside the strip", text: "A soft darkening from the strip's edge over the thread" }} dim={off} />
-            <Toggle item={{ key: "edgeDarkOnly", label: "No shade on a light theme", text: "Off while the theme is light, where it looks heavy" }} dim={off || !options.edgeShadow} indent={1} />
-            <Segment item={{ key: "edgeRight", label: "Cast from", text: "The strip's own edge, or the window's, crossing the strip" }} no="Strip edge" yes="Right edge" dim={off || !options.edgeShadow} indent={1} />
-            <Segment item={{ key: "edgeTheme", label: "Colour", text: "Darkens with black, or fades into the theme's background" }} no="Black" yes="Theme" dim={off || !options.edgeShadow} indent={1} />
-            <Segment item={{ key: "edgeOver", label: "Layer", text: "Under the strip's rectangles, or over them" }} no="Under" yes="Over" dim={off || !options.edgeShadow} indent={1} />
-            <Slider label="Shade strength" text="How dark it is, 0 to 100" unit="%" name="edgeStrength" value={Math.round(options.edgeStrength * 100)} dim={off || !options.edgeShadow} indent={1} />
-            <Slider label="Shade reach" text="As a share of the strip's width, 25 to 400" unit="%" name="edgeReach" value={options.edgeReach} dim={off || !options.edgeShadow} indent={1} />
+            <Toggle name="edgeShadow" dim={off} />
+            <Toggle name="edgeDarkOnly" dim={off || !options.edgeShadow} indent={1} />
+            <Segment name="edgeRight" no="Strip edge" yes="Right edge" dim={off || !options.edgeShadow} indent={1} />
+            <Segment name="edgeTheme" no="Black" yes="Theme" dim={off || !options.edgeShadow} indent={1} />
+            <Segment name="edgeOver" no="Under" yes="Over" dim={off || !options.edgeShadow} indent={1} />
+            <Slider name="edgeStrength" dim={off || !options.edgeShadow} indent={1} />
+            <Slider name="edgeReach" dim={off || !options.edgeShadow} indent={1} />
           </>
         )}
         {tab === "Scrolling" && (
           <>
-            <Segment item={{ key: "clickSmooth", label: "A click on the strip", text: "Glides to the place, or jumps there" }} no="Jumps" yes="Glides" dim={off} />
-            <Segment item={{ key: "wheelSmooth", label: "The wheel over the strip", text: "Glides, with steps adding up, or jumps a step at a time" }} no="Jumps" yes="Glides" dim={off} />
-            <Slider label="Wheel speed" text="Distance per wheel step; 200 is twice the thread's own, 25 to 1000" unit="%" name="wheelSpeed" value={options.wheelSpeed} dim={off} />
+            <Segment name="clickSmooth" no="Jumps" yes="Glides" dim={off} />
+            <Segment name="wheelSmooth" no="Jumps" yes="Glides" dim={off} />
+            <Slider name="wheelSpeed" dim={off} />
           </>
         )}
         {tab === "Blocks" && (
@@ -498,39 +461,32 @@ function Content({ box, focusOnOpen }: { box: React.RefObject<HTMLElement | null
         )}
         {page === "Preview" && (
           <>
-            <Toggle
-              item={{ key: "hoverPreview", label: "Preview on hover", text: "A note beside the strip with the start of the message under the pointer" }}
-              dim={off}
+            <Toggle name="hoverPreview" dim={off}
             />
-            <Slider label="Context rows" text="Rows above and below the pointer's, 0 to 6" unit="" name="hoverContext" value={options.hoverContext} dim={noteOff} indent={1} />
-            <Slider label="Text lines" text="1 to 6 lines of each message" unit="" name="hoverLines" value={options.hoverLines} dim={noteOff} indent={1} />
-            <Slider label="Hover delay" text="Least time between rows, 0 to 500 ms" unit="ms" name="hoverDelay" value={options.hoverDelay} dim={noteOff} indent={1} />
+            <Slider name="hoverContext" dim={noteOff} indent={1} />
+            <Slider name="hoverLines" dim={noteOff} indent={1} />
+            <Slider name="hoverDelay" dim={noteOff} indent={1} />
           </>
         )}
         {page === "Glide" && (
           <>
-            <Toggle
-              item={{ key: "hoverAnimate", label: "Animate the note", text: "Glides from row to row; off swaps the text at once" }}
-              dim={noteOff}
+            <Toggle name="hoverAnimate" dim={noteOff}
             />
-            <Slider label="Glide time" text="Between rows, 0 to 1000 ms; 0 is instant" unit="ms" name="hoverSlideMs" value={options.hoverSlideMs} dim={noteOff || !options.hoverAnimate} indent={1} />
-            <Slider label="Glide softness" text="Softening at the start of a long glide, 0 to 12" unit="px" name="hoverBlur" value={options.hoverBlur} dim={noteOff || !options.hoverAnimate || options.hoverSlideMs === 0} indent={1} />
+            <Slider name="hoverSlideMs" dim={noteOff || !options.hoverAnimate} indent={1} />
+            <Slider name="hoverBlur" dim={noteOff || !options.hoverAnimate || options.hoverSlideMs === 0} indent={1} />
           </>
         )}
         {tab === "Slider" && (
           <>
-            <Toggle
-              item={{ key: "showOutline", label: "Show the viewport slider", text: "The box over what is on screen; drag it to scrub" }}
-              dim={off}
+            <Toggle name="showOutline" dim={off}
             />
-            <Segment item={{ key: "sliderRound", label: "Corners", text: "Square corners, or curved ones" }} no="Square" yes="Round" dim={sliderOff} indent={1} />
-            <Slider label="Thickness" text="1 to 6 pixels" unit="px" name="sliderThickness" value={options.sliderThickness} dim={sliderOff} indent={1} />
+            <Segment name="sliderRound" no="Square" yes="Round" dim={sliderOff} indent={1} />
+            <Slider name="sliderThickness" dim={sliderOff} indent={1} />
             <Slider
-              label="Opacity"
-              text="Fading the strip never changes it"
-              unit="%"
+             
+             
+             
               name="sliderOpacity"
-              value={Math.round(options.sliderOpacity * 100)}
               dim={sliderOff}
               indent={1}
             />

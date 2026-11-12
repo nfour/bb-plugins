@@ -2,6 +2,7 @@ import type { Box } from "./boxes.ts";
 import { ICONS, KIND_ICON } from "./icons.ts";
 import { KINDS, rectAt, type Kind, type Layout } from "./model.ts";
 import type { Rows } from "./timeline.ts";
+import { isJump, planLines, windowStart } from "./window.ts";
 
 const LABEL: Record<Kind, string> = { user: "You", reply: "Agent", work: "Work", error: "Error", system: "Note" };
 
@@ -50,8 +51,7 @@ const LINE_H = 17;
 const PAD = 5;
 /** The softening reaches its peak after the glide has passed this many rows. */
 const SOFT_ROWS = 8;
-/** A jump of more rows than this takes the new line at once, since gliding past that many lines would only streak. */
-const FAR = 24;
+/** How close the note may come to the top or bottom of the strip. */
 const EDGE = 10;
 /** Space between the note and the strip. */
 const GAP = 12;
@@ -171,20 +171,13 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
 
   /** Builds only the lines a glide from `from` to `to` passes, brings them up to date, keeps the ones near it and drops the rest. */
   const keepLines = (layout: Layout, from: number, to: number, span: number) => {
-    const lo = Math.max(0, Math.min(from, to));
-    const hi = Math.min(drawn.length - 1, Math.max(from, to) + span - 1);
-    for (const [place, line] of lines) {
-      if (place < lo - FAR || place > hi + FAR || place >= drawn.length) {
-        line.remove();
-        lines.delete(place);
-      }
+    const plan = planLines(lines.keys(), from, to, span, drawn.length);
+    for (const place of plan.drop) {
+      lines.get(place)?.remove();
+      lines.delete(place);
     }
-    for (let place = lo; place <= hi; place++) {
-      const have = lines.get(place);
-      if (have) {
-        fill(have, place, layout);
-        continue;
-      }
+    for (const place of plan.refresh) fill(lines.get(place)!, place, layout);
+    for (const place of plan.build) {
       const line = lineFor(place, layout);
       lines.set(place, line);
       list!.append(line);
@@ -269,14 +262,8 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
         changedAt = performance.now();
         // The list holds a line for every row the glide passes, at its place; the window shows `span` of them
         // with the pointer's row in the middle, moved inward at either end of the thread so no part of it is empty.
-        const start = Math.min(Math.max(0, near.place - context), Math.max(0, drawn.length - span));
-        const jump =
-          fresh ||
-          Number.isNaN(pos) ||
-          !config.animate ||
-          config.slideMs <= 0 ||
-          Math.abs(start - pos) > FAR ||
-          !!reduced?.matches;
+        const start = windowStart(near.place, context, drawn.length);
+        const jump = fresh || config.slideMs <= 0 || !!reduced?.matches || isJump(start, pos, config.animate);
         if (jump) {
           for (const line of lines.values()) line.remove();
           lines.clear();

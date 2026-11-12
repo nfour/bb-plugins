@@ -24,7 +24,7 @@ export const rpcContract = defineRpcContract({
 export default async function plugin(bb: BbPluginApi) {
   // The ranges are ours (held where a number is written and read), not part of BB's definition.
   const definitions = Object.fromEntries(
-    Object.entries(SETTINGS).map(([key, { min: _min, max: _max, ...definition }]: [string, Record<string, unknown>]) => [key, definition]),
+    Object.entries(SETTINGS).map(([key, { min: _min, max: _max, short: _short, hint: _hint, unit: _unit, ...definition }]: [string, Record<string, unknown>]) => [key, definition]),
   );
   const settings = bb.settings.define(definitions as unknown as typeof SETTINGS);
   bb.rpc.register(rpcContract, {

@@ -22,6 +22,7 @@ import { boxAt, boxesOf } from "./boxes.ts";
 import { createPainter } from "./painter.ts";
 import { createSteering } from "./steering.ts";
 import { createTip, type TipConfig } from "./tip.ts";
+import { inBackground } from "./tab.ts";
 
 export interface Options {
   /** Hide the scroller's own scrollbar while the strip shows; the strip takes its place. */
@@ -476,9 +477,12 @@ export function createStrip(threadId: string, initial: Options): Strip {
   dark.addEventListener("change", recolour);
 
   // The scroller can be rebuilt under a thread (a layout change); a cheap check finds the new one.
-  const watch = window.setInterval(() => {
-    if (!timeline || !timeline.scroller.isConnected || !timeline.items.isConnected) request();
-  }, 1000);
+  // It does not run while the tab is in the background, and looks once when it comes back.
+  const look = () => {
+    if (!inBackground() && (!timeline || !timeline.scroller.isConnected || !timeline.items.isConnected)) request();
+  };
+  const watch = window.setInterval(look, 1000);
+  document.addEventListener("visibilitychange", look);
   request();
 
   return {
@@ -503,6 +507,7 @@ export function createStrip(threadId: string, initial: Options): Strip {
       disposed = true;
       steering.cancel();
       window.clearInterval(watch);
+      document.removeEventListener("visibilitychange", look);
       window.clearTimeout(passTimer);
       window.clearTimeout(idleTimer);
       cancelAnimationFrame(frameId);

@@ -25,6 +25,8 @@ export function createPainter(): Painter {
   let animation = 0;
   const size = { w: 0, h: 0, dpr: 0 };
   let live = false;
+  /** The colours the canvas was last painted with, so a picture that is the same in the same colours is not painted again. */
+  let painted = "";
 
   const paint = (ctx: CanvasRenderingContext2D, boxes: Iterable<Box>, width: number, height: number, palette: Record<Kind, string>) => {
     ctx.setTransform(size.dpr, 0, 0, size.dpr, 0, 0);
@@ -48,6 +50,8 @@ export function createPainter(): Painter {
   const settle = (ctx: CanvasRenderingContext2D, to: Map<string, Box>, width: number, height: number, palette: () => Record<Kind, string>) => {
     stop();
     const from = current;
+    const inks = palette();
+    const key = Object.values(inks).join("|");
     let changed = from.size !== to.size;
     if (!changed) for (const [id, box] of to) {
       const before = from.get(id);
@@ -56,9 +60,13 @@ export function createPainter(): Painter {
         break;
       }
     }
+    // Nothing moved and nothing was recoloured: what is on the canvas is already right (a pass that only read new text
+    // or a taller row elsewhere comes here about once a second on a live thread).
+    if (!changed && from.size > 0 && key === painted) return;
+    painted = key;
     if (!changed || from.size === 0 || to.size > TWEEN_MAX || reduceMotion.matches) {
       current = to;
-      paint(ctx, to.values(), width, height, palette());
+      paint(ctx, to.values(), width, height, inks);
       return;
     }
     const start = performance.now();
@@ -100,7 +108,10 @@ export function createPainter(): Painter {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       // A new size is a new picture, not a change to animate.
-      if (resized) current = new Map();
+      if (resized) {
+        current = new Map();
+        painted = "";
+      }
       settle(ctx, to, width, height, palette);
     },
     forget() {
@@ -108,6 +119,7 @@ export function createPainter(): Painter {
       live = false;
       size.w = size.h = size.dpr = 0;
       current = new Map();
+      painted = "";
     },
     stop,
   };

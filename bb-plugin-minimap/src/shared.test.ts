@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BLOCKS, COLOR_KEYS, NUMBER_KEYS, NUMBER_RANGES, SETTINGS, SETTING_KEYS, readNumber } from "./shared.ts";
+import { BLOCKS, COLOR_KEYS, NUMBER_KEYS, NUMBER_RANGES, SETTINGS, SETTING_KEYS, SHARE_KEYS, hintOf, readNumber, shortOf, unitOf } from "./shared.ts";
 
 test("every setting is exactly one of on/off, number or colour", () => {
   const all = [...SETTING_KEYS, ...NUMBER_KEYS, ...COLOR_KEYS].sort();
@@ -65,4 +65,20 @@ test("the shade starts at the strip's edge and is black", () => {
 
 test("the shade is off on a light theme by default", () => {
   assert.equal(SETTINGS.edgeDarkOnly.default, true);
+});
+
+test("the panel's labels, hints and units come from SETTINGS, and every setting has words for it", () => {
+  for (const key of Object.keys(SETTINGS) as (keyof typeof SETTINGS)[]) {
+    assert.ok(shortOf(key).length > 0, `${key} has no label`);
+    assert.ok(hintOf(key).length > 0, `${key} has no hint or description`);
+    // The panel shows a hint on one line beside its control.
+    assert.ok(hintOf(key).length <= 100, `${key}'s hint is ${hintOf(key).length} characters`);
+  }
+  assert.equal(shortOf("width"), "Width");
+  assert.equal(unitOf("width"), "px");
+  assert.equal(unitOf("hoverLines"), "");
+  assert.equal(unitOf("edgeStrength"), "%");
+  // A setting with no panel wording falls back to the API's.
+  assert.equal(shortOf("showUser"), SETTINGS.showUser.label);
+  for (const key of SHARE_KEYS) assert.equal(SETTINGS[key].max, 100, `${key} is a percentage`);
 });

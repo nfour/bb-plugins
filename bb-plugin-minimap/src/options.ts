@@ -1,5 +1,5 @@
 import { useSettings } from "@get-bb/plugin-sdk/app";
-import { NUMBER_RANGES, SETTINGS, SETTING_KEYS, readNumber, type ColorKey, type NumberKey, type SettingKey } from "./shared";
+import { NUMBER_RANGES, SETTINGS, SETTING_KEYS, SHARE_KEYS, readNumber, type ColorKey, type NumberKey, type SettingKey } from "./shared";
 import type { Kind } from "./model.ts";
 import type { Options as StripOptions } from "./strip";
 import { usePreview } from "./usePreview";
@@ -38,7 +38,7 @@ export function useOptions(): Options {
   for (const key of SETTING_KEYS) out[key] = typeof values?.[key] === "boolean" ? values[key] : DEFAULTS[key];
   const numbers = Object.keys(NUMBER_RANGES) as NumberKey[];
   for (const key of numbers) out[key] = readNumber(values, key);
-  for (const key of ["opacity", "idleOpacity", "sliderOpacity", "edgeStrength"] as const) out[key] = (out[key] as number) / 100;
+  for (const key of SHARE_KEYS) out[key] = (out[key] as number) / 100;
   out.sliderColor = hex(values?.sliderColor);
   const colors = {} as Record<Kind, string>;
   for (const kind of Object.keys(BLOCK_KEYS) as Kind[]) colors[kind] = hex(values?.[BLOCK_KEYS[kind].color]);

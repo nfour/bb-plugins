@@ -2,6 +2,11 @@
 
 Releases are the tags `minimap/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.6 (2026-11-12)
+
+- The strip is redrawn only when something on it changed.
+- Nothing is checked while the browser tab is in the background.
+
 ## 0.1.5 (2026-11-12)
 
 - With several threads side by side, every pane now has its own minimap; before, only the focused pane had one.
