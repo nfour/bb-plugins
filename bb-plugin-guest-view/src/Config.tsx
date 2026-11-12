@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { OwnerState } from "../server";
+import type { GuestsSee, OwnerState } from "../server";
 import { CloseIcon, UserIcon } from "./Icons";
 import { leftLabel, sinceLabel } from "./labels";
 import { useNow, type Rpc } from "./state";
@@ -15,6 +15,13 @@ function Switch({ on, onChange, label, disabled }: { on: boolean; onChange(next:
   );
 }
 
+/** What guests learn about each other, from least to most. */
+const SEE: { value: GuestsSee; label: string; hint: string }[] = [
+  { value: "own", label: "Only their own", hint: "A guest's page shows the icon with no count, and only the prompts that guest sent." },
+  { value: "count", label: "How many", hint: "A guest's page says how many guests are connected. A guest only sees their own prompts." },
+  { value: "prompts", label: "How many and prompts", hint: "A guest's page says how many are connected, and each guest's list shows everyone's prompts as \"name: message Sent\". Guests are never told whether you used or dismissed a prompt." },
+];
+
 /** The settings overlay: who is connected (with Kick), when the link ends, and whether newcomers see earlier messages. */
 export function Config({ share, threadId, rpc, set, onClose }: { share: Share; threadId: string; rpc: Rpc; set(next: OwnerState): void; onClose(): void }) {
   // The labels here (who has been connected how long, time left) move by the minute, not by the second.
@@ -23,18 +30,22 @@ export function Config({ share, threadId, rpc, set, onClose }: { share: Share; t
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  // The card hands in a new function on every render, and each owner-state push renders it. The effect below must not
+  // run again for that: it focuses the dialog, which would take focus from the field being typed in.
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        close.current();
       }
     };
     document.addEventListener("keydown", onKey, true);
     panel.current?.focus();
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, []);
 
   const run = (call: Promise<OwnerState>) => {
     setBusy(true);
@@ -108,20 +119,26 @@ export function Config({ share, threadId, rpc, set, onClose }: { share: Share; t
 
         <section className="guest-view-section">
           <div className="guest-view-form-row">
-            <span>Guests know about other guests</span>
+            <span id="guest-view-see">Guests see about each other</span>
             <span className="guest-view-spacer" />
-            <Switch on={share.showGuests} label="Guests know about other guests" onChange={(next) => run(rpc.call("configure", { threadId, showGuests: next }))} />
+            <div className="guest-view-choice" role="radiogroup" aria-labelledby="guest-view-see">
+              {SEE.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={share.guestsSee === option.value}
+                  className="guest-view-choice-item"
+                  data-on={share.guestsSee === option.value ? "true" : "false"}
+                  disabled={busy}
+                  onClick={() => share.guestsSee !== option.value && run(rpc.call("configure", { threadId, guestsSee: option.value }))}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="guest-view-muted guest-view-fine">On: a guest's page says how many guests are connected. Off: it shows only the icon, and a guest only ever sees their own prompts.</div>
-        </section>
-
-        <section className="guest-view-section">
-          <div className="guest-view-form-row">
-            <span>Guests see each other's prompts</span>
-            <span className="guest-view-spacer" />
-            <Switch on={share.showPrompts && share.showGuests} disabled={!share.showGuests} label="Guests see each other's prompts" onChange={(next) => run(rpc.call("configure", { threadId, showPrompts: next }))} />
-          </div>
-          <div className="guest-view-muted guest-view-fine">On: each guest's list shows everyone's prompts as "name: message Sent". Off: a guest only sees their own. Needs "Guests know about other guests". Guests are never told whether you used or dismissed a prompt.</div>
+          <div className="guest-view-muted guest-view-fine">{SEE.find((option) => option.value === share.guestsSee)?.hint}</div>
         </section>
 
         <section className="guest-view-section">

@@ -13,6 +13,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { emptyHeld, readHeld, type Held, type TimelineRead } from "./src/delta.ts";
 import { Feed, hideHistory, type Header } from "./src/feed.ts";
 import { startGuestServer, type GuestServer } from "./src/http.ts";
 import {
@@ -87,11 +88,15 @@ export interface OwnerGuest {
   since: number;
 }
 
+/** What a guest learns about the other guests: nothing (only their own prompts), how many are here, or that and each other's prompts. */
+export type GuestsSee = "own" | "count" | "prompts";
+const guestsSee = z.enum(["own", "count", "prompts"]);
+
 export interface OwnerState {
   threadId: string;
   /** Starting the server and tunnel. */
   starting: boolean;
-  share: { url: string; createdAt: number; expiresAt: number; viewers: number; showHistory: boolean; showPrompts: boolean; showGuests: boolean; showModel: boolean; guests: OwnerGuest[] } | null;
+  share: { url: string; createdAt: number; expiresAt: number; viewers: number; showHistory: boolean; guestsSee: GuestsSee; showModel: boolean; guests: OwnerGuest[] } | null;
   prompts: OwnerPrompt[];
   /** Prompts already used or dismissed, oldest first (the newest is last). */
   history: OwnerHistoryItem[];
@@ -117,8 +122,7 @@ const ownerState = z.object({
       expiresAt: z.number(),
       viewers: z.number(),
       showHistory: z.boolean(),
-      showPrompts: z.boolean(),
-      showGuests: z.boolean(),
+      guestsSee,
       showModel: z.boolean(),
       guests: z.array(z.object({ id: z.string(), name: z.string(), since: z.number() })),
     })
@@ -141,7 +145,7 @@ export const rpcContract = defineRpcContract({
   clear_error: { input: threadInput, output: ownerState },
   /** Changes this link: when it expires (hours from now), whether guests who join later see earlier messages. */
   configure: {
-    input: z.object({ threadId: z.string().min(1).max(200), expiryHours: z.number().min(1).max(168).optional(), showHistory: z.boolean().optional(), showPrompts: z.boolean().optional(), showGuests: z.boolean().optional(), showModel: z.boolean().optional() }),
+    input: z.object({ threadId: z.string().min(1).max(200), expiryHours: z.number().min(1).max(168).optional(), showHistory: z.boolean().optional(), guestsSee: guestsSee.optional(), showModel: z.boolean().optional() }),
     output: ownerState,
   },
   /** Removes a guest from the link; their browser is told and cannot read or send again. */
@@ -187,12 +191,10 @@ interface Share {
   guests: Map<string, Guest>;
   /** Client ids the owner removed. */
   kicked: Set<string>;
-  /** Whether guests see each other's prompts (name, text, outcome), not only their own outcomes. */
-  showPrompts: boolean;
+  /** What guests learn about each other: nothing, the count, or the count and each other's prompts. */
+  guestsSee: GuestsSee;
   /** Whether guests joining later see messages from before they came. */
   showHistory: boolean;
-  /** Whether guests know about each other: the count on their page and, with showPrompts, each other's prompts. */
-  showGuests: boolean;
   /** Whether guests are told which model and effort the agent runs on. */
   showModel: boolean;
   /** The count the owner last saw. */
@@ -203,6 +205,8 @@ interface Share {
   notices: NoticeBatch;
   /** Messages already parsed, so a read parses only what changed. */
   memo: ParseMemo;
+  /** The newest page of the thread as the last read left it; a refresh asks only for what changed since. */
+  held: Held<Row>;
   endReason: "revoked" | "expired" | null;
   expiry: ReturnType<typeof setTimeout> | null;
   /** The read in progress; calls made meanwhile mark it dirty and share its promise. */
@@ -264,7 +268,7 @@ export default async function plugin(bb: BbPluginApi) {
       starting: starting.has(threadId),
       share:
         share && tunnel
-          ? { url: `${tunnel.url}/${share.token}`, createdAt: share.createdAt, expiresAt: share.expiresAt, viewers: viewerCount(share), showHistory: share.showHistory, showPrompts: share.showPrompts, showGuests: share.showGuests, showModel: share.showModel, guests: liveGuests(share) }
+          ? { url: `${tunnel.url}/${share.token}`, createdAt: share.createdAt, expiresAt: share.expiresAt, viewers: viewerCount(share), showHistory: share.showHistory, guestsSee: share.guestsSee, showModel: share.showModel, guests: liveGuests(share) }
           : null,
       prompts: (share?.prompts ?? []).filter((p) => p.status === "pending").map(({ id, name, text, createdAt }) => ({ id, name, text, createdAt })),
       history: (share?.prompts ?? [])
@@ -302,7 +306,7 @@ export default async function plugin(bb: BbPluginApi) {
   function showViewers(share: Share) {
     const count = viewerCount(share);
     // Every guest's page shows the count (unless the owner keeps it from them), so a change reaches them too.
-    if (share.feed.setGuests(share.showGuests ? count : null)) wake(share);
+    if (share.feed.setGuests(share.guestsSee === "own" ? null : count)) wake(share);
     const key = `${count}:${liveGuests(share).map((g) => `${g.id}=${g.name}`).join(",")}`;
     if (key === share.shownViewers) return;
     share.shownViewers = key;
@@ -311,9 +315,9 @@ export default async function plugin(bb: BbPluginApi) {
   function wake(share: Share) {
     share.waiters.wakeAll();
   }
-  /** Everyone's prompts go to the pages only while the owner allows it (and guests may know about each other); otherwise each page lists its own. */
+  /** Everyone's prompts go to the pages only while the owner allows it; otherwise each page lists its own. */
   function promptsChanged(share: Share) {
-    const list = share.showPrompts && share.showGuests ? share.prompts.map((p) => ({ id: p.id, name: p.name, text: maskSecrets(p.text) })) : [];
+    const list = share.guestsSee === "prompts" ? share.prompts.map((p) => ({ id: p.id, name: p.name, text: maskSecrets(p.text) })) : [];
     if (share.feed.setPrompts(list)) wake(share);
   }
 
@@ -337,20 +341,20 @@ export default async function plugin(bb: BbPluginApi) {
     return name;
   }
 
-  /** Reads the thread as a guest may see it. The model is only looked up when guests are allowed to see it. */
-  async function readThread(threadId: string, memo: ParseMemo, withModel: boolean): Promise<{ header: Header; items: ReturnType<typeof guestTranscript> }> {
-    const [timeline, thread, exec] = await Promise.all([
-      bb.sdk.threads.timeline({ threadId, includeNestedRows: "true" }),
+  /**
+   * Reads the thread as a guest may see it. The timeline is read as a delta against the page held (a few KB instead
+   * of the whole nested page), with the content of tool rows left out (nothing here reads it). The model is only
+   * looked up when guests are allowed to see it.
+   */
+  async function readThread(threadId: string, memo: ParseMemo, held: Held<Row>, withModel: boolean): Promise<{ header: Header; items: ReturnType<typeof guestTranscript> }> {
+    const [, thread, exec] = await Promise.all([
+      readHeld(held, async (afterTag) => (await bb.sdk.threads.timeline({ threadId, includeNestedRows: "true", deferContent: "true", ...(afterTag ? { afterTag } : {}) })) as unknown as TimelineRead<Row>),
       bb.sdk.threads.get({ threadId }),
       withModel ? bb.sdk.threads.defaultExecutionOptions({ threadId }).catch(() => null) : Promise.resolve(null),
     ]);
     const t = thread as unknown as { title?: string | null; titleFallback?: string | null; status: string; environmentId?: string | null };
-    const tl = timeline as unknown as {
-      rows: Row[];
-      timelinePage?: { olderCursor?: string | null } | null;
-    };
     const options = exec as unknown as { model?: string; reasoningLevel?: string } | null;
-    const all = guestTranscript(tl.rows ?? [], memo);
+    const all = guestTranscript(held.rows, memo);
     const items = all.slice(-MAX_ITEMS);
     const effort = options?.reasoningLevel ?? "";
     return {
@@ -360,7 +364,7 @@ export default async function plugin(bb: BbPluginApi) {
         status: workingLabel(t.status),
         model: await modelName(t.environmentId, options?.model ?? ""),
         effort: effort ? effort.charAt(0).toUpperCase() + effort.slice(1) : "",
-        older: all.length > items.length || Boolean(tl.timelinePage?.olderCursor),
+        older: all.length > items.length || held.older,
       },
     };
   }
@@ -375,7 +379,7 @@ export default async function plugin(bb: BbPluginApi) {
       try {
         do {
           share.dirty = false;
-          const { header, items } = await readThread(share.threadId, share.memo, share.showModel);
+          const { header, items } = await readThread(share.threadId, share.memo, share.held, share.showModel);
           if (shares.get(share.threadId) !== share) return;
           // The model and effort only reach guests when the owner turned them on (and were only read then).
           const shown = share.showModel ? header : { ...header, model: "", effort: "" };
@@ -621,12 +625,12 @@ export default async function plugin(bb: BbPluginApi) {
         guests: new Map(),
         kicked: new Set(),
         showHistory: true,
-        showPrompts: false,
-        showGuests: true,
+        guestsSee: "count",
         showModel: false,
         waiters: new WaitSet(WAIT_LIMITS),
         notices: new NoticeBatch((notice) => void push(notice, threadId)),
         memo: new Map(),
+        held: emptyHeld<Row>(),
         endReason: null,
         expiry: null,
         refreshing: null,
@@ -707,7 +711,7 @@ export default async function plugin(bb: BbPluginApi) {
       settle(live, prompt, "dismissed");
       return stateOf(threadId);
     },
-    configure: async ({ threadId, expiryHours, showHistory, showPrompts, showGuests, showModel }) => {
+    configure: async ({ threadId, expiryHours, showHistory, guestsSee: see, showModel }) => {
       const live = shares.get(threadId);
       if (!live) throw new Error("This thread is not shared.");
       if (expiryHours !== undefined) {
@@ -718,16 +722,11 @@ export default async function plugin(bb: BbPluginApi) {
         live.showHistory = showHistory;
         bb.log.info(`share for ${threadId}: guests who join later ${showHistory ? "see" : "do not see"} earlier messages`);
       }
-      if (showPrompts !== undefined) {
-        live.showPrompts = showPrompts;
-        promptsChanged(live);
-        bb.log.info(`share for ${threadId}: guests ${showPrompts ? "see" : "do not see"} each other's prompts`);
-      }
-      if (showGuests !== undefined) {
-        live.showGuests = showGuests;
+      if (see !== undefined) {
+        live.guestsSee = see;
         showViewers(live);
         promptsChanged(live);
-        bb.log.info(`share for ${threadId}: guests ${showGuests ? "know" : "do not know"} about each other`);
+        bb.log.info(`share for ${threadId}: guests see ${see === "own" ? "only their own prompts" : see === "count" ? "how many guests are here" : "how many guests are here and each other's prompts"}`);
       }
       if (showModel !== undefined) {
         live.showModel = showModel;

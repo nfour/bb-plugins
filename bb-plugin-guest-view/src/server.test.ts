@@ -33,6 +33,12 @@ interface FakeThread {
   rows: Record<string, unknown>[];
   /** While above zero, reading the timeline fails (and counts down). */
   failReads: number;
+  /** When set, reads carry a tag and a read that names the last tag gets a delta, as BB's does. */
+  tagged?: boolean;
+  /** What each timeline read asked for. */
+  reads?: { afterTag?: string; deferContent?: string; includeNestedRows?: string }[];
+  /** Make the next delta one that cannot be applied. */
+  badDelta?: boolean;
 }
 interface Push {
   title: string;
@@ -87,13 +93,26 @@ while true; do sleep 1; done
             if (!thread) throw new Error("No such thread.");
             return { id: threadId, title: thread.title, status: thread.status, environmentId: null };
           },
-          timeline: async ({ threadId }: { threadId: string }) => {
+          timeline: async ({ threadId, afterTag, deferContent, includeNestedRows }: { threadId: string; afterTag?: string; deferContent?: string; includeNestedRows?: string }) => {
             const thread = threads.get(threadId)!;
+            thread.reads?.push({ afterTag, deferContent, includeNestedRows });
             if (thread.failReads > 0) {
               thread.failReads -= 1;
               throw new Error("timeline is not ready");
             }
-            return { rows: thread.rows };
+            if (!thread.tagged) return { rows: thread.rows };
+            // The tag is the number of rows a read saw; a delta lists the rows added since.
+            const tag = `t${thread.rows.length}`;
+            const seen = afterTag ? Number(afterTag.slice(1)) : -1;
+            if (afterTag && thread.badDelta) {
+              thread.badDelta = false;
+              return { tag, delta: { afterTag, upsertRows: [], rowOrder: [[0, 9999]] } };
+            }
+            if (afterTag && seen >= 0 && seen <= thread.rows.length) {
+              const added = thread.rows.slice(seen);
+              return { tag, delta: { afterTag, upsertRows: added, rowOrder: [[0, seen], ...added.map((row) => String(row.id))] } };
+            }
+            return { tag, rows: thread.rows, timelinePage: { olderCursor: null } };
           },
           defaultExecutionOptions: async () => ({ model: "m", reasoningLevel: "high" }),
         },
@@ -369,4 +388,79 @@ test("stopping the last share stops cloudflared", async () => {
   await gv.call("stop", { threadId: THREAD });
   assert.ok(await until(() => !alive(record.pid), 6000), "after a short grace for the pages to hear it");
   assert.ok(await until(() => !w.kv.has("state"), 3000), "and the record is cleared");
+});
+
+test("a watched share reads the timeline as deltas, and a guest still gets every message", async () => {
+  const w = await fresh();
+  const thread = w.threads.get(THREAD)!;
+  thread.tagged = true;
+  thread.reads = [];
+  thread.rows = [message("m1", "user", "hello")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  const client = hex24();
+  const first = (await (await poll(base, token, client)).json()) as { rev: number; items: { id: string }[] };
+  assert.deepEqual(first.items.map((i) => i.id), ["m1"]);
+
+  let since = first.rev;
+  for (const id of ["m2", "m3", "m4"]) {
+    thread.rows.push(message(id, "assistant", `answer ${id}`));
+    const next = poll(base, token, client, { since }).then((r) => r.json()) as Promise<{ rev: number; items: { id: string }[] }>;
+    await sleep(60);
+    gv.fire("experimental_thread.events", { thread: { id: THREAD } });
+    const got = await next;
+    assert.deepEqual(got.items.map((i) => i.id), [id]);
+    since = got.rev;
+  }
+  const reads = thread.reads;
+  assert.equal(reads.filter((r) => !r.afterTag).length, 1, "one whole read, at the start");
+  assert.ok(reads.filter((r) => r.afterTag).length >= 3, "every later read named a tag");
+  assert.ok(reads.every((r) => r.deferContent === "true" && r.includeNestedRows === "true"), "tool content is left out, nested rows are kept");
+});
+
+test("a delta that cannot be applied costs one whole read, not a wrong transcript", async () => {
+  const w = await fresh();
+  const thread = w.threads.get(THREAD)!;
+  thread.tagged = true;
+  thread.reads = [];
+  thread.rows = [message("m1", "user", "hello")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  const client = hex24();
+  const first = (await (await poll(base, token, client)).json()) as { rev: number };
+  thread.rows.push(message("m2", "assistant", "second"));
+  thread.badDelta = true;
+  const next = poll(base, token, client, { since: first.rev }).then((r) => r.json()) as Promise<{ items: { id: string }[] }>;
+  await sleep(60);
+  gv.fire("experimental_thread.events", { thread: { id: THREAD } });
+  assert.deepEqual((await next).items.map((i) => i.id), ["m2"]);
+  assert.equal(thread.reads.filter((r) => !r.afterTag).length, 2, "the failed delta was followed by a whole read");
+});
+
+test("what guests see about each other is one choice: nothing, the count, or the count and prompts", async () => {
+  const w = await fresh();
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  const ann = hex24();
+  assert.equal((await gv.state()).share!.guestsSee, "count", "the count is the default");
+  await poll(base, token, ann, { name: "Ann" });
+  assert.equal((await submit(base, token, { name: "Ann", text: "from ann", clientId: ann })).status, 201);
+
+  const view = async () => (await (await poll(base, token, hex24(), { name: "Bob", ip: "198.51.100.9" })).json()) as { guests?: number | null; prompts?: { text: string }[] };
+  const count = await view();
+  assert.equal(typeof count.guests, "number", "the count reaches a guest's page");
+  assert.ok(!count.prompts || count.prompts.length === 0, "and no one else's prompts");
+
+  await gv.call("configure", { threadId: THREAD, guestsSee: "prompts" });
+  const prompts = await view();
+  assert.deepEqual(prompts.prompts?.map((p) => p.text), ["from ann"], "everyone's prompts reach a page");
+
+  await gv.call("configure", { threadId: THREAD, guestsSee: "own" });
+  const own = await view();
+  assert.equal(own.guests, null, "only the icon, no number");
+  assert.ok(!own.prompts || own.prompts.length === 0);
+  assert.equal((await gv.state()).share!.guestsSee, "own");
 });

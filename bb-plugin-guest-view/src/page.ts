@@ -166,6 +166,10 @@ const SCRIPT = String.raw`
     if (window.matchMedia("(hover:hover)").matches) $("gv-input").focus();
   });
   $("gv-rename").addEventListener("click", askName);
+  // Another tab of this browser has the same stored name and client id; follow its change, or the two keep sending different names.
+  window.addEventListener("storage", (event) => {
+    if (event.key === "guest-view:name" && event.newValue && event.newValue !== name) { name = event.newValue; showName(); }
+  });
   if (!name) askName(); else showName();
 
   // Markdown tree → DOM (textContent only).
@@ -368,7 +372,9 @@ const SCRIPT = String.raw`
     $("gv-presence-text").textContent = count == null ? "" : count === 1 ? "1 guest" : count + " guests";
     $("gv-presence").classList.toggle("gv-off", ended || count === 0);
   };
-  const apply = (data) => {
+  // "sent" is the name the poll that brought "data" was sent with. A poll waits up to 25s, so the guest may have typed
+  // a new name since; the owner's answer then carries the old one and must not replace what was typed.
+  const apply = (data, sent) => {
     if (data.reset) items.clear();
     if (data.header) renderHeader(data.header);
     for (const item of data.items || []) items.set(item.id, item);
@@ -376,7 +382,7 @@ const SCRIPT = String.raw`
     if (data.prompts) { everyone = data.prompts.length ? data.prompts : null; renderMine(); }
     if (data.guests !== undefined) renderPresence(data.guests);
     // The owner sees the name as the server cleaned it (no colons, not the owner's own); show the same one here.
-    if (name && typeof data.you === "string" && data.you && data.you !== name) { name = data.you; store.set("guest-view:name", name); showName(); }
+    if (name && name === sent && typeof data.you === "string" && data.you && data.you !== name) { name = data.you; store.set("guest-view:name", name); showName(); }
     renderFeed();
     paintBusy();
   };
@@ -397,8 +403,9 @@ const SCRIPT = String.raw`
     let failures = 0;
     while (!ended) {
       let busy = "";
+      const sent = name || BOOT.suggestedName;
       try {
-        const response = await fetch(base + "/poll?since=" + rev + "&client=" + clientId + "&name=" + encodeURIComponent(name || BOOT.suggestedName), { cache: "no-store" });
+        const response = await fetch(base + "/poll?since=" + rev + "&client=" + clientId + "&name=" + encodeURIComponent(sent), { cache: "no-store" });
         if (response.status === 404) { end("This guest link has ended."); return; }
         const data = await response.json().catch(() => ({}));
         // A 429 (the owner's limits, or Cloudflare's own) is a reason to wait, never to give up.
@@ -406,7 +413,7 @@ const SCRIPT = String.raw`
         if (!response.ok) throw new Error(data.error || "HTTP " + response.status);
         failures = 0;
         if (reconnecting) online();
-        apply(data);
+        apply(data, sent);
         rev = data.rev;
         if (data.ended) { end(data.ended === "expired" ? "This guest link has expired." : data.ended === "kicked" ? "The owner removed you from this thread." : "The owner stopped sharing this thread."); return; }
       } catch {

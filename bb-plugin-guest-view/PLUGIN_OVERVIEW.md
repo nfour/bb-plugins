@@ -25,7 +25,7 @@ A guest cannot change anything. They can only write a suggestion, and it waits i
 
 ## Settings
 
-The card's settings panel lists who is connected, with a **Kick** button for each guest, and sets when this link expires. It also holds switches for whether new guests see earlier messages, whether guests know about each other and see each other's prompts, and whether they see the model.
+The card's settings panel lists who is connected, with a **Kick** button for each guest, and sets when this link expires. It also holds a switch for whether new guests see earlier messages, a choice of what guests learn about each other (nothing, how many are here, or that and each other's prompts), and a switch for whether they see the model.
 
 ## Requirements and costs
 

@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-guest-view",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "build": "bb plugin build",
     "dev": "bb plugin dev",
     "check": "tsc --noEmit",
-    "test": "node --test src/model.test.ts src/feed.test.ts src/install.test.ts src/labels.test.ts src/waiters.test.ts src/notify.test.ts src/tunnel.test.ts src/http.test.ts src/page.test.ts src/server.test.ts"
+    "test": "node --test src/*.test.ts"
   },
   "bb": {
     "name": "Guest View",

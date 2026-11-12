@@ -4,12 +4,30 @@ import type { OwnerState, rpcContract } from "../server";
 
 export type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;
 
-/** The time, refreshed every `everyMs`. */
+// The state word is split: the plugin build turns that word standing alone into a page-wide rule.
+const SHOWN = "vis" + "ible";
+const shown = () => document.visibilityState === SHOWN;
+
+/** The time, refreshed every `everyMs` while the tab is on screen; a tab that is not ticks no timer, and coming back catches up once. */
 export function useNow(everyMs: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), everyMs);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const stop = () => {
+      clearInterval(timer);
+      timer = undefined;
+    };
+    const sync = () => {
+      if (!shown()) return stop();
+      setNow(Date.now());
+      timer ??= setInterval(() => setNow(Date.now()), everyMs);
+    };
+    if (shown()) timer = setInterval(() => setNow(Date.now()), everyMs);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, [everyMs]);
   return now;
 }

@@ -2,6 +2,14 @@
 
 Releases are the tags `guest-view/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.2.0 (2026-11-12)
+
+- A guest's new name stays: a name typed while the page waited for news was sometimes put back to the old one. A second tab in the same browser follows a rename.
+- One choice, what guests see of each other (only their own prompts, how many guests, or how many and their prompts), replaces two switches.
+- Typing in the settings overlay is no longer interrupted when a guest joins or a prompt arrives.
+- Less work on your machine while a shared thread is watched: it reads only what changed in the thread.
+- The card's clock stops while the browser tab is in the background.
+
 ## 0.1.0 (2026-11-06)
 
 - First release. **Share with guest** in a thread's menu (with the other plugins' entries) copies a public link to that thread, made with a Cloudflare quick tunnel (no account). A guest with no BB account follows the conversation live in their browser and can suggest prompts. The link works for 4 hours (1 to 168 with the `expiryHours` setting) or until you stop sharing.
