@@ -115,9 +115,42 @@ function eventOf(row: Row): SpanEvent | null {
   return row.systemKind === "operation" && row.operationKind === "thread-interrupted" ? "interrupted" : null;
 }
 
-export function indexOf(rows: readonly Row[], hasOlder: boolean): TimelineIndex {
+/** What a message's title is made from; the same inputs give the same title. */
+interface TitleKey {
+  role: string;
+  text: string;
+  mentions: string;
+  attachments: string;
+  initiator: string;
+}
+
+/** A conversation row's title inputs, without reading the text any further than comparing it. */
+function titleKey(row: Extract<Row, { kind: "conversation" }>): TitleKey {
+  const user = row.role === "user";
+  return {
+    role: row.role,
+    text: row.text,
+    mentions: user ? row.mentions.map((m) => `${m.start}-${m.end}:${m.resource.label}`).join("|") : "",
+    attachments: user && row.attachments ? `${row.attachments.localFileDetails.map((f) => f.name).join(",")}#${row.attachments.localImages + row.attachments.webImages + row.attachments.imageUrls.length}` : "",
+    initiator: user ? row.initiator : "",
+  };
+}
+const sameKey = (a: TitleKey, b: TitleKey) =>
+  a.text === b.text && a.role === b.role && a.mentions === b.mentions && a.attachments === b.attachments && a.initiator === b.initiator;
+
+/**
+ * Messages kept by row id between reads. A delta changes a row or two, so the text of the rest
+ * is not read again: an entry holds what its title was made from and the title (`full`, or "" for
+ * a row the bar does not name), and the message itself, handed out again while nothing about it moved.
+ */
+export type Titles = Map<string, { key: TitleKey; full: string; message?: Message }>;
+
+const sameMessage = (a: Message, b: Message) =>
+  a.rank === b.rank && a.title === b.title && a.full === b.full && a.by === b.by && a.status === b.status && a.role === b.role;
+
+export function indexOf(rows: readonly Row[], hasOlder: boolean, titles: Titles = new Map()): TimelineIndex {
   const rank = new Map<string, number>();
-  const messages: Message[] = [];
+  const drafts: Message[] = [];
   // A turn runs from one user row to the next; its status is read off the events inside.
   let events: SpanEvent[] = [];
   let replies: Message[] = [];
@@ -125,12 +158,13 @@ export function indexOf(rows: readonly Row[], hasOlder: boolean): TimelineIndex 
   const close = () => {
     const status = turnStatus(events);
     if (status) for (const reply of replies) reply.status = status;
-    // The question only shows that its turn is still in progress; how it ended is the reply's to say.
+    // The question only shows that its turn is still running; how it ended is the reply's to say.
     if (status === "pending" && asked) asked.status = status;
     events = [];
     replies = [];
     asked = null;
   };
+  const seen = new Set<string>();
   rows.forEach((row, i) => {
     rank.set(row.id, i);
     if (row.kind !== "conversation") {
@@ -142,22 +176,37 @@ export function indexOf(rows: readonly Row[], hasOlder: boolean): TimelineIndex 
     else events.push("assistant");
     // Another agent's message is not the user's turn to name.
     if (row.role === "user" && row.initiator === "agent") return;
-    // Bounded first: a long message is read in full only to be cut to a line.
-    const full = oneLine(textOf(row).slice(0, TEXT_READ), 800);
-    if (full === "") return;
+    seen.add(row.id);
+    const key = titleKey(row);
+    let held = titles.get(row.id);
+    if (!held || !sameKey(held.key, key)) {
+      // Bounded first: a long message is read in full only to be cut to a line.
+      held = { key, full: oneLine(textOf(row).slice(0, TEXT_READ), 800) };
+      titles.set(row.id, held);
+    }
+    if (held.full === "") return;
     const message: Message = {
       id: row.id,
       role: row.role,
       rank: i,
-      title: full.slice(0, 240),
-      full,
+      title: held.full.slice(0, 240),
+      full: held.full,
       by: row.role === "user" && row.initiator === "system" ? "system" : "user",
     };
     if (row.role === "user") asked = message;
     else replies.push(message);
-    messages.push(message);
+    drafts.push(message);
   });
   close();
+  // Rows rewritten away do not stay behind.
+  if (titles.size > seen.size) for (const id of titles.keys()) if (!seen.has(id)) titles.delete(id);
+  // A message whose fields all match the one handed out last time is that one, so what compares by identity stays equal.
+  const messages = drafts.map((draft) => {
+    const held = titles.get(draft.id)!;
+    if (held.message && sameMessage(held.message, draft)) return held.message;
+    held.message = draft;
+    return draft;
+  });
   return { rank, messages, hasOlder };
 }
 

@@ -9,11 +9,12 @@ While you scroll a thread, a bar at the top shows the user message you are readi
 
 ## Settings
 
-Use the **Pinned turns** submenu in a thread's actions menu (⋯ in the thread header), or `bb plugin config pinned-turns`. All are booleans:
+Use the **Pinned turns** submenu in a thread's actions menu (⋯ in the thread header), or `bb plugin config pinned-turns`. All are booleans except `halves`:
 
 | Key | Default | Effect |
 | --- | --- | --- |
 | `enabled` | on | The bar itself. |
+| `halves` | `both` | `both`, `message` (only the message you are under) or `reply` (only the latest reply). |
 | `showStatus` | on | Your message and the reply pulse while the turn runs; a dot marks one that failed or was interrupted. |
 | `showPinButton` | on | The Pinned turns submenu in thread menus. |
 | `showPosition` | on (the turn counter) | `7/23` outside the message's right edge; counted from the thread's `conversationOutline` (one small request). |
@@ -22,4 +23,4 @@ Use the **Pinned turns** submenu in a thread's actions menu (⋯ in the thread h
 
 ## Debugging
 
-`bb plugin logs pinned-turns` prints the log. Debug lines: `load` and `older` (timeline fetches), `attach`/`detach` (the bar finding or losing BB's scroller), `jump` (outcome, ms), and a `timeline` summary every 5s of activity with `signals` against `refetches`. A reply title that stays stale while `signals` keeps rising and `refetches` stays near zero means the refetch debounce is starving.
+`bb plugin logs pinned-turns` prints the log. Debug lines: `load` and `older` (timeline fetches), `attach`/`detach` (the bar finding or losing BB's scroller), `jump` (outcome, ms), and a `timeline` summary every 5s of activity with `signals` against `refetches` (`deltas` of them read as small `afterTag` deltas). The timeline is not read while the bar is off the page or the tab is in the background; it reads once on return. A reply title that stays stale while `signals` keeps rising and `refetches` stays near zero means the refetch debounce is starving.

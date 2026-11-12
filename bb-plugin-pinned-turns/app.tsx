@@ -51,13 +51,69 @@ function useSettled(threadId: string | null): string | null {
   return settled === threadId ? settled : null;
 }
 
+/** How often the page is looked at for panes that opened, closed or changed thread; it stops while the tab is in the background. */
+const PANE_SCAN_MS = 1000;
+
+/**
+ * The threads whose timelines are on the page: one for a single thread, one per pane in a split workspace. BB hands a
+ * plugin only the focused one (`useBbContext`), so the rest are read off the page: a timeline's rows carry their
+ * thread's id as the start of `data-timeline-row-id`.
+ */
+function paneThreads(): string[] {
+  const ids: string[] = [];
+  for (const scroller of document.querySelectorAll("[data-page-scroll-viewport]")) {
+    const id = scroller.querySelector("[data-timeline-row-id]")?.getAttribute("data-timeline-row-id");
+    const thread = id ? id.slice(0, id.indexOf(":")) : "";
+    if (thread && !ids.includes(thread)) ids.push(thread);
+  }
+  return ids;
+}
+
+/**
+ * Every thread that may have a bar, once the focused thread has settled (see `useSettled`). A cheap look at the page
+ * once a second finds panes that opened, closed or switched thread; it stops while the tab is in the background and looks once on
+ * return.
+ */
+function usePaneThreads(settled: string | null): string[] {
+  const [threads, setThreads] = useState<string[]>([]);
+  useEffect(() => {
+    if (settled === null) return;
+    const scan = () => {
+      const next = paneThreads();
+      setThreads((now) => (now.length === next.length && now.every((id, at) => id === next[at]) ? now : next));
+    };
+    let timer = 0;
+    const sync = () => {
+      window.clearInterval(timer);
+      timer = 0;
+      if (document.hidden) return;
+      scan();
+      timer = window.setInterval(scan, PANE_SCAN_MS);
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [settled]);
+  return threads;
+}
+
 function Overlay() {
   const { threadId } = useBbContext();
   const { ready, enabled } = useOptions();
   const settled = useSettled(threadId);
+  const threads = usePaneThreads(settled);
   // Not before the saved settings are known: a bar switched off would otherwise flash on every thread.
   if (settled === null || !ready || !enabled) return null;
-  return <PinnedTurns key={settled} threadId={settled} />;
+  return (
+    <>
+      {threads.map((id) => (
+        <PinnedTurns key={id} threadId={id} />
+      ))}
+    </>
+  );
 }
 
 export default definePluginApp((app) => {

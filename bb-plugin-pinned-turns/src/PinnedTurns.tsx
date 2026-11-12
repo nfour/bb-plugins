@@ -22,6 +22,11 @@ const RADIUS = 12;
  */
 const SIDE_ROOM = 16;
 
+/** How many boxes up from the frame are watched for the timeline being replaced. */
+const WATCH_LEVELS = 6;
+/** Frames a rebuilt timeline is waited for, after its box appeared, before giving up until the next change. */
+const ATTACH_FRAMES = 30;
+
 interface Shown {
   message: Message | null;
   reply: Message | null;
@@ -102,28 +107,40 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
     schedule();
   }, [index, schedule]);
 
-  const counter = options.showPosition && roomForCounter;
+  const counter = options.showPosition && roomForCounter && options.halves !== "reply";
   const tally = useOutline(threadId, counter, active, newestUser(index));
 
-  // Park the row in the scroller and keep it parked. The scroller can be rebuilt
-  // under a thread (a layout change), so a cheap check re-attaches when it is gone.
+  // Park the row in the scroller and keep it parked. BB can rebuild the scroller or its frame under a
+  // thread (a layout change), so each of them and the few boxes above is watched for children added or
+  // removed (no subtree: a streaming reply does not wake it), and the bar attaches again when it is gone.
   useEffect(() => {
     let timeline: Timeline | null = null;
     let element: HTMLElement | null = null;
     let observer: ResizeObserver | null = null;
+    let watch: MutationObserver | null = null;
+    let retry = 0;
     const l = live.current;
 
     const detach = () => {
       if (timeline) log.current("detach", { scrollerConnected: timeline.scroller.isConnected, itemsConnected: timeline.items.isConnected });
       observer?.disconnect();
+      watch?.disconnect();
       timeline?.scroller.removeEventListener("scroll", schedule);
       element?.remove();
-      timeline = element = observer = null;
+      timeline = element = observer = watch = null;
       l.timeline = null;
       setHost(null);
     };
+    const attached = () =>
+      timeline !== null && element !== null && timeline.scroller.isConnected && timeline.items.isConnected && element.parentElement === timeline.frame;
+    // A rebuilt timeline may not have its rows yet when its box appears; look again for a few frames.
+    const attachSoon = (tries: number) => {
+      cancelAnimationFrame(retry);
+      attach();
+      if (!attached() && tries > 0) retry = requestAnimationFrame(() => attachSoon(tries - 1));
+    };
     const attach = () => {
-      if (timeline && element && timeline.scroller.isConnected && timeline.items.isConnected && element.parentElement === timeline.frame) return;
+      if (attached()) return;
       detach();
       const found = findTimeline(threadId);
       if (!found) return;
@@ -138,15 +155,20 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
       });
       observer.observe(found.items);
       observer.observe(found.scroller);
+      watch = new MutationObserver(() => {
+        if (!attached()) attachSoon(ATTACH_FRAMES);
+      });
+      // The frame and the scroller, then the boxes above it that could be replaced with it.
+      let box: HTMLElement | null = found.frame;
+      for (let up = 0; box && up < WATCH_LEVELS; up++, box = box.parentElement) watch.observe(box, { childList: true });
       l.timeline = found;
       log.current("attach", { rows: found.items.children.length });
       setHost(element);
       schedule();
     };
-    attach();
-    const timer = window.setInterval(attach, 500);
+    attachSoon(ATTACH_FRAMES);
     return () => {
-      window.clearInterval(timer);
+      cancelAnimationFrame(retry);
       cancelAnimationFrame(l.frame);
       l.frame = 0;
       detach();
@@ -246,7 +268,10 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
       className="pinned-bar"
       style={{ margin: "0 auto", maxWidth: `min(728px, calc(100% - ${SIDE_ROOM * 2}px))` }}
     >
-      <Half message={shown.reply} onJump={jump} className="pinned-half--reply" ink={REPLY_INK} status={options.showStatus} tooltip={options.showFullText} />
+      {options.halves !== "message" ? (
+        <Half message={shown.reply} onJump={jump} className="pinned-half--reply" ink={REPLY_INK} status={options.showStatus} tooltip={options.showFullText} />
+      ) : null}
+      {options.halves !== "reply" ? (
       <Half
         message={shown.message}
         onJump={jump}
@@ -257,6 +282,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
         tooltip={options.showFullText}
         position={tally && nth ? { nth, total: tally.total } : undefined}
       />
+      ) : null}
     </div>,
     host,
   );

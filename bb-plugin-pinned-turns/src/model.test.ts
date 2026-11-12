@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rankOfRow } from "./dom.ts";
-import { flatten, indexOf, mergeNewest, outlineOf, prependOlder } from "./rows.ts";
+import { flatten, indexOf, mergeNewest, outlineOf, prependOlder, type Titles } from "./rows.ts";
 import { PIN_ROW_HEIGHT, bandAt, bandContent, dataIdOf, jumpOffset, lastAtOrAbove, oneLine, turnStatus, type Message, type Pin } from "./model.ts";
 
 test("bandContent: last message and last reply past the line, same line for both", () => {
@@ -188,4 +188,33 @@ test("outlineOf: counts the messages the bar names, not another agent's or an em
   ]);
   assert.deepEqual([...out.ordinals], [["u1", 1], ["u3", 2], ["u5", 3], ["u6", 4]]);
   assert.equal(out.total, 4);
+});
+
+test("indexOf: with a title memo an unchanged row keeps its message object, a changed one gets a new one", () => {
+  const titles: Titles = new Map();
+  const first = indexOf([user(1), reply(1), user(2), reply(2)], false, titles);
+  const again = indexOf([user(1), reply(1), user(2), reply(2, "a2 longer")], false, titles);
+  assert.equal(again.messages[0], first.messages[0]);
+  assert.equal(again.messages[1], first.messages[1]);
+  assert.equal(again.messages[2], first.messages[2]);
+  assert.notEqual(again.messages[3], first.messages[3]);
+  assert.equal(again.messages[3]!.title, "a2 longer");
+});
+
+test("indexOf: a turn finishing changes the status, so the message is new; a row that left the page leaves the memo", () => {
+  const titles: Titles = new Map();
+  const live = indexOf([user(1), reply(1), work("pending")], false, titles);
+  const done = indexOf([user(1), reply(1), work("completed")], false, titles);
+  assert.equal(live.messages[0]!.status, "pending");
+  assert.notEqual(done.messages[0], live.messages[0]);
+  assert.equal(done.messages[0]!.status, undefined);
+  indexOf([user(1)], false, titles);
+  assert.equal(titles.size, 1);
+});
+
+test("indexOf: the memo gives the same messages as no memo", () => {
+  const rows = [user(1, "hello **there**"), reply(1, "```ts\ncode\n```\nresult"), user(2, "", { attachments: { localFileDetails: [{ name: "a.png" }], localImages: 0, webImages: 0, imageUrls: [] } }), work("pending")];
+  const titles: Titles = new Map();
+  indexOf(rows, false, titles);
+  assert.deepEqual(indexOf(rows, false, titles).messages, indexOf(rows, false).messages);
 });

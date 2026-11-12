@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
-import { indexOf, outlineOf, type Outline, type TimelineIndex } from "./rows";
+import { indexOf, outlineOf, type Outline, type TimelineIndex, type Titles } from "./rows";
 import { watchTimeline, type Debug, type Watch } from "./watch";
 
 export type { Debug, Outline, TimelineIndex };
@@ -25,10 +25,12 @@ export function useTimeline(threadId: string, debug: Debug, active: boolean) {
 
   useEffect(() => {
     setIndex(EMPTY);
+    // Per thread: a delta then only reads the text of the rows that changed.
+    const titles: Titles = new Map();
     const mine = watchTimeline(
       sdk,
       threadId,
-      (rows, hasOlder) => setIndex(indexOf(rows, hasOlder)),
+      (rows, hasOlder) => setIndex(indexOf(rows, hasOlder, titles)),
       (event, data) => log.current(event, data),
       wanted.current,
     );

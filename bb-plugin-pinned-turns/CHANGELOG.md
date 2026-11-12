@@ -2,6 +2,13 @@
 
 Releases are the tags `pinned-turns/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.5 (2026-11-12)
+
+- Every pane of a split workspace has its own bar; before, only the focused pane had one.
+- The bar can show only the message or only the reply: Message and reply, Message only, Reply only in the Pinned turns submenu.
+- Less work on long threads: an update re-reads only the messages that changed (a 2,000-row thread went from 36 ms to 1 ms an update), and nothing polls on a timer any more.
+- Nothing is checked while the browser tab is in the background.
+
 ## 0.1.4 (2026-11-11)
 
 - Lighter on BB's styling: the plugin no longer adds page-wide CSS rules. Earlier releases added nine, made from ordinary words in its own code and docs, which BB matched against every element on the page whenever it restyled. Nothing changes in how the bar looks or works.

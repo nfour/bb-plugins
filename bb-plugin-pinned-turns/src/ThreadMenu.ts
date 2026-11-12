@@ -5,7 +5,7 @@ import {
   useRpc,
   type PluginThreadActionRegistration,
 } from "@get-bb/plugin-sdk/app";
-import type { SettingKey, rpcContract } from "../server";
+import { HALVES, type Halves, type SettingKey, type rpcContract } from "../server";
 import { useOptions, type Options } from "./options";
 import { useCanHover, useCounterRoom } from "./viewport";
 
@@ -17,6 +17,13 @@ const OPTIONS: { key: SettingKey; label: string }[] = [
   { key: "debugLog", label: "Debug log" },
 ];
 
+/** The bar's halves as menu rows; one is selected at a time. */
+const HALF_CHOICES: { value: Halves; label: string }[] = [
+  { value: "both", label: "Message and reply" },
+  { value: "message", label: "Message only" },
+  { value: "reply", label: "Reply only" },
+];
+const HALF_PREFIX = "halves:";
 const SETTINGS = "settings";
 
 /**
@@ -33,6 +40,7 @@ interface Data {
   /** Why an option cannot do anything here, by key. */
   unavailable: Partial<Record<SettingKey, string>>;
   toggle(key: SettingKey): void;
+  setHalves(value: Halves): void;
   openSettings(): void;
 }
 
@@ -49,7 +57,8 @@ function useData(): Data {
     (key: SettingKey) => void rpc.call("set_setting", { key, value: !options[key] }).catch(() => {}),
     [rpc, options],
   );
-  return { options, unavailable, toggle, openSettings: () => openSettings(pluginId) };
+  const setHalves = useCallback((value: Halves) => void rpc.call("set_halves", { value }).catch(() => {}), [rpc]);
+  return { options, unavailable, toggle, setHalves, openSettings: () => openSettings(pluginId) };
 }
 
 /**
@@ -76,6 +85,7 @@ export const threadMenu: PluginThreadActionRegistration<Data> = {
       choices: {
         items: [
           { id: "enabled", label: "Pin the current turn", selected: on },
+          ...HALF_CHOICES.map(({ value, label }) => ({ id: HALF_PREFIX + value, label, selected: options.halves === value, disabled: !on })),
           ...OPTIONS.map(({ key, label }) => ({
             id: key,
             label,
@@ -88,6 +98,10 @@ export const threadMenu: PluginThreadActionRegistration<Data> = {
       },
       run: ({ value }) => {
         if (value === SETTINGS) data.openSettings();
+        else if (typeof value === "string" && value.startsWith(HALF_PREFIX)) {
+          const picked = HALVES.find((one) => one === value.slice(HALF_PREFIX.length));
+          if (picked) data.setHalves(picked);
+        }
         else if (value === "enabled" || OPTIONS.some((option) => option.key === value)) data.toggle(value as SettingKey);
       },
     };

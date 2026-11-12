@@ -11,8 +11,13 @@ import { z } from "zod";
 export const SETTING_KEYS = ["enabled", "showStatus", "showPosition", "showFullText", "debugLog", "showPinButton"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
+/** Which halves of the bar are drawn. */
+export const HALVES = ["both", "message", "reply"] as const;
+export type Halves = (typeof HALVES)[number];
+
 export const rpcContract = defineRpcContract({
   set_setting: { input: z.object({ key: z.enum(SETTING_KEYS), value: z.boolean() }), output: z.null() },
+  set_halves: { input: z.object({ value: z.enum(HALVES) }), output: z.null() },
   debug: {
     input: z.object({
       event: z.string().max(40),
@@ -49,6 +54,12 @@ export default async function plugin(bb: BbPluginApi) {
       description: "The Pinned turns submenu in each thread's actions menu, where the bar and its options are switched.",
       default: true,
     },
+    halves: {
+      type: "string",
+      label: "Halves shown",
+      description: "both, message (only the message you are under) or reply (only the latest reply).",
+      default: "both",
+    },
     debugLog: {
       type: "boolean",
       label: "Debug log",
@@ -59,6 +70,10 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(rpcContract, {
     set_setting: async ({ key, value }) => {
       await settings.experimental_set({ [key]: value });
+      return null;
+    },
+    set_halves: async ({ value }) => {
+      await settings.experimental_set({ halves: value });
       return null;
     },
     debug: async ({ event, data }) => {
