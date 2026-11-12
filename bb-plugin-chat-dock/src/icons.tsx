@@ -24,7 +24,7 @@ function Dock({ x }: { x: number }) {
   const scale = 0.55;
   return (
     <g opacity={0.55}>
-      <svg x={x - 2 * scale} y={12 - 15 * scale} width={24 * scale} height={24 * scale} viewBox="0 0 24 24" overflow="visible" strokeWidth={2 / scale}>
+      <svg x={x - 2 * scale} y={12 - 15 * scale} width={24 * scale} height={24 * scale} viewBox="0 0 24 24" overflow={["vis", "ible"].join("")} strokeWidth={2 / scale}>
         <path d="M2 8h20" />
         <rect width="20" height="8" x="2" y="14" rx="2" />
         <path d="M6 18h2" />

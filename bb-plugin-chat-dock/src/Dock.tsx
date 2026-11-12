@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useDebug } from "./debug";
-import { dockInto, findPanel, findShell, heldShell, holdsShell, observePanel, onShellHome, panelHidden, park } from "./dom";
+import { BACKSTOP_MS, dockInto, every, findPanel, findShell, heldShell, holdsShell, observePanel, onShellHome, panelHidden, park } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -41,14 +41,14 @@ export function Dock({ threadId }: { threadId: string }) {
       log.current("dock", { to: "tab", height: shell.getBoundingClientRect().height });
     };
     check();
-    const timer = window.setInterval(check, 500);
+    const stopTimer = every(BACKSTOP_MS, check);
     // The panel collapsing and expanding is an attribute change, so no wait.
     const stop = where ? observePanel(where, check) : () => {};
     // The strip letting go (the lock switched off) is a release to take at once.
     const offHome = onShellHome(check);
     return () => {
       offHome();
-      window.clearInterval(timer);
+      stopTimer();
       stop();
       // Leaving because the lock went on: hand the shell to the strip rather than
       // bounce it through the column while the overlay catches up.

@@ -91,7 +91,6 @@
  * frame takes the host's class too, so it is drawn as the host would be.
  */
 .chat-dock-overlay {
-  position: fixed;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

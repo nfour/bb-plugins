@@ -37,6 +37,8 @@ export function createOverlay(host: HTMLElement, drawer: HTMLElement): Overlay {
   // A layer the drawer's size that lets touches through, and the frame at its bottom that holds the shell.
   const layer = document.createElement("div");
   layer.className = "chat-dock-overlay";
+  // Set here: the word is a utility to the build, which would scope a rule for it page-wide.
+  layer.style.position = ["fix", "ed"].join("");
   const frame = document.createElement("div");
   frame.dataset.chatDockHost = "overlay";
   // The host's own look (its padding, the strip's top rule), so the frame is drawn as the host would be.

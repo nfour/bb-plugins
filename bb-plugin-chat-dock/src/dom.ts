@@ -15,8 +15,15 @@
 import { createOverlay, overlayOf } from "./overlay";
 
 const SHELL = '[data-scroll-footer] [data-app-composer][data-app-composer-role="primary"]';
-/** On a phone-width viewport the right panel is this drawer instead, fixed over the page and outside the grid. */
+/** On a phone-width viewport the right panel is this drawer instead, pinned over the page and outside the split layout. */
 const SHELF = "[data-testid=secondary-panel-shelf]";
+/**
+ * The right panel: `#thread-detail-secondary-panel`, or in a split workspace
+ * `#thread-detail-secondary-panel-<pane id>` (one panel, which moves to the
+ * focused pane). The `-handle` element beside it is not a panel.
+ */
+const PANEL = '#thread-detail-secondary-panel, [id^="thread-detail-secondary-panel-pane"]';
+const PANEL_PREFIX = "thread-detail-secondary-panel-";
 
 export interface Panel {
   /** The split panel, or the drawer on a narrow viewport. */
@@ -35,19 +42,33 @@ export function findShell(threadId: string): HTMLElement | null {
 
 /**
  * The chat panes on the page, each with its composer shell and its right panel.
- * A narrow viewport has one pane and the drawer, which is outside the grid.
+ * A narrow viewport has one pane and the drawer, which is outside the split layout.
  */
 export function findPanes(): { root: HTMLElement; shell: HTMLElement | null; panel: Panel | null }[] {
-  return [...document.querySelectorAll<HTMLElement>("[data-split-resize-grid-root]")].map((root) => ({
-    root,
-    shell: root.querySelector<HTMLElement>(SHELL),
-    panel: panelFor(root),
-  }));
+  return [...document.querySelectorAll<HTMLElement>("[data-split-resize-grid-root]")].map((root) => {
+    const panel = panelFor(root);
+    return { root, shell: shellFor(root, panel), panel };
+  });
+}
+
+/**
+ * The composer shell in a layout root's column. Split, the roots nest and the
+ * one panel belongs to the pane its id names, so it is that pane's shell, not
+ * the first one in the root.
+ */
+function shellFor(root: HTMLElement, panel: Panel | null): HTMLElement | null {
+  const id = panel?.panel.id.startsWith(PANEL_PREFIX) ? panel.panel.id.slice(PANEL_PREFIX.length) : null;
+  if (id === null) return root.querySelector<HTMLElement>(SHELL);
+  for (const pane of root.querySelectorAll(`[data-split-pane-id="${CSS.escape(id)}"]`)) {
+    // The panel's own tabs are split panes with ids of their own, inside the panel.
+    if (!pane.closest(PANEL)) return pane.querySelector<HTMLElement>(SHELL);
+  }
+  return null;
 }
 
 /** The right panel of a chat pane: the pane's split panel, or the drawer. */
 export function panelFor(root: HTMLElement): Panel | null {
-  return findPanel(root.querySelector("#thread-detail-secondary-panel") ?? root) ?? findShelf();
+  return findPanel(root.querySelector(PANEL) ?? root) ?? findShelf();
 }
 
 /** The drawer while it is open: closed, BB unmounts its aside, so there is nothing to dock into. */
@@ -65,7 +86,7 @@ function findShelf(): Panel | null {
 export function findPanel(from: Element): Panel | null {
   const shelf = from.closest<HTMLElement>(SHELF);
   if (shelf) return panelOf(shelf, shelf.querySelector<HTMLElement>("aside"));
-  const panel = from.closest<HTMLElement>("#thread-detail-secondary-panel") ?? from.querySelector<HTMLElement>("#thread-detail-secondary-panel");
+  const panel = from.closest<HTMLElement>(PANEL) ?? from.querySelector<HTMLElement>(PANEL);
   return panel ? panelOf(panel, panel.querySelector<HTMLElement>(":scope > aside")) : null;
 }
 
@@ -134,18 +155,62 @@ export function observePanel({ panel, aside }: Panel, onChange: () => void): () 
  * Watches the whole page for what can change where a shell belongs: a chat
  * column or a panel column mounting or being replaced (a navigation, BB's
  * remount of the aside's content after a plugin setting write, the drawer
- * mounting its aside), and the attributes that collapse or expand a panel.
+ * mounting its aside), and the attributes that open or close a panel.
  * `onChange` runs in the observer's microtask, after the change and before a
  * paint. Mutations inside the rows and inside the composer itself, which stream
  * constantly, are filtered out before anything is done.
  */
 export function observePage(onChange: () => void): () => void {
   const observer = new MutationObserver((records) => {
-    if (records.some(({ target }) => !(target instanceof Element) || !target.closest("[data-timeline-items], [data-app-composer]"))) onChange();
+    if (records.some(structural)) onChange();
   });
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-panel-size", "aria-hidden", "inert"] });
   return () => observer.disconnect();
 }
+
+/** What moves a shell's home when it is added or removed: a layout root, a column, a panel, the shell, our own host. */
+const STRUCTURE = `[data-split-resize-grid-root], [data-scroll-footer], [data-app-composer], [data-chat-dock-host], [data-split-pane-id], [data-testid=thread-secondary-panel-top-chrome], aside, ${PANEL}, ${SHELF}`;
+
+/**
+ * Whether a mutation can change where a shell belongs. A panel's own tab (a diff,
+ * a terminal, a browser) changes constantly and none of it matters, so a change
+ * of children counts only if a node added or removed is, or holds, a piece of the
+ * layout above; an attribute counts only on a panel, a drawer or an aside.
+ */
+function structural({ type, target, addedNodes, removedNodes }: MutationRecord): boolean {
+  if (!(target instanceof Element)) return true;
+  if (target.closest("[data-timeline-items], [data-app-composer]")) return false;
+  if (type === "attributes") return target.matches(`aside, ${PANEL}, ${SHELF}`);
+  for (const list of [addedNodes, removedNodes]) {
+    for (const node of list) if (node instanceof Element && (node.matches(STRUCTURE) || node.querySelector(STRUCTURE))) return true;
+  }
+  return false;
+}
+
+/** The state name of a tab on screen, split: the whole word is a utility to the build. */
+const ON_SCREEN = ["vis", "ible"].join("");
+const asleep = () => document.visibilityState !== ON_SCREEN;
+
+/**
+ * A backstop timer for what the observers miss. It sleeps while the tab is in
+ * the background and runs once when the tab comes back.
+ */
+export function every(ms: number, run: () => void): () => void {
+  const timer = window.setInterval(() => {
+    if (!asleep()) run();
+  }, ms);
+  const back = () => {
+    if (!asleep()) run();
+  };
+  document.addEventListener("visibilitychange", back);
+  return () => {
+    window.clearInterval(timer);
+    document.removeEventListener("visibilitychange", back);
+  };
+}
+
+/** How often the backstop timers run. The observers do the work; this is for a change they cannot see. */
+export const BACKSTOP_MS = 2000;
 
 /** The strip's host: appended to the panel's column, under the tab body. */
 export function createStripHost(): HTMLElement {

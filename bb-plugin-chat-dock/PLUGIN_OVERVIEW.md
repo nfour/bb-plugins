@@ -15,7 +15,8 @@ The dock button in the composer's action row switches docking on and off. **Chat
 
 - Hiding the right panel (Ctrl+J) puts the composer back under the timeline.
 - Opening another thread with the panel open docks that thread's composer.
-- Split chat panes each keep their own composer.
+- Split chat panes each keep their own composer; the panel follows the focused pane, and that pane's composer docks into it.
+- Two palette commands toggle docking and switch between the strip and the Chat tab; bind keys to them in BB's shortcut settings.
 - On a phone-width screen the composer docks at the bottom of the panel drawer and works as it does under the timeline: tap it to expand it and see its footer, and it stays above the on-screen keyboard. The dock button shows while the box is expanded; the thread menu has every option.
 - In the side panel the composer's footer (environment, permission mode, context meter) stays shown even when the panel is narrow.
 

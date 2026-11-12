@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useBbContext } from "@get-bb/plugin-sdk/app";
 import { useDebug } from "./debug";
-import { adopt, createStripHost, dockInto, findPanes, holdsShell, isDrawer, observePage, onShellHome, panelHidden, type Panel } from "./dom";
+import { adopt, BACKSTOP_MS, createStripHost, dockInto, every, findPanes, holdsShell, isDrawer, observePage, onShellHome, panelHidden, type Panel } from "./dom";
 import { useOptions } from "./options";
 
 /**
@@ -45,7 +45,7 @@ export function Strip() {
       log.current("dock", { to: "strip", height: shell.getBoundingClientRect().height });
     };
     // The tab parked the shell in a strip host when the lock went on: take it over.
-    // The phone drawer is outside the grid, so its host is looked for in the drawer.
+    // The phone drawer is outside the split layout, so its host is looked for in the drawer.
     const takeOver = (root: HTMLElement, panel: Panel) => {
       const host =
         root.querySelector<HTMLElement>("[data-chat-dock-host=strip]") ??
@@ -86,12 +86,12 @@ export function Strip() {
     }
     check();
     const stopObserving = observePage(check);
-    const timer = window.setInterval(check, 500);
+    const stopTimer = every(BACKSTOP_MS, check);
     const offHome = onShellHome(check);
     return () => {
       offHome();
       stopObserving();
-      window.clearInterval(timer);
+      stopTimer();
       for (const root of [...held.keys()]) release(root, "off");
     };
   }, [on, log]);

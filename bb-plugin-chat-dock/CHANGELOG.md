@@ -2,6 +2,13 @@
 
 Releases are the tags `chat-dock/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.6 (2026-11-12)
+
+- The composer docks in a split workspace: the pane you are in docks into its own right panel.
+- Two palette commands: toggle docking the composer, and switch between the panel's bottom strip and a Chat tab.
+- Far less work while idle: it looks for panes only when the page's layout changes, and nothing is checked while the browser tab is in the background.
+- The plugin adds no page-wide style rules.
+
 ## 0.1.5 (2026-11-10)
 
 - The dock button's chevron follows the docking setting instead of where the composer is right now: it points left while docking is on and right while it is off. On a phone with the drawer closed, a composer under the timeline used to show a right chevron whose tap seemed to do nothing.
@@ -9,7 +16,7 @@ Releases are the tags `chat-dock/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 ## 0.1.4 (2026-11-10)
 
 - On a phone, the composer docked in the drawer works: send, the pickers and the cards respond, tapping the box expands it and shows its footer (and tapping away hides it, as under the timeline), and it stays above the on-screen keyboard.
-- In a narrow side panel on desktop, the composer's footer (environment, permission mode, context meter) stays visible instead of fading out.
+- In a narrow side panel on desktop, the composer's footer (environment, permission mode, context meter) stays shown instead of fading out.
 
 ## 0.1.3 (2026-10-30)
 

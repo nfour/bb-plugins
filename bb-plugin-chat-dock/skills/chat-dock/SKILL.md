@@ -10,11 +10,17 @@ While a thread's right panel is open, the composer (the box, the cards above it 
 ## Modes
 
 - **Keep it at the panel's bottom** (`locked`, on by default): a strip under whichever tab is open; the tab shrinks to make room.
-- **Chat tab** (`locked` off): a fixed Chat tab holds the composer while it is the active tab in its pane; otherwise the composer is in the column.
+- **Chat tab** (`locked` off): a Chat tab of its own holds the composer while it is the active tab in its pane; otherwise the composer is in the column.
 
 `enabled` switches docking off altogether.
 
 Hiding the right panel (Ctrl+J) puts the composer back in the column in either mode. On a phone-width screen the panel is a drawer and the composer docks at its bottom. The drawer is outside BB's React root, so the composer is laid over the drawer's bottom from inside the root (`src/overlay.ts`) and its place in the drawer keeps the same height; it behaves as under the timeline (a tap expands it and shows the footer) and follows the drawer above the on-screen keyboard. In the desktop side panel the composer's footer stays shown even when the panel is narrow.
+
+## Commands
+
+In BB's command palette: **Chat Dock: toggle docking the composer** (`enabled`) and **Chat Dock: switch between the panel's bottom strip and a Chat tab** (`locked`, listed only while docking is on). No default keys; users can bind them in BB's shortcut settings.
+
+In a split workspace there is one right panel, which follows the focused pane (`#thread-detail-secondary-panel-<pane id>`); that pane's composer is the one docked.
 
 ## Settings
 
