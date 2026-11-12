@@ -76,7 +76,11 @@ export function createSteering(env: SteeringEnv): Steering {
     const { scroller } = timeline;
     // Something else moved the scroller (BB re-measuring rows above): carry the glide along rather than pull against it.
     const moved = scroller.scrollTop - wheelSeen;
-    if (Math.abs(moved) > 1) {
+    const bottom = scroller.scrollHeight - scroller.clientHeight;
+    // A jump to the very bottom from somewhere else is BB's scroll keeper undoing a write it did not take for the reader's
+    // (a slow frame outlasts its window for that): it is written again, not followed, or the glide would end at the bottom.
+    const snapped = scroller.scrollTop >= bottom - 1 && wheelSeen < bottom - 1;
+    if (Math.abs(moved) > 1 && !snapped) {
       wheelPos += moved;
       wheelTarget += moved;
     }
@@ -106,7 +110,7 @@ export function createSteering(env: SteeringEnv): Steering {
    * measurements, so the place clicked moves. This follows the row that was under the
    * click until it is on screen at the right height, then lets go.
    */
-  const steer = async (id: string, within: number, glide = false) => {
+  const steer = async (id: string, within: number, aimed: number, glide = false) => {
     const mine = ++steering;
     const stop = (event: Event) => {
       if (event.isTrusted && steering === mine) steering++;
@@ -126,7 +130,12 @@ export function createSteering(env: SteeringEnv): Steering {
         const timeline = env.timeline();
         if (!timeline || steering !== mine) return;
         const row = rowById(timeline.items, id);
-        if (!row) continue;
+        if (!row) {
+          // Not on screen: BB's scroll keeper may have put the scroller back at the bottom after the write (a slow frame
+          // outlasts the window in which it takes a write for the reader's), so the place aimed at is written again.
+          if (Math.abs(timeline.scroller.scrollTop - aimed) > 1 && !(glide && wheelFrame !== 0)) scrollTo(aimed);
+          continue;
+        }
         const rect = row.getBoundingClientRect();
         const scroller = timeline.scroller.getBoundingClientRect();
         const delta = rect.top + within * rect.height - (scroller.top + timeline.scroller.clientHeight / 2);
@@ -168,7 +177,7 @@ export function createSteering(env: SteeringEnv): Steering {
         if (glide) aim(scroller, target);
         else scrollTo(target);
         const at = rectAt(layout, y / scale);
-        if (at >= 0) void steer(layout.ids[at]!, Math.min(1, Math.max(0, (y / scale - layout.y[at]!) / Math.max(1, layout.h[at]!))), glide);
+        if (at >= 0) void steer(layout.ids[at]!, Math.min(1, Math.max(0, (y / scale - layout.y[at]!) / Math.max(1, layout.h[at]!))), target, glide);
         grab = thumb.height / 2;
       }
       host.dataset.drag = "";

@@ -2,7 +2,9 @@
    (top, height, right). It takes the pointer so a drag is not a text selection. */
 .minimap {
   position: var(--minimap-pos);
-  z-index: 20;
+  /* Above the divider between two panes (BB's is z-25 with a transparent handle 12px wide that reaches 6px over a pane's
+     edge), or the strip of the left pane could not be clicked on its right half. */
+  z-index: 26;
   touch-action: none;
   user-select: none;
   cursor: pointer;

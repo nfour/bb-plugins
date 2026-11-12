@@ -2,6 +2,11 @@
 
 Releases are the tags `minimap/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.5 (2026-11-12)
+
+- With several threads side by side, every pane now has its own minimap; before, only the focused pane had one.
+- Clicking the left pane's minimap no longer misses its right half, and the first click in a pane no longer does nothing.
+
 ## 0.1.4 (2026-11-11)
 
 - The hover note shows the rows around the pointer, not just one: the pointer's row bright and one row above and below it dimmed. Moving along the strip glides the list to the next row. **Context rows**, **Text lines**, **Hover delay** (now 66ms by default), and the glide's time and softness are settings on the new Note tab.

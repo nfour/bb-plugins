@@ -49,6 +49,10 @@ The panel has six tabs (the same panel is also the Minimap section of BB's setti
 
 Sliders and colours preview on the strip as you drag and are saved when you let go. To take the entry out of the thread menu, switch off **Show in thread menus** on the plugin's page in BB's settings.
 
+## Split workspaces
+
+With several threads side by side, each pane gets its own strip, and a pane that closes or switches thread takes or changes its strip within a second. The strip needs the same room beside the thread's column as anywhere else, so a narrow pane shows the narrow width.
+
 ## Narrow windows
 
 The full strip needs room beside the message column, about 880px of thread width (more if you keep the thread-index button). When there is less, the strip drops to its narrow width (12px by default) and may overlap the edge of the column. Turn off **Keep on narrow windows** to hand back to BB's scrollbar there instead.
