@@ -1,5 +1,6 @@
 import type { Box } from "./boxes.ts";
 import { ICONS, KIND_ICON } from "./icons.ts";
+import { reducedMotion } from "./motion.ts";
 import { KINDS, rectAt, type Kind, type Layout } from "./model.ts";
 import type { Rows } from "./timeline.ts";
 import { isJump, planLines, windowStart } from "./window.ts";
@@ -105,7 +106,6 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
   let hotLine: HTMLElement | null = null;
   let blurring: Animation | null = null;
   let markKey = "";
-  let reduced: MediaQueryList | null = null;
   let mark: HTMLDivElement | null = null;
   let at: HTMLElement | null = null;
   let frame = 0;
@@ -263,7 +263,7 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
         // The list holds a line for every row the glide passes, at its place; the window shows `span` of them
         // with the pointer's row in the middle, moved inward at either end of the thread so no part of it is empty.
         const start = windowStart(near.place, context, drawn.length);
-        const jump = fresh || config.slideMs <= 0 || !!reduced?.matches || isJump(start, pos, config.animate);
+        const jump = fresh || config.slideMs <= 0 || reducedMotion() || isJump(start, pos, config.animate);
         if (jump) {
           for (const line of lines.values()) line.remove();
           lines.clear();
@@ -327,6 +327,8 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
 
   const onMove = (event: PointerEvent) => {
     const host = env.host();
+    // A finger on the strip is scrubbing, not pointing: the note would only cover the thread under it.
+    if (event.pointerType === "touch") return hide();
     if (!host || !env.enabled()) return;
     pointerY = event.clientY;
     if (frame === 0) frame = requestAnimationFrame(show);
@@ -335,7 +337,6 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
   return {
     attach(host) {
       at = host;
-      reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
       mark = document.createElement("div");
       mark.className = "minimap-hot";
       note = document.createElement("div");
@@ -377,7 +378,6 @@ export function createTip(env: TipEnv): { attach(host: HTMLElement): void; detac
       shownKey = "";
       markKey = "";
       hotLine = null;
-      reduced = null;
       note = arrow = list = mark = at = null;
     },
   };

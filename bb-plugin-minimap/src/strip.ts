@@ -106,6 +106,8 @@ const MIN_GAP = 8;
 const LEAD_SLACK = 120;
 /** A pass (reading the page, drawing) happens at most this often while the thread is changing. */
 const PASS_EVERY_MS = 250;
+/** How many passes in a row may find no list before the search slows to once a second. */
+const MISSED_QUICK = 12;
 /** After a scroll stops, rows that mounted along the way are read once. */
 const SCROLL_IDLE_MS = 140;
 
@@ -200,6 +202,13 @@ export function createStrip(threadId: string, initial: Options): Strip {
     drawn.top = drawn.right = drawn.height = -1;
   };
 
+  /** A colour probe finished its 1ms fade: the theme changed under the strip, so its colours are read again. */
+  const onInk = (event: TransitionEvent) => {
+    if (event.propertyName !== "color" || !(event.target instanceof HTMLElement) || !event.target.classList.contains(`${CLASS}-ink`)) return;
+    colors = null;
+    request();
+  };
+
   const attach = () => {
     if (timeline && host && timeline.scroller.isConnected && timeline.items.isConnected && host.parentElement === timeline.scroller.parentElement) return;
     detach();
@@ -233,8 +242,11 @@ export function createStrip(threadId: string, initial: Options): Strip {
     host.addEventListener("pointerdown", steering.onPointerDown);
     host.addEventListener("wheel", steering.onWheel, { passive: false });
     observer = new ResizeObserver(() => request());
+    // A rebuilt scroller or list is seen here too: an observed element that leaves the page reports a size of nothing.
     observer.observe(found.frame);
     observer.observe(found.scroller);
+    observer.observe(found.items);
+    host.addEventListener("transitionend", onInk);
     request();
   };
 
@@ -284,6 +296,8 @@ export function createStrip(threadId: string, initial: Options): Strip {
   /** ---- one pass: read the page, lay the rectangles out, draw ---- */
 
   let passTimer = 0;
+  /** Passes in a row that found no list to draw beside. */
+  let missed = 0;
   let lastPass = 0;
   /** Asks for a pass; an `urgent` one (an option moved) does not wait out the pause between passes, so a dragged control is followed. */
   const request = (urgent = false) => {
@@ -302,7 +316,15 @@ export function createStrip(threadId: string, initial: Options): Strip {
     lastPass = performance.now();
     attach();
     const t = timeline;
-    if (!t || !host || !canvas || !view || disposed) return;
+    if (!t || !host || !canvas || !view || disposed) {
+      // The page has not drawn the thread's list (yet, or any more): ask again, quickly at first and then once a second.
+      if (!t && !disposed) {
+        missed++;
+        window.setTimeout(look, missed < MISSED_QUICK ? 0 : 1000);
+      }
+      return;
+    }
+    missed = 0;
     const { scroller, items, frame } = t;
     const parent = scroller.parentElement!;
     const itemsRect = items.getBoundingClientRect();
@@ -466,22 +488,11 @@ export function createStrip(threadId: string, initial: Options): Strip {
 
   /** ---- life ---- */
 
-  // BB's rows move under the strip without the thread changing: a theme change recolours it.
-  const recolour = () => {
-    colors = null;
-    request();
-  };
-  const theme = new MutationObserver(recolour);
-  theme.observe(document.documentElement, { attributes: true });
-  const dark = window.matchMedia("(prefers-color-scheme: dark)");
-  dark.addEventListener("change", recolour);
-
-  // The scroller can be rebuilt under a thread (a layout change); a cheap check finds the new one.
-  // It does not run while the tab is in the background, and looks once when it comes back.
+  // Nothing here polls. A rebuilt scroller is reported by the size observer; one the page has not drawn yet is looked for
+  // again by `pass`; and a tab that was in the background is looked at once when it comes back.
   const look = () => {
-    if (!inBackground() && (!timeline || !timeline.scroller.isConnected || !timeline.items.isConnected)) request();
+    if (!inBackground()) request();
   };
-  const watch = window.setInterval(look, 1000);
   document.addEventListener("visibilitychange", look);
   request();
 
@@ -506,14 +517,11 @@ export function createStrip(threadId: string, initial: Options): Strip {
       remember(threadId, { columnWidth, cache });
       disposed = true;
       steering.cancel();
-      window.clearInterval(watch);
       document.removeEventListener("visibilitychange", look);
       window.clearTimeout(passTimer);
       window.clearTimeout(idleTimer);
       cancelAnimationFrame(frameId);
       painter.stop();
-      theme.disconnect();
-      dark.removeEventListener("change", recolour);
       detach();
     },
   };

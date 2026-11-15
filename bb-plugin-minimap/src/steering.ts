@@ -1,4 +1,5 @@
 import { glideStep, rectAt, scrollForClick, scrollForDrag, type Layout } from "./model.ts";
+import { reducedMotion } from "./motion.ts";
 import { rowById, type Timeline } from "./dom.ts";
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -170,7 +171,7 @@ export function createSteering(env: SteeringEnv): Steering {
       if (!onThumb) {
         const layout = env.layout();
         const scale = env.scale();
-        const glide = env.config().clickSmooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const glide = env.config().clickSmooth && !reducedMotion();
         const target = scrollForClick(layout, y, scale, scroller.clientHeight);
         // Our own glide, not the browser's smooth scroll: that one is cut short whenever BB swaps the estimated height of
         // rows for measured ones under it, which it does all the way to a place not loaded yet (a click ended 10% of the way).
@@ -221,7 +222,7 @@ export function createSteering(env: SteeringEnv): Steering {
       const lines = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientHeight : 1;
       const config = env.config();
       const step = event.deltaY * lines * (config.wheelSpeed / 100);
-      const smooth = config.wheelSmooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const smooth = config.wheelSmooth && !reducedMotion();
       if (!smooth) {
         stopGlide();
         scrollTo(scroller.scrollTop + step);

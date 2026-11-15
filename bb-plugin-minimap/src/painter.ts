@@ -1,3 +1,4 @@
+import { reducedMotion } from "./motion.ts";
 import { TWEEN_MAX, paintList, type Box } from "./boxes.ts";
 import type { Kind } from "./model.ts";
 
@@ -19,7 +20,6 @@ export interface Painter {
 }
 
 export function createPainter(): Painter {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   /** What is on the canvas now, by row id: where an animation starts from. */
   let current = new Map<string, Box>();
   let animation = 0;
@@ -64,7 +64,7 @@ export function createPainter(): Painter {
     // or a taller row elsewhere comes here about once a second on a live thread).
     if (!changed && from.size > 0 && key === painted) return;
     painted = key;
-    if (!changed || from.size === 0 || to.size > TWEEN_MAX || reduceMotion.matches) {
+    if (!changed || from.size === 0 || to.size > TWEEN_MAX || reducedMotion()) {
       current = to;
       paint(ctx, to.values(), width, height, inks);
       return;

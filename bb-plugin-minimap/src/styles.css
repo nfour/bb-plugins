@@ -97,9 +97,14 @@
 [data-minimap-toc="hide"] {
   display: none;
 }
-/* The colours the canvas paints with: read back as computed colours, since a canvas cannot take var() or light-dark(). */
+/* The colours the canvas paints with: read back as computed colours, since a canvas cannot take var() or light-dark().
+   They have a box of no size, not display none, so that a change of theme starts a 1ms colour fade on them: its end is
+   the strip's cue to read the colours again, with no observer on the page's root. */
 .minimap-ink {
-  display: none;
+  display: block;
+  width: 0;
+  height: 0;
+  transition: color 1ms;
 }
 .minimap-ink[data-kind="user"] {
   color: light-dark(#aaa, #bbb);
@@ -120,7 +125,8 @@
 /* The settings panel floats over the chat window, dragged by its title bar. */
 .minimap-panel {
   position: var(--minimap-float);
-  z-index: 40;
+  /* Above BB's phone drawer (45), under its toasts (49) and menus (50). */
+  z-index: 46;
   width: 760px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
@@ -191,6 +197,8 @@
 .minimap-panel-body {
   padding: 4px 16px 12px;
   overflow-y: auto;
+  /* A swipe that reaches the end of the list stops there instead of scrolling the thread behind. */
+  overscroll-behavior: contain;
 }
 .minimap-opt {
   display: var(--minimap-row);
@@ -316,6 +324,15 @@
   cursor: pointer;
   background: color-mix(in oklab, var(--foreground) 22%, transparent);
   transition: background 120ms ease-out;
+}
+/* The switch's reach is the pill and a margin round it; on a touch screen the margin makes it 44px each way. */
+.minimap-switch::before {
+  content: "";
+  position: var(--minimap-pos);
+  top: -4px;
+  bottom: -4px;
+  left: -4px;
+  right: -4px;
 }
 .minimap-switch::after {
   content: "";
@@ -524,6 +541,36 @@
 }
 .minimap-hot[data-on] {
   opacity: 1;
+}
+
+/* A finger needs about 44px: the switch reaches out by 12px above and below, the slider's box is as tall, and the
+   handle is bigger; tabs, choices and the title bar's buttons are as high. */
+@media (pointer: coarse) {
+  .minimap-switch::before {
+    top: -12px;
+    bottom: -12px;
+  }
+  .minimap-range {
+    height: 44px;
+  }
+  .minimap-range::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+    margin-top: -10px;
+  }
+  .minimap-range::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  .minimap-tab,
+  .minimap-seg-btn,
+  .minimap-reset,
+  .minimap-titlebar button {
+    min-height: 44px;
+  }
+  .minimap-titlebar button {
+    min-width: 44px;
+  }
 }
 
 /* On a narrow window the panel is a sheet from the bottom, as wide as the screen. Its tabs wrap into rows, and a control

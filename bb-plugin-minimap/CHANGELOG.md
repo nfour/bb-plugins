@@ -2,6 +2,12 @@
 
 Releases are the tags `minimap/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.7 (2026-11-15)
+
+- On a touch screen the settings panel's switches, sliders, tabs and buttons are easier to hit, the panel shows above BB's open drawer, and a swipe at the end of its list no longer scrolls the thread.
+- Touching the strip no longer shows the hover note.
+- Nothing runs on a timer while a thread is idle; a theme change redraws the strip once.
+
 ## 0.1.6 (2026-11-12)
 
 - The strip is redrawn only when something on it changed.

@@ -36,7 +36,7 @@ BB virtualises the timeline at 20 or more top-level rows: unmounted ranges are `
 - A finished turn's work is one `<turn>:turn:0` "Worked for" row, so its `work` rows are estimated at 0px. While a turn works BB folds tool calls into lines (ids `<turn>:work-summary:<data id>`, each standing for several data rows, direct children of the items box): `foldedHeights` gives the first data row of a line the line's height and the others 0, and `dataIdOf` maps a DOM id to a data id.
 - A user message is estimated at most `USER_MAX_H` 380px (BB cuts a long one short; a 3,900-character first prompt drew a giant rectangle). User rectangles are right-aligned and as wide as the bubble (`bubbleShare` reads `[data-message-column]`'s first child).
 - The slider is the viewport height times the scale. The scale is always strip height over content height, so a short thread spans the strip.
-- Colours are the `.minimap-ink[data-kind]` probes read with `getComputedStyle` (a canvas takes no `var()` or `light-dark()`), re-read when `<html>` attributes or the colour scheme change; a colour set on a Blocks row is written on the element itself on its probe. A canvas cannot read `oklab(…)` back, so the panel's `themeColor` reads a pixel.
+- Colours are the `.minimap-ink[data-kind]` probes read with `getComputedStyle` (a canvas takes no `var()` or `light-dark()`), re-read when a probe's colour changes: the probes have a box of no size (not `display: none`) and a 1ms `color` fade, and the strip's `transitionend` handler (`onInk`) clears the cached colours, so a theme or colour-scheme change costs one pass and nothing watches `<html>`; a colour set on a Blocks row is written on the element itself on its probe. A canvas cannot read `oklab(…)` back, so the panel's `themeColor` reads a pixel.
 
 ## Placement
 
@@ -44,7 +44,7 @@ BB virtualises the timeline at 20 or more top-level rows: unmounted ranges are `
 - BB's `[data-thread-toc]` is moved left of the strip (`data-minimap-toc="left"`, `--minimap-shift`) or out of view (`hideToc`, the default), and restored on detach.
 - The strip is removed from view below a gap of `MIN_GAP` 8px between the column and the strip unless `keepNarrow` (the default): then it stays at `narrowWidth` over the column's edge. `hideWhenFits` hides it while `scrollHeight <= clientHeight + 1`.
 - `z-index: 26`: above BB's pane divider (z-25, a transparent handle 12px wide that reaches 6px over a pane's edge and otherwise took the left pane's clicks). Menus are at 50, toasts 49, BB's phone drawer 45.
-- Phone: the panel is a bottom sheet up to 640px; the strip itself has no phone rules beyond the narrow width.
+- Phone: the panel is a bottom sheet up to 640px, `z-index: 46` (above BB's drawer at 45), `overscroll-behavior: contain` on its body, and on `(pointer: coarse)` its switches (a `::before` reach), sliders, tabs, choices and title-bar buttons are 44px high. A `pointermove` with `pointerType: "touch"` hides the note and never shows it. The strip itself has no phone rules beyond the narrow width. `src/motion.ts` holds the one reduced-motion query.
 
 ## Scrolling (`src/steering.ts`)
 
@@ -75,7 +75,7 @@ BB virtualises the timeline at 20 or more top-level rows: unmounted ranges are `
 
 ## Standing timers
 
-- The strip's 1s look for a rebuilt scroller and the pane scan in `app.tsx` do not run while the tab is in the background and look once when it returns (`inBackground`, `visibilitychange`). The timeline watcher reads nothing while inactive. The note's throttle and the strip's pass timers are one-shot and started by input.
+- The strip has no timer of its own while it is attached: its `ResizeObserver` watches the scroller, its one child and `[data-timeline-items]` (an element that leaves the page reports a size of nothing, so a rebuilt list makes a pass, which attaches again); a pass that finds no list asks again at once up to 12 times and then once a second (`missed`), and a tab coming back from the background makes one pass. The pane scan in `app.tsx` does not run while the tab is in the background and looks once when it returns (`inBackground`, `visibilitychange`). The timeline watcher reads nothing while inactive. The note's throttle and the strip's pass timers are one-shot and started by input.
 - Idle cost seen headless: on a quiet thread 3 passes and 0 repaints in 15s; on a live one a pass about each second with the repaint skipped when nothing moved.
 
 ## Testing
@@ -84,4 +84,4 @@ BB virtualises the timeline at 20 or more top-level rows: unmounted ranges are `
 
 ## Known gaps
 
-Three or more panes and a real phone are untested. Review items left on purpose: the note naming an unpainted row on a very dense strip, small touch targets in the panel, the panel sitting under BB's phone drawer (z-index 40 against 45), `Item.more` memory at 12,000 rows with `loadHistory` on (about 2 to 4MB, estimated).
+Three or more panes and a real phone are untested. Review items left on purpose: the note naming an unpainted row on a very dense strip, `Item.more` memory at 12,000 rows with `loadHistory` on (about 2 to 4MB, estimated).
