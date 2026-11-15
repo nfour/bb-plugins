@@ -12,4 +12,7 @@ Releases are the tags `performance/vX.Y.Z` of https://github.com/nfour/bb-plugin
 - Slow inputs say how they divided (waiting for the page, handlers, paint) and which owners ran meanwhile; the places in a bundle that forced layout are listed with file, function and position; a value in the slowest histogram bucket is shown as "at least"; the report adds thread switches (rows, windowed or not, forced layout), plugin script against BB core, and the BB version.
 - **Compare plugin CSS** runs the thread-switch benchmark with and without the other plugins' stylesheets.
 - Class names behind a plugin's page-wide rules are read back from the stylesheet (escapes undone) and shown as bare words and variants.
+- Pages driven by automation (headless or scripted browsers, `navigator.webdriver`) are measured for their own dashboard but write nothing to the metrics files, so bots and tests no longer pass for your real use.
+- Cold start is now first paint plus the first 500 ms without a long frame (it used to be the end of the last long frame in the first 10 s, which was always near the 10 s cap).
 - A badge on the nav icon with the biggest gap as a multiple of its target.
+- The metrics files are about a third smaller (a day of 2.3 MB becomes 1.7 MB): the page-wide CSS line is written once a day instead of at every page load, and the server line keeps only what changed. The dashboard and `bb performance summary` read the same.

@@ -12,8 +12,8 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { cliCommand, defineCli, defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { createWriter } from "./src/jsonl.ts";
-import { measures, mergeWindows, TARGETS, worstGap, type Line, type ServerLine, type TargetsLine, type WindowLine } from "./src/model.ts";
+import { createWriter, dayOf } from "./src/jsonl.ts";
+import { cssKey, measures, mergeWindows, slimServer, TARGETS, worstGap, type Line, type ServerLine, type TargetsLine, type WindowLine, type WorkerState } from "./src/model.ts";
 import { findWorkers, readWorker, type Reading } from "./src/proc.ts";
 
 /** The boolean settings the page can switch. */
@@ -35,7 +35,6 @@ const handlerSchema = z.object({
   id: z.string().max(80),
   version: z.string().max(40).nullable(),
   calls: z.number().finite(),
-  maxMs: z.number().finite(),
   errors: z.number().finite(),
 });
 
@@ -97,7 +96,7 @@ export default async function plugin(bb: BbPluginApi) {
 
   /** Handler counters as last seen from the page, and the change since the last server line. */
   const seen = new Map<string, { calls: number; errors: number }>();
-  const pending = new Map<string, { calls: number; maxMs: number; errors: number }>();
+  const pending = new Map<string, { calls: number; errors: number }>();
 
   const header = (): TargetsLine => ({ v: 1, t: Date.now(), kind: "targets", bb: bbVersion, plugins: versions, targets: TARGETS });
 
@@ -107,11 +106,37 @@ export default async function plugin(bb: BbPluginApi) {
     if (recentLines.length > RING) recentLines.splice(0, recentLines.length - RING);
   };
 
+  /** What was written per day: a `css` line only when its content is new that day, and the `server` line as a delta (`slimServer`). */
+  let cssSeen: { day: string; keys: Set<string> } = { day: "", keys: new Set() };
+  let workerState: WorkerState | null = null;
+
+  const forFile = (lines: Line[]): { t: number }[] => {
+    const out: { t: number }[] = [];
+    for (const line of lines) {
+      const day = dayOf(line.t);
+      if (line.kind === "css") {
+        // Pages that load one after another report the same rules: a line is written once per distinct content per day, not once per load.
+        if (cssSeen.day !== day) cssSeen = { day, keys: new Set() };
+        const key = cssKey(line);
+        if (cssSeen.keys.has(key)) continue;
+        cssSeen.keys.add(key);
+      }
+      if (line.kind === "server") {
+        const { out: slim, state } = slimServer(line, workerState, day);
+        workerState = state;
+        out.push(slim);
+        continue;
+      }
+      out.push(line);
+    }
+    return out;
+  };
+
   const write = async (lines: Line[]) => {
     for (const line of lines) keep(line);
     if (!(await settings.get()).writeFile) return 0;
     try {
-      const n = await writer.append(lines, header);
+      const n = await writer.append(forFile(lines), header);
       lastWriteError = null;
       return n;
     } catch (error) {
@@ -137,10 +162,9 @@ export default async function plugin(bb: BbPluginApi) {
         const calls = p.calls - before.calls;
         const errors = Math.max(0, p.errors - before.errors);
         if (calls === 0 && errors === 0) continue;
-        const into = pending.get(p.id) ?? { calls: 0, maxMs: 0, errors: 0 };
+        const into = pending.get(p.id) ?? { calls: 0, errors: 0 };
         into.calls += calls;
         into.errors += errors;
-        into.maxMs = Math.max(into.maxMs, p.maxMs);
         pending.set(p.id, into);
       }
       const written = await write(lines as unknown as Line[]);
@@ -254,8 +278,8 @@ export default async function plugin(bb: BbPluginApi) {
               switches: recentLines.flatMap((l) => (l.kind === "nav" && l.what === "thread-switch" ? [l.ms] : [])),
               panels: recentLines.flatMap((l) => (l.kind === "nav" && l.what === "panel-open" ? [l.ms] : [])),
             };
-            const startLine = [...recentLines].reverse().find((l) => l.kind === "start");
-            const rows = measures(merged, navs, { settled: startLine?.kind === "start" ? startLine.settled : null }, null);
+            const startLine = [...recentLines].reverse().find((l) => l.kind === "start" && l.quietMs != null);
+            const rows = measures(merged, navs, { settled: startLine?.kind === "start" && startLine.settled > 0 ? startLine.settled : null, capped: startLine?.kind === "start" ? startLine.capped : undefined }, null);
             const gap = worstGap(rows);
             const out = { windows: windows.length, dir, measures: rows, worst: gap?.id ?? null, server: latestServer };
             if (input.options.json) return { exitCode: 0, stdout: JSON.stringify(out, null, 2) };

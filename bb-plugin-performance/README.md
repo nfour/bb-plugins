@@ -44,7 +44,7 @@ Top to bottom, for the last 15 minutes or the last hour:
 | Click to screen | 50 ms | Event Timing, pointer and click events, 95th percentile |
 | Thread switch | 100 ms | median from the route change to the timeline going quiet for 100 ms |
 | Panel open | 100 ms | median from the right panel's size change to it going quiet |
-| Cold start | 1 s | end of the last long frame in the first 10 s after a page load |
+| Cold start | 1 s | first paint, then the first 500 ms without a long frame, read once 10 s after a page load ("at least" when the page was still busy then) |
 | Idle busy | 1 % | share of idle time spent in long frames (frames while loading do not count) |
 | Memory growth | 5 MB/h | slope of the JS heap over the last hour |
 
@@ -80,12 +80,12 @@ Each day goes to `~/.bb/plugins/performance/metrics/YYYY-MM-DD.jsonl`, appended 
 - `window`: a period of use: frame and input histograms (bucket edges 8, 17, 25, 34, 50, 66, 100, 150, 250, 500, 1000 ms), long frames by what drove them, idle busy time, script time per plugin (with the layout it forced and what started it), `sites`, the biggest places that forced layout (file, function, character position), and `split`, how the long frames divide into script, forced layout, style and layout, and other tasks.
 - `slow`: one frame or input over 100 ms, with what you were doing, the plugins whose scripts ran in it (with forced layout and what started each) its `split` and, for an input, `phases` (wait, handlers, paint) (at most 5 per minute).
 - `nav`: a thread switch, page change or panel opening and how long it took to settle, with the route (ids removed).
-- `start`: cold start and each plugin's start time.
-- `css`: page-wide CSS rules per plugin, and `words`, the class words behind them (a key ending in `:` is a variant, such as `hover:`).
+- `start`: cold start (`settled`: ms from navigation start to first paint plus 500 ms without a long frame, `quietMs` 500; `capped` when still busy at 10 s; lines without `quietMs` are from before this and measured something else), first paint, and each plugin's start time.
+- `css`: page-wide CSS rules per plugin, and `words`, the class words behind them (a key ending in `:` is a variant, such as `hover:`). Written once per distinct content per day, so a day with no `css` line after the first means nothing changed.
 - `mark`: a press of **This lagged**.
 - `bench`: a thread-switch benchmark: each switch's time, median and 95th percentile (`cssOff` marks the run with plugin stylesheets off).
 - `probe`: a style probe: one recalculation with and without the plugin stylesheets, and the time each plugin's adds.
-- `server`: one sample a minute of the server process and plugin workers, with back-end call counts per plugin.
+- `server`: one sample a minute of the server process and plugin workers, with back-end call counts per plugin (`handlers`: `calls`, and `errors` when not zero). `workers` hold only the ones that changed since the last line (`delta: true`; `gone` lists ended workers); the first line of a day and every 30th hold all of them.
 
 No message text, file names, titles or ids are written. `bb performance summary [--json]` prints the headline numbers from the file, and `bb performance files` the folder.
 
@@ -107,5 +107,5 @@ The plugin must not be the cost it measures. It samples instead of recording eac
 
 - BB 0.48 or later. Event Timing, Long Animation Frames and `performance.memory` need a Chromium-based page, which BB's desktop and browser use.
 - Per-plugin server cost is not split out (see above). To compare with a plugin off, use `bb plugin disable` or `bb plugin safe-mode`; the plugin never does that itself.
-- A headless browser draws on the CPU, so its frame times are far worse than your screen's. Read the numbers from your own sessions.
+- A headless browser draws on the CPU, so its frame times are far worse than your screen's. A page driven by automation (`navigator.webdriver`) therefore measures for its own dashboard only and writes nothing to the metrics files; the dashboard says so.
 - No external service or account is used.

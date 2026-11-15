@@ -19,7 +19,9 @@ import {
   hashOf,
   kindOf,
   ownerOf,
+  settleAfter,
   splitOf,
+  START_QUIET_MS,
   type BenchLine,
   type CallKind,
   type CssLine,
@@ -72,7 +74,6 @@ export interface PluginInfo {
   id: string;
   version: string | null;
   calls: number;
-  maxMs: number;
   errors: number;
 }
 
@@ -85,6 +86,10 @@ export interface Live {
   css: Record<string, number>;
   startPluginMs: Record<string, number>;
   startSettled: number | null;
+  /** Start-up was still busy when it was read, so `startSettled` is a floor. */
+  startCapped: boolean;
+  /** Driven by automation (`navigator.webdriver`): measured here, never written to the metrics files. */
+  automated: boolean;
   /** The BB version, read from where its built-in plugins live. */
   bb: string | null;
   plugins: PluginInfo[];
@@ -123,6 +128,8 @@ export interface BenchTools {
 }
 
 const PLUGIN_ID = "performance";
+/** Headless and driven pages (bots, tests) draw on the CPU: their numbers are measured for their own dashboard and never sent, or they would pass for the user's. */
+const AUTOMATED = typeof navigator !== "undefined" && navigator.webdriver === true;
 const FLUSH_MS = 60_000;
 const TICK_MS = 30_000;
 const FRAME_WINDOW_MS = 400;
@@ -161,6 +168,7 @@ function createCollector() {
   let css: Record<string, number> = {};
   let startPluginMs: Record<string, number> = {};
   let startSettled: number | null = null;
+  let startCapped = false;
   let plugins: PluginInfo[] = [];
   let heap: { t: number; mb: number }[] = [];
   let lastFlush: number | null = null;
@@ -255,7 +263,7 @@ function createCollector() {
         // BB's own list carries the size of each bundle; the browser's resource timings would do too, but their buffer fills at 250 entries.
         if (typeof p.app?.bundle?.jsBytes === "number") nextBundles[p.id] = { js: p.app.bundle.jsBytes, css: 0 };
         if (p.enabled && p.handlerStats) {
-          infos.push({ id: p.id, version: typeof p.version === "string" ? p.version : null, calls: p.handlerStats.count ?? 0, maxMs: p.handlerStats.maxMs ?? 0, errors: p.handlerStats.errorCount ?? 0 });
+          infos.push({ id: p.id, version: typeof p.version === "string" ? p.version : null, calls: p.handlerStats.count ?? 0, errors: p.handlerStats.errorCount ?? 0 });
         }
         // Built-in plugins live under .../app-versions/<bb version>/, the only place a page can read the version from.
         if (!bbVersion && typeof p.rootDir === "string") bbVersion = /app-versions\/([\d.]+)\//.exec(p.rootDir)?.[1] ?? null;
@@ -353,7 +361,7 @@ function createCollector() {
   const owner = (url: string) => ownerOf(url, urls, location.origin);
 
   /** Startup facts, read from the frames that ran before `START_WINDOW_MS`. */
-  let startEnd = 0;
+  let startFrames: [number, number][] = [];
   let startFresh = false;
 
   function onLoaf(entries: PerformanceEntry[]) {
@@ -403,7 +411,7 @@ function createCollector() {
         into.by ??= {};
         for (const [k, v] of Object.entries(o.by)) into.by[k as CallKind] = (into.by[k as CallKind] ?? 0) + (v ?? 0);
       }
-      if (startFresh && e.startTime < START_WINDOW_MS) startEnd = Math.max(startEnd, e.startTime + e.duration);
+      if (startFresh && e.startTime < START_WINDOW_MS) startFrames.push([e.startTime, e.startTime + e.duration]);
       if (e.duration >= SLOW_MS) {
         const at = Date.now() - Math.max(0, performance.now() - e.startTime);
         const top = (o: { by: Partial<Record<CallKind, number>> }) => (Object.entries(o.by).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0]?.[0] ?? "other") as CallKind;
@@ -515,12 +523,14 @@ function createCollector() {
     const done = closeWindow();
     if (done) queue(done);
     if (queued.length === 0) return;
+    // An automated page keeps its numbers for its own dashboard (the queue is capped) and sends nothing.
+    if (AUTOMATED) return;
     const lines = queued.slice(0, MAX_QUEUED);
     try {
       await call("ingest", {
         lines,
         bb: bbVersion,
-        plugins: plugins.map((p) => ({ id: p.id, version: p.version, calls: p.calls, maxMs: p.maxMs, errors: p.errors })),
+        plugins: plugins.map((p) => ({ id: p.id, version: p.version, calls: p.calls, errors: p.errors })),
       });
       queued = queued.filter((l) => !lines.includes(l));
       history.push(...lines);
@@ -639,7 +649,7 @@ function createCollector() {
     };
 
     startFresh = performance.now() < START_WINDOW_MS;
-    startEnd = 0;
+    startFrames = [];
     startPluginMs = {};
     eventBase = counts();
     visibleSince = isAway() ? null : performance.now();
@@ -688,7 +698,8 @@ function createCollector() {
         void flush();
       } else {
         visibleSince = now;
-        void refreshPlugins();
+        // The timers skipped while away: one catch-up of what they would have done.
+        void refreshPlugins().then(emit);
       }
     });
 
@@ -727,15 +738,17 @@ function createCollector() {
     let ticks = 0;
     const timer = setInterval(
       timed(() => {
+        // A tab in the background has nothing to sample: it catches up on the next `visibilitychange` (the flush already ran when it went away).
+        if (isAway()) return;
         ticks++;
         const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
-        if (memory && !isAway()) {
+        if (memory) {
           heap.push({ t: Date.now(), mb: Math.round(memory.usedJSHeapSize / 104857.6) / 10 });
           if (heap.length > HEAP_KEEP) heap.splice(0, heap.length - HEAP_KEEP);
         }
         if (ticks % (FLUSH_MS / TICK_MS) === 0) {
           void (async () => {
-            if (!isAway()) await refreshPlugins();
+            await refreshPlugins();
             await flush();
           })();
         }
@@ -750,7 +763,9 @@ function createCollector() {
       startTimer = setTimeout(
         timed(() => {
           const nav0 = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-          startSettled = Math.round(startEnd || fcp || 0) || null;
+          const settled = settleAfter(startFrames, fcp, START_WINDOW_MS);
+          startSettled = settled ? Math.round(settled.at) : null;
+          startCapped = settled?.capped ?? false;
           const line: StartLine = {
             v: 1,
             t: Date.now(),
@@ -758,6 +773,8 @@ function createCollector() {
             session,
             fcp: fcp == null ? null : Math.round(fcp),
             settled: startSettled ?? 0,
+            ...(startCapped ? { capped: true } : {}),
+            quietMs: START_QUIET_MS,
             domContentLoaded: nav0 ? Math.round(nav0.domContentLoadedEventEnd) : null,
             load: nav0 && nav0.loadEventEnd > 0 ? Math.round(nav0.loadEventEnd) : null,
             pluginMs: Object.fromEntries(Object.entries(startPluginMs).map(([k, v]) => [k, Math.round(v)])),
@@ -805,6 +822,8 @@ function createCollector() {
       css,
       startPluginMs,
       startSettled,
+      startCapped,
+      automated: AUTOMATED,
       plugins,
       known,
       heap,
@@ -1057,7 +1076,7 @@ function createCollector() {
     subscribe(fn: () => void) {
       listeners.add(fn);
       // A once-a-second refresh of the dashboard's numbers, only while something watches them.
-      if (!notifyTimer) notifyTimer = setInterval(emit, 1000);
+      if (!notifyTimer) notifyTimer = setInterval(() => (isAway() ? undefined : emit()), 1000);
       cached = snapshotLive();
       return () => {
         listeners.delete(fn);

@@ -246,7 +246,12 @@ export interface StartLine {
   kind: "start";
   session: string;
   fcp: number | null;
+  /** Ms since navigation start when start-up settled: first paint, then `quietMs` without a long frame. 0 when it could not be told. Older lines hold the end of the last long frame instead. */
   settled: number;
+  /** The page was still busy when the window ended, so `settled` is the window's length, a floor. */
+  capped?: boolean;
+  /** How long the page had to stay quiet for `settled`; absent on older lines. */
+  quietMs?: number;
   domContentLoaded: number | null;
   load: number | null;
   pluginMs: Record<string, number>;
@@ -318,7 +323,67 @@ export interface ServerLine {
   rssMB: number;
   heapMB: number;
   workers: Record<string, { rssMB: number; cpuPct: number }>;
-  handlers: Record<string, { calls: number; maxMs: number; errors: number }>;
+  /** Back-end calls per plugin since the previous line (from the page-reported counters); errors only when there were any. */
+  handlers: Record<string, { calls: number; errors?: number }>;
+}
+
+/** A `server` line as written to the day's file: see `slimServer`. */
+export type ServerFileLine = Omit<ServerLine, "workers" | "handlers"> & {
+  /** Complete on a key line; on a `delta` line only the plugins whose memory or CPU changed since the previous line. */
+  workers?: ServerLine["workers"];
+  /** Absent when no plugin had a call. */
+  handlers?: ServerLine["handlers"];
+  /** True when `workers` holds only changes: an id missing from it is unchanged, not gone. */
+  delta?: true;
+  /** On a delta line: plugins whose host process ended since the previous line. */
+  gone?: string[];
+};
+
+/** A full `workers` map is written at the first line of a day and every this many lines, so a reader never has to go back far. */
+export const WORKER_KEY_EVERY = 30;
+
+export interface WorkerState {
+  workers: ServerLine["workers"];
+  day: string;
+  /** Lines written since the last key line. */
+  since: number;
+}
+
+/**
+ * The file's version of a `server` line. `workers` is a delta against the last
+ * line written (a key line, complete, at the start of each day and every
+ * `WORKER_KEY_EVERY` lines), `handlers` drops empty counts, and values are
+ * kept to whole units so a plugin that did not move writes nothing. The in-memory line the
+ * dashboard reads stays whole.
+ */
+export function slimServer(line: ServerLine, prev: WorkerState | null, day: string): { out: ServerFileLine; state: WorkerState } {
+  const workers: ServerLine["workers"] = {};
+  for (const [id, w] of Object.entries(line.workers)) workers[id] = { rssMB: Math.round(w.rssMB), cpuPct: Math.round(w.cpuPct * 10) / 10 };
+  const handlers: ServerLine["handlers"] = {};
+  for (const [id, h] of Object.entries(line.handlers)) handlers[id] = { calls: h.calls, ...(h.errors ? { errors: h.errors } : {}) };
+  const { workers: _w, handlers: _h, ...rest } = line;
+  const out: ServerFileLine = { ...rest };
+  if (Object.keys(handlers).length) out.handlers = handlers;
+  const key = !prev || prev.day !== day || prev.since + 1 >= WORKER_KEY_EVERY;
+  if (key) {
+    out.workers = workers;
+    return { out, state: { workers, day, since: 0 } };
+  }
+  const changed: ServerLine["workers"] = {};
+  for (const [id, w] of Object.entries(workers)) {
+    const before = prev.workers[id];
+    if (!before || before.rssMB !== w.rssMB || before.cpuPct !== w.cpuPct) changed[id] = w;
+  }
+  const gone = Object.keys(prev.workers).filter((id) => !(id in workers));
+  out.delta = true;
+  if (Object.keys(changed).length) out.workers = changed;
+  if (gone.length) out.gone = gone;
+  return { out, state: { workers, day, since: prev.since + 1 } };
+}
+
+/** What a `css` line says, for telling whether the last one written already holds it. */
+export function cssKey(line: { cssRules: Record<string, number>; words?: unknown }): string {
+  return JSON.stringify([line.cssRules, line.words ?? null]);
 }
 
 export interface TargetsLine {
@@ -427,6 +492,26 @@ export interface Navs {
 
 export interface Start {
   settled: number | null;
+  capped?: boolean;
+}
+
+export const START_QUIET_MS = 500;
+
+/**
+ * When start-up settled: the first moment after first paint from which the page
+ * went `quiet` ms without a long frame. `frames` are [start, end] in ms since
+ * navigation start, `cap` is how far the page was watched. Null without a first
+ * paint; `capped` when the page was still busy at the cap (`at` is then `cap`).
+ */
+export function settleAfter(frames: [number, number][], fcp: number | null, cap: number, quiet = START_QUIET_MS): { at: number; capped: boolean } | null {
+  if (fcp == null) return null;
+  let at = fcp;
+  for (const [from, to] of [...frames].sort((a, b) => a[0] - b[0])) {
+    if (to <= at) continue;
+    if (from - at >= quiet) return { at, capped: false };
+    at = Math.max(at, to);
+  }
+  return cap - at >= quiet ? { at, capped: false } : { at: cap, capped: true };
 }
 
 /** Linear slope of heap samples, MB per hour; null under three samples or ten minutes of spread. */
@@ -468,11 +553,12 @@ export function measures(merged: WindowLine, navs: Navs, start: Start, heapGrowt
     measure("click", "Click to screen", "95th percentile of pointer and click events of 16 ms or more", clicks ? quantile(merged.input.click, 0.95) : merged.input.clicks ? 0 : null, "ms", TARGETS.inputMs, merged.input.clicks),
     measure("switch", "Thread switch", "median from the route change to the timeline going quiet for 100 ms", median(navs.switches), "ms", TARGETS.switchMs, navs.switches.length),
     measure("panel", "Panel open", "median from the panel's size change to it going quiet", median(navs.panels), "ms", TARGETS.switchMs, navs.panels.length),
-    measure("start", "Cold start", "end of the last long frame in the first 10 s after load", start.settled, "ms", TARGETS.startMs, start.settled == null ? 0 : 1),
+    measure("start", "Cold start", "first paint, then 500 ms without a long frame, from the page's load (read once, 10 s after it)", start.settled, "ms", TARGETS.startMs, start.settled == null ? 0 : 1),
     measure("idle", "Idle busy", "share of idle time spent in long frames", idleSeconds > 0 ? (merged.idleBusyMs / merged.visibleMs) * 100 : null, "%", TARGETS.idleBusyPct, idleSeconds > 0 ? Math.round(idleSeconds) : 0),
     measure("heap", "Memory growth", "least-squares slope of the JS heap over the last hour", heapGrowth, "MB/h", TARGETS.heapGrowthMbPerHour, 0),
   ];
   // Histograms stop at their last edge, so a 95th percentile there only says "at least".
+  for (const row of rows) if (row.id === "start" && start.capped) row.capped = true;
   for (const row of rows) if (["frame", "typing", "click"].includes(row.id) && row.value != null && row.value >= EDGES[EDGES.length - 1]) row.capped = true;
   return rows;
 }
@@ -502,7 +588,6 @@ export interface PluginRow {
   cssRules: number | null;
   startMs: number | null;
   handlerCalls: number;
-  handlerMaxMs: number;
   handlerErrors: number;
   workerRssMB: number | null;
   workerCpuPct: number | null;
@@ -518,7 +603,7 @@ export function pluginRows(
   merged: WindowLine,
   css: Record<string, number>,
   start: Record<string, number>,
-  handlers: Record<string, { calls: number; maxMs: number; errors: number }>,
+  handlers: Record<string, { calls: number; errors?: number }>,
   workers: Record<string, { rssMB: number; cpuPct: number }>,
 ): PluginRow[] {
   const ids = new Set<string>([...Object.keys(merged.byPlugin), ...Object.keys(css), ...Object.keys(start), ...Object.keys(handlers), ...Object.keys(workers)]);
@@ -535,7 +620,6 @@ export function pluginRows(
       cssRules: css[id] ?? null,
       startMs: start[id] == null ? null : Math.round(start[id]),
       handlerCalls: h?.calls ?? 0,
-      handlerMaxMs: Math.round(h?.maxMs ?? 0),
       handlerErrors: h?.errors ?? 0,
       workerRssMB: w?.rssMB ?? null,
       workerCpuPct: w?.cpuPct ?? null,

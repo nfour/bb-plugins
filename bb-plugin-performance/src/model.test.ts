@@ -21,6 +21,11 @@ import {
   topSites,
   unescapeClass,
   utilityOf,
+  settleAfter,
+  slimServer,
+  cssKey,
+  WORKER_KEY_EVERY,
+  type ServerLine,
   classParts,
   splitWords,
   coreKinds,
@@ -139,7 +144,7 @@ test("plugin rows merge every source and flag the heavy ones", () => {
   const w = emptyWindow("s", 0);
   w.byPlugin["tasks"] = { ms: 150, n: 4 };
   w.byPlugin[CORE] = { ms: 900, n: 9 };
-  const rows = pluginRows(w, { tasks: 589, "chat-dock": 12 }, { tasks: 32 }, { "bb--git": { calls: 5, maxMs: 90, errors: 2 } }, { "bb--git": { rssMB: 80, cpuPct: 0.2 } });
+  const rows = pluginRows(w, { tasks: 589, "chat-dock": 12 }, { tasks: 32 }, { "bb--git": { calls: 5, errors: 2 } }, { "bb--git": { rssMB: 80, cpuPct: 0.2 } });
   assert.deepEqual(rows.map((r) => r.id), ["tasks", "chat-dock", "bb--git"]);
   assert.deepEqual(rows[0].flags, ["slow frames", "page-wide CSS"]);
   assert.deepEqual(rows[2].flags, ["handler errors"]);
@@ -279,4 +284,71 @@ test("a class splits into its bare word and its variants, and tallies split back
   const { words, variants } = splitWords([["zed", 3], ["hover:", 9]]);
   assert.deepEqual(words, [["zed", 3]]);
   assert.deepEqual(variants, [["hover:", 9]]);
+});
+
+test("start-up settles at the first quiet stretch after first paint", () => {
+  // first paint at 400, a long frame to 900, another 1,000 to 1,300, then nothing for 500 ms
+  assert.deepEqual(settleAfter([[500, 900], [1000, 1300]], 400, 10_000), { at: 1300, capped: false });
+  // the gap between frames is under 500 ms, so it is not quiet yet
+  assert.deepEqual(settleAfter([[450, 700], [900, 1100]], 400, 10_000), { at: 1100, capped: false });
+  // a quiet gap before the next frame counts
+  assert.deepEqual(settleAfter([[500, 600], [1300, 1400]], 400, 10_000), { at: 600, capped: false });
+  // frames before first paint do not hold it back
+  assert.deepEqual(settleAfter([[100, 300]], 400, 10_000), { at: 400, capped: false });
+  // busy to the cap is a floor
+  assert.deepEqual(settleAfter([[500, 9800]], 400, 10_000), { at: 10_000, capped: true });
+  // without a first paint there is nothing to say
+  assert.equal(settleAfter([], null, 10_000), null);
+});
+
+test("a start still busy at its cap is marked as a floor", () => {
+  const row = measures(emptyWindow("s", 1), { switches: [], panels: [] }, { settled: 10_000, capped: true }, null).find((r) => r.id === "start")!;
+  assert.equal(row.capped, true);
+});
+
+const serverLine = (t: number, workers: ServerLine["workers"], handlers: ServerLine["handlers"] = {}): ServerLine => ({
+  v: 1, t, kind: "server", eventLoop: { p50: 1, p99: 2, max: 3 }, cpuPct: 4, rssMB: 600, heapMB: 200, workers, handlers,
+});
+
+test("a server line is written whole at the start of a day, then only what changed", () => {
+  const a = slimServer(serverLine(1, { x: { rssMB: 68.4, cpuPct: 0 }, y: { rssMB: 149.2, cpuPct: 5.34 } }, { p: { calls: 3, errors: 0 } }), null, "d1");
+  assert.deepEqual(a.out.workers, { x: { rssMB: 68, cpuPct: 0 }, y: { rssMB: 149, cpuPct: 5.3 } });
+  assert.equal(a.out.delta, undefined);
+  assert.deepEqual(a.out.handlers, { p: { calls: 3 } }); // no maxMs, no zero errors
+  // nothing moved but a sub-MB wobble: the next line carries no workers at all
+  const b = slimServer(serverLine(2, { x: { rssMB: 68.1, cpuPct: 0 }, y: { rssMB: 149.4, cpuPct: 5.3 } }), a.state, "d1");
+  assert.equal(b.out.delta, true);
+  assert.equal(b.out.workers, undefined);
+  assert.equal(b.out.handlers, undefined);
+  // one plugin moved, one ended, one is new
+  const c = slimServer(serverLine(3, { x: { rssMB: 70, cpuPct: 1 }, z: { rssMB: 40, cpuPct: 0 } }, { p: { calls: 1, errors: 2 } }), b.state, "d1");
+  assert.deepEqual(c.out.workers, { x: { rssMB: 70, cpuPct: 1 }, z: { rssMB: 40, cpuPct: 0 } });
+  assert.deepEqual(c.out.gone, ["y"]);
+  assert.deepEqual(c.out.handlers, { p: { calls: 1, errors: 2 } });
+});
+
+test("a new day, and every WORKER_KEY_EVERY lines, start again from a whole workers map", () => {
+  const w = { x: { rssMB: 68, cpuPct: 0 } };
+  let state = slimServer(serverLine(1, w), null, "d1").state;
+  assert.deepEqual(slimServer(serverLine(2, w), state, "d2").out.workers, w);
+  let keys = 0;
+  for (let i = 0; i < WORKER_KEY_EVERY * 2; i++) {
+    const r = slimServer(serverLine(i, w), state, "d1");
+    if (!r.out.delta) keys++;
+    state = r.state;
+  }
+  assert.equal(keys, 2);
+});
+
+test("the in-memory server line is not changed by slimming it", () => {
+  const line = serverLine(1, { x: { rssMB: 68.44, cpuPct: 0.26 } }, { p: { calls: 2, errors: 0 } });
+  slimServer(line, null, "d1");
+  assert.deepEqual(line.workers, { x: { rssMB: 68.44, cpuPct: 0.26 } });
+  assert.deepEqual(line.handlers, { p: { calls: 2, errors: 0 } });
+});
+
+test("two css lines with the same rules and words have the same key", () => {
+  assert.equal(cssKey({ cssRules: { a: 1 }, words: { a: { zed: 1 } } }), cssKey({ cssRules: { a: 1 }, words: { a: { zed: 1 } } }));
+  assert.notEqual(cssKey({ cssRules: { a: 1 } }), cssKey({ cssRules: { a: 2 } }));
+  assert.notEqual(cssKey({ cssRules: { a: 1 }, words: { a: { zed: 1 } } }), cssKey({ cssRules: { a: 1 }, words: { a: { zed: 2 } } }));
 });

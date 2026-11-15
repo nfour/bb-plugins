@@ -108,7 +108,8 @@ export function compute(lines: Line[], heap: { t: number; mb: number }[], now: n
   const inRange = lines.filter((l) => l.t >= now - rangeMs);
   const windows = inRange.filter((l): l is WindowLine => l.kind === "window");
   const navs = inRange.filter((l): l is NavLine => l.kind === "nav");
-  const start = [...lines].reverse().find((l): l is StartLine => l.kind === "start");
+  // Lines written before `quietMs` existed measured the end of the last long frame, not this: they are left out.
+  const start = [...lines].reverse().find((l): l is StartLine => l.kind === "start" && l.quietMs != null);
   const merged = mergeWindows(windows);
   const rows = measures(
     merged,
@@ -117,7 +118,7 @@ export function compute(lines: Line[], heap: { t: number; mb: number }[], now: n
       switches: navs.filter((n) => n.what === "thread-switch" && n.settled).map((n) => n.ms),
       panels: navs.filter((n) => n.what === "panel-open" && n.settled).map((n) => n.ms),
     },
-    { settled: start && start.settled > 0 ? start.settled : null },
+    { settled: start && start.settled > 0 ? start.settled : null, capped: start?.capped },
     heapSlope(heap),
   );
   return { inRange, windows, merged, rows, navs, start };
@@ -443,7 +444,7 @@ function PluginDetail({ row, merged, windows, slows, live, probe, words, now, ra
         {fact("Elements it owns now", nodes == null ? "unknown" : nodes === 0 ? "none on screen" : String(nodes))}
         {fact("Page-wide CSS", row.cssRules == null ? (cssKnown ? "none" : "not counted yet") : `${row.cssRules} rules`)}
         {fact("Style recalculation", probed ? `${probed.ms} ms of one pass` : "press Probe CSS")}
-        {fact("Back-end", row.handlerCalls ? `${row.handlerCalls} calls, slowest ${row.handlerMaxMs} ms${row.handlerErrors ? `, ${row.handlerErrors} failed` : ""}` : "no calls in this period")}
+        {fact("Back-end", row.handlerCalls ? `${row.handlerCalls} calls${row.handlerErrors ? `, ${row.handlerErrors} failed` : ""}` : "no calls in this period")}
         {row.workerRssMB != null && fact("Host process", `${Math.round(row.workerRssMB)} MB${row.workerCpuPct ? `, ${row.workerCpuPct}% CPU` : ""}`)}
       </div>
       <div className="perf-detail-side">
@@ -618,13 +619,12 @@ function Panel() {
 
   const { inRange, windows, merged, rows, navs, start } = compute(lines, live.heap, now, rangeMs);
   const serverLines = inRange.filter((l): l is ServerLine => l.kind === "server");
-  const handlers: Record<string, { calls: number; maxMs: number; errors: number }> = {};
+  const handlers: Record<string, { calls: number; errors: number }> = {};
   for (const s of serverLines) {
     for (const [id, h] of Object.entries(s.handlers)) {
-      const into = (handlers[id] ??= { calls: 0, maxMs: 0, errors: 0 });
+      const into = (handlers[id] ??= { calls: 0, errors: 0 });
       into.calls += h.calls;
-      into.errors += h.errors;
-      into.maxMs = Math.max(into.maxMs, h.maxMs);
+      into.errors += h.errors ?? 0;
     }
   }
   const startMs: Record<string, number> = { ...(start?.pluginMs ?? {}), ...live.startPluginMs };
@@ -706,6 +706,12 @@ function Panel() {
     <div className="perf-scroll">
       <div className="perf-page">
         <Hero rows={rows} range={range} setRange={setRange} live={live} minutes={merged.visibleMs ? Math.round(merged.visibleMs / 60000) : 0} />
+
+        {live.automated && (
+          <p className="perf-note" data-tone="warn">
+            This page is driven by automation (a headless or scripted browser). It measures for this dashboard only and writes nothing to the metrics files, because a headless page draws on the CPU and its numbers are not yours.
+          </p>
+        )}
 
         {!options.enabled && (
           <p className="perf-note">
