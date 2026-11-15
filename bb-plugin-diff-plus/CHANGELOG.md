@@ -2,6 +2,11 @@
 
 Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 1.2.1 (2026-11-15)
+
+- The folder tree updates when files change while the Diff tab is open, including when the last change is committed, reverted or discarded; before, it could keep showing files BB's list no longer had.
+- The file icons load as a stylesheet again, so the plugin's script is a third of the size.
+
 ## 1.2.0 (2026-11-12)
 
 - The tree works from the keyboard: it is one Tab stop; Up and Down move, Home and End go to the ends, Right opens a folder, Left closes it or goes to its parent, and Enter picks.

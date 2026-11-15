@@ -56,15 +56,15 @@ import {
 import { fileIcon, folderIcon } from "./file-icons";
 import { filterMatches } from "./match";
 import { setOption, useOptions } from "./options";
-import { loadIconSheet } from "./icon-sheet";
 import { baseMoved, baseRestored, PickerCommits } from "./Picker";
+import { refresher, refreshes } from "./refresh";
 import { useRecentCommits } from "./recent";
 import { TreeMenu, ViewMenu } from "./TreeMenu";
 
-/** Environment changes that can change which files differ. */
-const REFRESH_ON = new Set(["status-changed", "git-refs-changed", "metadata-changed"]);
-/** Quiet time after a git change before the files are fetched again; agents write in bursts. */
+/** Quiet time after a change before the files are fetched again; agents write in bursts. */
 const REFRESH_WAIT_MS = 1000;
+/** The longest the list waits for quiet while changes keep coming. */
+const REFRESH_MAX_WAIT_MS = 5000;
 /** A failed fetch is tried again after this long. */
 const RETRY_MS = 3000;
 /** Under this width the tree goes above the file list instead of beside it. */
@@ -189,11 +189,6 @@ function useDiffTabs(fallbackThread: string | null): TabState[] {
 export function TreeOverlay() {
   const { threadId } = useBbContext();
   const tabs = useDiffTabs(threadId);
-  const hasTabs = tabs.length > 0;
-  // The icons' stylesheet is big: it is read the first time a Diff tab is on the page.
-  useEffect(() => {
-    if (hasTabs) void loadIconSheet().catch(() => {});
-  }, [hasTabs]);
   return (
     <>
       {tabs.map((state) => (
@@ -495,6 +490,7 @@ function useChangedFiles(environmentId: string | null, scope: Scope | null): Fil
     let controller: AbortController | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let unsubscribe: (() => void) | null = null;
+    const refresh = refresher(() => void load(), REFRESH_WAIT_MS, REFRESH_MAX_WAIT_MS);
 
     const load = async () => {
       controller?.abort();
@@ -505,9 +501,7 @@ function useChangedFiles(environmentId: string | null, scope: Scope | null): Fil
             event: "environment:changed",
             environmentId,
             callback: ({ changes }) => {
-              if (!changes.some((change) => REFRESH_ON.has(change))) return;
-              clearTimeout(timer);
-              timer = setTimeout(load, REFRESH_WAIT_MS);
+              if (refreshes(changes)) refresh.signal();
             },
           });
         }
@@ -557,6 +551,7 @@ function useChangedFiles(environmentId: string | null, scope: Scope | null): Fil
       disposed = true;
       controller?.abort();
       clearTimeout(timer);
+      refresh.cancel();
       unsubscribe?.();
     };
   }, [sdk, rpc, environmentId, scopeKey]); // scopeKey stands for scope
@@ -616,7 +611,7 @@ function Stats({ additions, deletions }: { additions: number; deletions: number 
   );
 }
 
-/** A vscode-icons glyph, drawn by its class in src/icons-css.ts. */
+/** A vscode-icons glyph, drawn by its class in src/icons.css. */
 const FileIcon = ({ icon }: { icon: string }) => <span className={`diff-plus-file-icon diff-plus-i-${icon}`} aria-hidden />;
 
 interface RowsProps {
