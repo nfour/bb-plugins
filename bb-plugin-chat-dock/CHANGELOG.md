@@ -2,6 +2,11 @@
 
 Releases are the tags `chat-dock/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.7 (2026-11-15)
+
+- Where the composer goes (the column, the panel's strip, the Chat tab or the phone drawer) is now decided by one rule for every pane, so moving between them is steadier. Nothing should look different.
+- With docking off, Chat Dock watches nothing on the page.
+
 ## 0.1.6 (2026-11-12)
 
 - The composer docks in a split workspace: the pane you are in docks into its own right panel.

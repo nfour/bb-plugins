@@ -12,7 +12,8 @@
  * non-turn UI.
  */
 
-import { createOverlay, overlayOf } from "./overlay";
+import { isShut, lowestIndex, paneOfPanelId } from "./model";
+import { createOverlay, overlayOf, type Overlay } from "./overlay";
 
 const SHELL = '[data-scroll-footer] [data-app-composer][data-app-composer-role="primary"]';
 /** On a phone-width viewport the right panel is this drawer instead, pinned over the page and outside the split layout. */
@@ -23,7 +24,6 @@ const SHELF = "[data-testid=secondary-panel-shelf]";
  * focused pane). The `-handle` element beside it is not a panel.
  */
 const PANEL = '#thread-detail-secondary-panel, [id^="thread-detail-secondary-panel-pane"]';
-const PANEL_PREFIX = "thread-detail-secondary-panel-";
 
 export interface Panel {
   /** The split panel, or the drawer on a narrow viewport. */
@@ -31,13 +31,6 @@ export interface Panel {
   aside: HTMLElement;
   /** The aside's column: the tab strip, then the tab body. A strip appended here sits under the body. */
   column: HTMLElement;
-}
-
-/** The composer shell of the chat column that shows `threadId`, or null while it has not mounted. */
-export function findShell(threadId: string): HTMLElement | null {
-  const row = document.querySelector(`[data-timeline-row-id^="${CSS.escape(threadId)}:"]`);
-  const scroller = row?.closest<HTMLElement>("[data-page-scroll-viewport]");
-  return scroller?.querySelector<HTMLElement>(SHELL) ?? null;
 }
 
 /**
@@ -57,7 +50,7 @@ export function findPanes(): { root: HTMLElement; shell: HTMLElement | null; pan
  * the first one in the root.
  */
 function shellFor(root: HTMLElement, panel: Panel | null): HTMLElement | null {
-  const id = panel?.panel.id.startsWith(PANEL_PREFIX) ? panel.panel.id.slice(PANEL_PREFIX.length) : null;
+  const id = panel ? paneOfPanelId(panel.panel.id) : null;
   if (id === null) return root.querySelector<HTMLElement>(SHELL);
   for (const pane of root.querySelectorAll(`[data-split-pane-id="${CSS.escape(id)}"]`)) {
     // The panel's own tabs are split panes with ids of their own, inside the panel.
@@ -103,21 +96,9 @@ function panelOf(panel: HTMLElement, aside: HTMLElement | null): Panel | null {
  * screen order), so the tile is picked by where it sits: lowest, then leftmost.
  */
 function lowestStrip(aside: HTMLElement): Element | null {
-  const strips = aside.querySelectorAll("[data-testid=thread-secondary-panel-top-chrome]");
+  const strips = [...aside.querySelectorAll("[data-testid=thread-secondary-panel-top-chrome]")];
   if (strips.length < 2) return strips[0] ?? null;
-  let best: Element | null = null;
-  let bottom = -Infinity;
-  let left = Infinity;
-  for (const strip of strips) {
-    const rect = (strip.closest("[data-split-pane-id]") ?? strip).getBoundingClientRect();
-    const lower = rect.bottom > bottom + 1;
-    if (lower || (rect.bottom > bottom - 1 && rect.left < left)) {
-      best = strip;
-      bottom = lower ? rect.bottom : Math.max(bottom, rect.bottom);
-      left = rect.left;
-    }
-  }
-  return best;
+  return strips[lowestIndex(strips.map((strip) => (strip.closest("[data-split-pane-id]") ?? strip).getBoundingClientRect()))] ?? null;
 }
 
 /** The lowest ancestor of the tab strip (the aside at most) that holds something beside it: the body. */
@@ -139,16 +120,7 @@ function columnOf(aside: HTMLElement, strip: Element): HTMLElement {
  * its aside from assistive technology; the drawer is made inert while closed.
  */
 export function panelHidden({ panel, aside }: Panel): boolean {
-  const size = Number.parseFloat(panel.dataset.panelSize ?? "");
-  return panel.hasAttribute("inert") || aside.getAttribute("aria-hidden") === "true" || (Number.isFinite(size) && size <= 0);
-}
-
-/** Watches the attributes that flip when the panel collapses or expands. */
-export function observePanel({ panel, aside }: Panel, onChange: () => void): () => void {
-  const observer = new MutationObserver(onChange);
-  observer.observe(panel, { attributes: true, attributeFilter: ["data-panel-size", "inert"] });
-  observer.observe(aside, { attributes: true, attributeFilter: ["aria-hidden"] });
-  return () => observer.disconnect();
+  return isShut({ size: panel.dataset.panelSize, inert: panel.hasAttribute("inert"), ariaHidden: aside.getAttribute("aria-hidden") });
 }
 
 /**
@@ -220,87 +192,48 @@ export function createStripHost(): HTMLElement {
   return host;
 }
 
-const parked = new Map<HTMLElement, { restore: () => void; timer: number }>();
-
-/**
- * The lock switched on while the tab held the shell. The tab's React root learns
- * of the setting before the overlay's does, so rather than put the shell back in
- * the column for that gap, the tab parks it in a strip host for the strip to
- * adopt. A host nobody adopts in time puts the shell back itself.
- */
-export function park(shell: HTMLElement, panel: Panel): void {
-  const host = createStripHost();
-  panel.column.appendChild(host);
-  const restore = dockInto(shell, host, panel);
-  const timer = window.setTimeout(() => {
-    parked.delete(host);
-    host.remove();
-    restore();
-  }, 1500);
-  parked.set(host, { restore, timer });
-}
-
-/** Takes over a parked host, returning what puts its shell back; null for a host that is not parked. */
-export function adopt(host: HTMLElement): (() => void) | null {
-  const entry = parked.get(host);
-  if (!entry) return null;
-  parked.delete(host);
-  window.clearTimeout(entry.timer);
-  return entry.restore;
-}
-
-const homeListeners = new Set<() => void>();
-
-/**
- * Runs after a shell is put back in its column, in a microtask, so the other
- * dock can take it before anything paints: the tab and the strip never hold a
- * shell at the same time, and a switch between them is one move, not two.
- */
-export function onShellHome(listener: () => void): () => void {
-  homeListeners.add(listener);
-  return () => {
-    homeListeners.delete(listener);
-  };
-}
-
-/**
- * Moves `shell` into `host`, and returns the function that puts it back where it
- * was. A comment marks the place, so the move survives siblings coming and going.
- * A marker with no parent means BB tore the shell's home down (a navigation to
- * another thread unmounts the chat column but keeps the panel, so a docked shell
- * is never removed by React): the shell is stale, and is dropped instead.
- */
-export function moveInto(shell: HTMLElement, host: HTMLElement): () => void {
-  const marker = document.createComment("chat-dock: composer shell home");
-  shell.parentNode?.insertBefore(marker, shell);
-  host.appendChild(shell);
-  return () => {
-    if (marker.parentNode) marker.parentNode.insertBefore(shell, marker);
-    else shell.remove();
-    marker.remove();
-    queueMicrotask(() => {
-      for (const listener of homeListeners) listener();
-    });
-  };
-}
-
 /** Whether a panel is the phone drawer rather than the split panel. */
-export function isDrawer({ panel }: Panel): boolean {
+function isDrawer({ panel }: Panel): boolean {
   return panel.matches(SHELF);
 }
 
+/** A shell held away from its column: `moveTo` takes it to another host, `restore` puts it back. */
+export interface Dock {
+  moveTo(host: HTMLElement, panel: Panel | null): void;
+  restore(): void;
+}
+
 /**
- * Docks `shell` in `host`, and returns what puts it back. In the split panel
- * that is `moveInto`; in the phone drawer, which is outside BB's React root,
- * the shell goes into an overlay laid over the host instead (`overlay.ts`).
+ * Moves `shell` into `host`. A comment marks the shell's place in its column, so
+ * the move survives siblings coming and going, and `restore` puts it back there;
+ * `moveTo` takes it to another host and leaves the marker where it is. A marker
+ * with no parent means BB tore the shell's home down (a navigation to another
+ * thread unmounts the chat column but keeps the panel, so a docked shell is never
+ * removed by React): the shell is stale, and is dropped instead.
+ *
+ * In the phone drawer, which is outside BB's React root, the shell goes into an
+ * overlay laid over the host instead (`overlay.ts`).
  */
-export function dockInto(shell: HTMLElement, host: HTMLElement, panel: Panel | null): () => void {
-  if (!panel || !isDrawer(panel)) return moveInto(shell, host);
-  const overlay = createOverlay(host, panel.panel);
-  const restore = moveInto(shell, overlay.frame);
-  return () => {
-    restore();
-    overlay.dispose();
+export function dockShell(shell: HTMLElement, host: HTMLElement, panel: Panel | null): Dock {
+  const marker = document.createComment("chat-dock: composer shell home");
+  shell.parentNode?.insertBefore(marker, shell);
+  let overlay: Overlay | null = null;
+  const moveTo = (into: HTMLElement, at: Panel | null) => {
+    const before = overlay;
+    overlay = at && isDrawer(at) ? createOverlay(into, at.panel) : null;
+    (overlay?.frame ?? into).appendChild(shell);
+    before?.dispose();
+  };
+  moveTo(host, panel);
+  return {
+    moveTo,
+    restore() {
+      if (marker.parentNode) marker.parentNode.insertBefore(shell, marker);
+      else shell.remove();
+      marker.remove();
+      overlay?.dispose();
+      overlay = null;
+    },
   };
 }
 

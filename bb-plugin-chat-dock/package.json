@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-chat-dock",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,7 +16,8 @@
   "scripts": {
     "build": "bb plugin build",
     "dev": "bb plugin dev",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "node --test src/*.test.ts"
   },
   "bb": {
     "name": "Chat Dock",

@@ -5,16 +5,9 @@ import {
   useRpc,
   type PluginThreadActionRegistration,
 } from "@get-bb/plugin-sdk/app";
-import type { SettingKey, rpcContract } from "../server";
+import type { rpcContract } from "../server";
 import { useOptions, type Options } from "./options";
-
-/** The switches in the submenu, in its order. */
-const OPTIONS: { key: SettingKey; label: string }[] = [
-  { key: "enabled", label: "Dock the composer in the right panel" },
-  { key: "locked", label: "Keep it at the panel's bottom" },
-  { key: "showButton", label: "Dock button in the composer" },
-  { key: "debugLog", label: "Debug log" },
-];
+import { menuLabel, SETTING_KEYS, type SettingKey } from "./shared";
 
 const SETTINGS = "settings";
 
@@ -66,9 +59,9 @@ export const threadMenu: PluginThreadActionRegistration<Data> = {
       icon: "PanelRight",
       choices: {
         items: [
-          ...OPTIONS.map(({ key, label }) => ({
+          ...SETTING_KEYS.map((key) => ({
             id: key,
-            label,
+            label: menuLabel(key),
             selected: options[key],
             disabled: key === "locked" && !options.enabled,
           })),
@@ -78,7 +71,7 @@ export const threadMenu: PluginThreadActionRegistration<Data> = {
       },
       run: ({ value }) => {
         if (value === SETTINGS) data.openSettings();
-        else if (OPTIONS.some((option) => option.key === value)) data.toggle(value as SettingKey);
+        else if (SETTING_KEYS.some((key) => key === value)) data.toggle(value as SettingKey);
       },
     };
   },

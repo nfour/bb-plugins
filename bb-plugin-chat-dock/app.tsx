@@ -10,7 +10,7 @@ import { Dock } from "./src/Dock";
 import { DockButton } from "./src/DockButton";
 import { DOCK_ICON, DockIcon } from "./src/icons";
 import { useOptions } from "./src/options";
-import { Strip } from "./src/Strip";
+import { Docking } from "./src/Docking";
 import { threadMenu } from "./src/ThreadMenu";
 import "./src/styles.css";
 
@@ -31,7 +31,7 @@ export default definePluginApp((app) => {
       return ready && enabled && !locked;
     },
   });
-  app.slots.experimental_appOverlay({ id: "strip", component: Strip });
+  app.slots.experimental_appOverlay({ id: "docking", component: Docking });
   app.slots.experimental_appOverlay({ id: "commands", component: Commands });
   // The same switches as the dock button and the thread menu, for the palette and a keyboard binding (none by default).
   app.commands.register({ id: "toggle-docking", title: "Chat Dock: toggle docking the composer", run: () => void toggleSetting("enabled")?.catch(() => {}) });

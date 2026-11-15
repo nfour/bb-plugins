@@ -13,13 +13,21 @@ const BUTTON_ATTR = "data-chat-dock-button";
  * event is stopped at the document, before React's root listener, so the
  * composer never sees it; the button's click still arrives.
  */
-function installButtonGuard(): () => void {
-  const guard = (event: PointerEvent) => {
-    if (!event.isTrusted || !(event.target instanceof Element) || !event.target.closest(`[${BUTTON_ATTR}]`)) return;
-    event.stopPropagation();
-  };
-  document.addEventListener("pointerdown", guard, true);
-  return () => document.removeEventListener("pointerdown", guard, true);
+function guard(event: PointerEvent) {
+  if (!event.isTrusted || !(event.target instanceof Element) || !event.target.closest(`[${BUTTON_ATTR}]`)) return;
+  event.stopPropagation();
+}
+
+/** How many buttons are mounted (one per composer): the one listener is on while there is any. */
+let buttons = 0;
+
+function useButtonGuard() {
+  useEffect(() => {
+    if (buttons++ === 0) document.addEventListener("pointerdown", guard, true);
+    return () => {
+      if (--buttons === 0) document.removeEventListener("pointerdown", guard, true);
+    };
+  }, []);
 }
 
 /**
@@ -32,7 +40,7 @@ export function DockButton() {
   const rpc = useRpc<typeof rpcContract>();
   // Shown until the saved value arrives, so a click answers at once.
   const [pending, setPending] = useState<boolean | null>(null);
-  useEffect(installButtonGuard, []);
+  useButtonGuard();
   useEffect(() => {
     if (pending === enabled) setPending(null);
   }, [pending, enabled]);

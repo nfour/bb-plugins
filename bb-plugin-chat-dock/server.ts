@@ -6,9 +6,9 @@
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
-/** The boolean settings the page can switch. */
-export const SETTING_KEYS = ["enabled", "locked", "showButton", "debugLog"] as const;
-export type SettingKey = (typeof SETTING_KEYS)[number];
+import { definitions, SETTING_KEYS } from "./src/shared";
+
+export type { SettingKey } from "./src/shared";
 
 export const rpcContract = defineRpcContract({
   set_setting: { input: z.object({ key: z.enum(SETTING_KEYS), value: z.boolean() }), output: z.null() },
@@ -22,32 +22,7 @@ export const rpcContract = defineRpcContract({
 });
 
 export default async function plugin(bb: BbPluginApi) {
-  const settings = bb.settings.define({
-    enabled: {
-      type: "boolean",
-      label: "Dock the composer in the right panel",
-      description: "While the panel is open, the composer and the cards above it move into it: as a strip at the panel's bottom, or as a Chat tab.",
-      default: true,
-    },
-    locked: {
-      type: "boolean",
-      label: "Keep it at the panel's bottom",
-      description: "A strip under whichever tab is open, so the composer never goes away while the panel is open. Off, it is a Chat tab instead.",
-      default: true,
-    },
-    showButton: {
-      type: "boolean",
-      label: "Show the dock button",
-      description: "The button in the composer's action row that switches docking on and off.",
-      default: true,
-    },
-    debugLog: {
-      type: "boolean",
-      label: "Debug log",
-      description: "Write dock and undock events to the plugin log (`bb plugin logs chat-dock`).",
-      default: false,
-    },
-  });
+  const settings = bb.settings.define(definitions());
   bb.rpc.register(rpcContract, {
     set_setting: async ({ key, value }) => {
       await settings.experimental_set({ [key]: value });

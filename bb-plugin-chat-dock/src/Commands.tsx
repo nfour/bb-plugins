@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
-import type { SettingKey, rpcContract } from "../server";
+import type { rpcContract } from "../server";
 import { useOptions, type Options } from "./options";
+import type { SettingKey } from "./shared";
 
 /**
  * What a command's `run` needs, which is not a component and so has no hooks:
