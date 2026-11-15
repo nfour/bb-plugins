@@ -4,6 +4,9 @@ import type { OwnerState, rpcContract } from "../server";
 
 export type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;
 
+/** What to show for a failed call. */
+export const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 // The state word is split: the plugin build turns that word standing alone into a page-wide rule.
 const SHOWN = "vis" + "ible";
 const shown = () => document.visibilityState === SHOWN;

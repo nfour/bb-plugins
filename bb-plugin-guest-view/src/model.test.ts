@@ -240,6 +240,19 @@ test("RateLimiter allows a burst then refuses until the window passes", () => {
   assert.ok(limiter.take("ip", 1001));
 });
 
+test("RateLimiter gives a hit back, once, and only while it is still in the window", () => {
+  const limiter = new RateLimiter(2, 1000);
+  assert.ok(limiter.take("ip", 0));
+  assert.ok(limiter.take("ip", 10));
+  limiter.refund("ip", 0);
+  assert.ok(limiter.take("ip", 20), "the refunded hit made room");
+  assert.ok(!limiter.take("ip", 30));
+  limiter.refund("ip", 0);
+  assert.ok(!limiter.take("ip", 40), "a hit that is not there cannot be refunded again");
+  limiter.refund("none", 5);
+  limiter.refund("ip", 5);
+});
+
 test("attributed puts the guest's name in front of the prompt", () => {
   assert.equal(attributed("Lydia", "rename the button"), "Lydia says: rename the button");
   assert.equal(attributed("Lydia", "first line\nsecond line"), "Lydia says:\nfirst line\nsecond line");

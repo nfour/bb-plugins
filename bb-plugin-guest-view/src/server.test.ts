@@ -6,9 +6,11 @@ import { randomBytes } from "node:crypto";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, test } from "node:test";
+import { after, mock, test } from "node:test";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import plugin, { type OwnerState } from "../server.ts";
+import type { FeedPayload } from "./feed.ts";
+import { drawn, emptyFeed, mergeFeed } from "./merge.ts";
 
 const THREAD = "thr_test";
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -463,4 +465,127 @@ test("what guests see about each other is one choice: nothing, the count, or the
   assert.equal(own.guests, null, "only the icon, no number");
   assert.ok(!own.prompts || own.prompts.length === 0);
   assert.equal((await gv.state()).share!.guestsSee, "own");
+});
+
+// The poll limit (120 a minute per share and address) against a thread that changes often. Each page loops as the real
+// one does: it polls, applies the answer and polls again at once, so a poll is held until the next change. A poll held
+// until a change does not count toward the limit; a refused one (429) makes the page wait 15 s before it asks again.
+// The clock is a fake `Date.now` that moves `stepMs` per change (the limiter and the viewer timeout read it), so a
+// minute of changes takes a fraction of a second.
+async function follow(pages: number, stepMs: number, steps: number) {
+  const w = await fresh();
+  const thread = w.threads.get(THREAD)!;
+  thread.rows = [message("m0", "user", "start")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  let clock = Date.now();
+  mock.method(Date, "now", () => clock);
+  const stopper = new AbortController();
+  try {
+    const followers = Array.from({ length: pages }, (_, i) => ({ id: hex24(), name: `Guest ${i}`, rev: 0, state: emptyFeed(), resumeAt: 0 }));
+    let refused = 0;
+    let polls = 0;
+    const behind = (f: (typeof followers)[number]) => thread.rows.length - drawn(f.state).length;
+    const loops = followers.map(async (f) => {
+      while (!stopper.signal.aborted) {
+        if (clock < f.resumeAt) {
+          await sleep(5);
+          continue;
+        }
+        polls += 1;
+        const response = await poll(base, token, f.id, { since: f.rev, ip: "203.0.113.50", name: f.name, signal: stopper.signal }).catch(() => null);
+        if (!response) return;
+        const data = (await response.json().catch(() => null)) as FeedPayload | null;
+        if (response.status === 429) {
+          refused += 1;
+          f.resumeAt = clock + 15_000; // what the page does: sleep 15 s, then poll again with the revision it holds
+          continue;
+        }
+        if (!data) return;
+        assert.equal(response.status, 200);
+        mergeFeed(f.state, data);
+        f.rev = data.rev;
+      }
+    });
+    const current = () => followers.every((f) => behind(f) === 0);
+    await until(current);
+    let worstBehind = 0;
+    for (let step = 1; step <= steps; step += 1) {
+      await sleep(40); // every page's poll is being held, as a page's is a moment after its last answer
+      clock += stepMs;
+      thread.rows.push(message(`m${step}`, step % 2 ? "assistant" : "user", `line ${step}`));
+      gv.fire("experimental_thread.events", { thread: { id: THREAD } });
+      await until(current, 250);
+      worstBehind = Math.max(worstBehind, ...followers.map(behind));
+      if (refused > 0) break; // the callers assert on it; no need to run the rest
+    }
+    // After the thread stops, a page that was refused wakes up and catches up exactly.
+    clock += 16_000;
+    await until(current);
+    stopper.abort();
+    await Promise.all(loops);
+    return { refused, polls, worstBehind, rows: thread.rows.length, drawnIds: followers.map((f) => drawn(f.state).map((i) => i.id)) };
+  } finally {
+    stopper.abort();
+    mock.restoreAll();
+  }
+}
+
+test("pages behind one address are never refused while a thread changes every second", { timeout: 60_000 }, async () => {
+  // A change a second is 60 polls a minute for a page; three pages would make 180 and five 300, and the limit is 120.
+  for (const [pages, stepMs] of [[3, 1000], [5, 1000], [3, 500]] as const) {
+    const run = await follow(pages, stepMs, 70);
+    assert.equal(run.refused, 0, `${pages} pages, a change every ${stepMs} ms: nobody is refused`);
+    assert.equal(run.worstBehind, 0, "and nobody is ever behind");
+    for (const [i, ids] of run.drawnIds.entries()) {
+      assert.deepEqual(ids, Array.from({ length: run.rows }, (_, n) => `m${n}`), `page ${i} holds the whole thread, in order`);
+    }
+  }
+});
+
+test("a page that re-polls with no wait is still limited, and the limit lifts when the minute passes", async () => {
+  const w = await fresh();
+  w.threads.get(THREAD)!.rows = [message("m1", "user", "hello")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  let clock = Date.now();
+  mock.method(Date, "now", () => clock);
+  try {
+    const client = hex24();
+    // since=0 is always answered at once (the whole thread), so it never waits for a change.
+    const statuses: number[] = [];
+    for (let i = 0; i < 125; i += 1) statuses.push((await poll(base, token, client, { since: 0, ip: "203.0.113.60" })).status);
+    assert.equal(statuses.filter((s) => s === 200).length, 120, "120 are answered");
+    assert.deepEqual(statuses.slice(120), [429, 429, 429, 429, 429], "the rest are refused");
+    assert.equal(((await (await poll(base, token, client, { since: 0, ip: "203.0.113.60" })).json()) as { retry?: boolean }).retry, true, "and told to try again, not to give up");
+    assert.equal((await poll(base, token, hex24(), { since: 0, ip: "203.0.113.61" })).status, 200, "another address is not affected");
+    clock += 61_000;
+    assert.equal((await poll(base, token, client, { since: 0, ip: "203.0.113.60" })).status, 200, "a minute later the page is answered again");
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test("polls that wait but are not answered by a change still count: a page cannot flood by holding and re-polling", async () => {
+  const w = await fresh();
+  w.threads.get(THREAD)!.rows = [message("m1", "user", "hello")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  const client = hex24();
+  const first = (await (await poll(base, token, client, { ip: "203.0.113.70" })).json()) as { rev: number };
+  const controller = new AbortController();
+  // Each of these is up to date, so it waits; a newer one releases the oldest of the page's three (answered "nothing new").
+  const answers: number[] = [];
+  const held = Array.from({ length: 130 }, () =>
+    poll(base, token, client, { since: first.rev, ip: "203.0.113.70", signal: controller.signal })
+      .then((r) => answers.push(r.status))
+      .catch(() => {}),
+  );
+  await sleep(500);
+  assert.ok(answers.filter((s) => s === 429).length >= 9, "past 120 a minute they are refused (the first poll was one of the 120)");
+  controller.abort();
+  await Promise.all(held);
 });

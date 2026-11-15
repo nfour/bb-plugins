@@ -2,6 +2,11 @@
 
 Releases are the tags `guest-view/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.2.1 (2026-11-15)
+
+- Several guests behind one network address can follow a streaming agent without being told "Too many requests."
+- Copying the link and copying the install command each show their own "Copied".
+
 ## 0.2.0 (2026-11-12)
 
 - A guest's new name stays: a name typed while the page waited for news was sometimes put back to the old one. A second tab in the same browser follows a rename.

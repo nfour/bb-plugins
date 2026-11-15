@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { GuestsSee, OwnerState } from "../server";
 import { CloseIcon, UserIcon } from "./Icons";
 import { leftLabel, sinceLabel } from "./labels";
-import { useNow, type Rpc } from "./state";
+import { messageOf, useNow, type Rpc } from "./state";
 
 type Share = NonNullable<OwnerState["share"]>;
 
@@ -12,6 +12,20 @@ function Switch({ on, onChange, label, disabled }: { on: boolean; onChange(next:
     <button type="button" role="switch" aria-checked={on} aria-label={label} className="guest-view-switch" data-on={on ? "true" : "false"} disabled={disabled} onClick={() => onChange(!on)}>
       <span className="guest-view-switch-knob" />
     </button>
+  );
+}
+
+/** One setting of the link: its label and control on one row, a note under it. */
+function Setting({ id, label, hint, children }: { id?: string; label: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="guest-view-section">
+      <div className="guest-view-form-row">
+        <span id={id}>{label}</span>
+        <span className="guest-view-spacer" />
+        {children}
+      </div>
+      <div className="guest-view-muted guest-view-fine">{hint}</div>
+    </section>
   );
 }
 
@@ -52,9 +66,11 @@ export function Config({ share, threadId, rpc, set, onClose }: { share: Share; t
     setError(null);
     call
       .then(set)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => setError(messageOf(e)))
       .finally(() => setBusy(false));
   };
+  /** Changes one or more settings of this link. */
+  const configure = (change: { expiryHours?: number; showHistory?: boolean; guestsSee?: GuestsSee; showModel?: boolean }) => run(rpc.call("configure", { threadId, ...change }));
   const parsed = Number(hours);
   const valid = Number.isFinite(parsed) && parsed >= 1 && parsed <= 168;
 
@@ -101,54 +117,39 @@ export function Config({ share, threadId, rpc, set, onClose }: { share: Share; t
               onChange={(event) => setHours(event.target.value)}
             />
             <span className="guest-view-muted">h from now</span>
-            <button type="button" className="guest-view-button" disabled={busy || !valid} onClick={() => run(rpc.call("configure", { threadId, expiryHours: Math.round(parsed) }))}>
+            <button type="button" className="guest-view-button" disabled={busy || !valid} onClick={() => configure({ expiryHours: Math.round(parsed) })}>
               Set
             </button>
           </div>
           <div className="guest-view-muted guest-view-fine">1 to 168 hours. New links start at the Link lifetime in the plugin's settings.</div>
         </section>
 
-        <section className="guest-view-section">
-          <div className="guest-view-form-row">
-            <span>New guests see previous history</span>
-            <span className="guest-view-spacer" />
-            <Switch on={share.showHistory} label="New guests see previous history" onChange={(next) => run(rpc.call("configure", { threadId, showHistory: next }))} />
-          </div>
-          <div className="guest-view-muted guest-view-fine">Off: someone who opens the link later only sees messages from then on. Guests already connected keep what they have.</div>
-        </section>
+        <Setting label="New guests see previous history" hint="Off: someone who opens the link later only sees messages from then on. Guests already connected keep what they have.">
+          <Switch on={share.showHistory} label="New guests see previous history" onChange={(next) => configure({ showHistory: next })} />
+        </Setting>
 
-        <section className="guest-view-section">
-          <div className="guest-view-form-row">
-            <span id="guest-view-see">Guests see about each other</span>
-            <span className="guest-view-spacer" />
-            <div className="guest-view-choice" role="radiogroup" aria-labelledby="guest-view-see">
-              {SEE.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={share.guestsSee === option.value}
-                  className="guest-view-choice-item"
-                  data-on={share.guestsSee === option.value ? "true" : "false"}
-                  disabled={busy}
-                  onClick={() => share.guestsSee !== option.value && run(rpc.call("configure", { threadId, guestsSee: option.value }))}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+        <Setting id="guest-view-see" label="Guests see about each other" hint={SEE.find((option) => option.value === share.guestsSee)?.hint ?? ""}>
+          <div className="guest-view-choice" role="radiogroup" aria-labelledby="guest-view-see">
+            {SEE.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={share.guestsSee === option.value}
+                className="guest-view-choice-item"
+                data-on={share.guestsSee === option.value ? "true" : "false"}
+                disabled={busy}
+                onClick={() => share.guestsSee !== option.value && configure({ guestsSee: option.value })}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-          <div className="guest-view-muted guest-view-fine">{SEE.find((option) => option.value === share.guestsSee)?.hint}</div>
-        </section>
+        </Setting>
 
-        <section className="guest-view-section">
-          <div className="guest-view-form-row">
-            <span>Show guests the model</span>
-            <span className="guest-view-spacer" />
-            <Switch on={share.showModel} label="Show guests the model" onChange={(next) => run(rpc.call("configure", { threadId, showModel: next }))} />
-          </div>
-          <div className="guest-view-muted guest-view-fine">On: the guest's composer shows the model and effort the agent runs on, like "Sonnet 5.5 High". Off (the default): it does not.</div>
-        </section>
+        <Setting label="Show guests the model" hint={'On: the guest\'s composer shows the model and effort the agent runs on, like "Sonnet 5.5 High". Off (the default): it does not.'}>
+          <Switch on={share.showModel} label="Show guests the model" onChange={(next) => configure({ showModel: next })} />
+        </Setting>
 
         {error ? <div className="guest-view-error">{error}</div> : null}
       </div>

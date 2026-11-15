@@ -6,7 +6,7 @@ import { elapsedLabel, leftLabel } from "./labels";
 import { attributed } from "./model";
 import { ArrowDownIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, LinkIcon, MessageIcon, SlidersIcon, StopIcon, ShareIcon, TimerIcon } from "./Icons";
 import { SplitButton } from "./SplitButton";
-import { useNow, useOwnerState, type Rpc } from "./state";
+import { messageOf, useNow, useOwnerState, type Rpc } from "./state";
 
 /** The time a link has been live, ticking once a second. Only this text renders on each tick, not the card around it. */
 function Elapsed({ since }: { since: number }) {
@@ -64,16 +64,22 @@ function MoreButton({ clamp }: { clamp: ReturnType<typeof useClamp> }) {
   );
 }
 
-/** An icon-only Copy button: it copies the text, shows a check for a moment, and changes nothing else. */
-function CopyButton({ text }: { text: string }) {
+/** Copies text and says so for a moment: `copied` is true for 1.5 s after a copy that worked. */
+function useCopied() {
   const [copied, setCopied] = useState(false);
-  const copy = () =>
+  const copy = (text: string) =>
     void copyToClipboard({ text }).then((ok) => {
       setCopied(ok);
       if (ok) setTimeout(() => setCopied(false), 1500);
     });
+  return [copied, copy] as const;
+}
+
+/** An icon-only Copy button: it copies the text, shows a check for a moment, and changes nothing else. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, copy] = useCopied();
   return (
-    <button type="button" className="guest-view-button guest-view-button-square" aria-label={copied ? "Copied" : "Copy"} title={copied ? "Copied" : "Copy"} onClick={copy}>
+    <button type="button" className="guest-view-button guest-view-button-square" aria-label={copied ? "Copied" : "Copy"} title={copied ? "Copied" : "Copy"} onClick={() => copy(text)}>
       {copied ? <CheckIcon className="guest-view-button-icon" /> : <CopyIcon className="guest-view-button-icon" />}
     </button>
   );
@@ -96,7 +102,7 @@ function PromptRow({ prompt, rpc, threadId, set }: { prompt: OwnerPrompt; rpc: R
         after?.();
         set(next);
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => setError(messageOf(e)))
       .finally(() => setBusy(false));
   };
   // Use puts the text in the owner's composer to read, change and send themselves; nothing goes to the agent from here.
@@ -184,7 +190,9 @@ export function GuestCard() {
   const composer = useComposer();
   const threadId = composer.scope.kind === "thread" ? composer.scope.threadId : null;
   const { state, rpc, set } = useOwnerState(threadId);
-  const [copied, setCopied] = useState(false);
+  // One per thing copied, so copying the link does not label the install command "Copied" too.
+  const [linkCopied, copyLink] = useCopied();
+  const [commandCopied, copyCommand] = useCopied();
   const [config, setConfig] = useState(false);
   // The expanded part stays closed until the owner opens it: a new prompt only adds to the pending count.
   const [openFor, setOpenFor] = useState<string | null>(null);
@@ -202,12 +210,6 @@ export function GuestCard() {
     setOpenFor(open ? null : threadId);
     if (open) setHistoryFor(null);
   };
-
-  const copy = (text: string) =>
-    void copyToClipboard({ text }).then((ok) => {
-      setCopied(ok);
-      if (ok) setTimeout(() => setCopied(false), 1500);
-    });
 
   return (
     <div className="guest-view-card">
@@ -256,8 +258,8 @@ export function GuestCard() {
             </span>
           </div>
           <div className="guest-view-buttons">
-            <IconButton label={copied ? "Link copied" : "Copy guest link"} onClick={() => copy(share.url)} active={copied}>
-              {copied ? <CheckIcon /> : <LinkIcon />}
+            <IconButton label={linkCopied ? "Link copied" : "Copy guest link"} onClick={() => copyLink(share.url)} active={linkCopied}>
+              {linkCopied ? <CheckIcon /> : <LinkIcon />}
             </IconButton>
             <IconButton label="Guests and settings" onClick={() => setConfig(true)} active={config}>
               <SlidersIcon />
@@ -282,7 +284,7 @@ export function GuestCard() {
               <div className="guest-view-muted">{install.text}</div>
               <pre className="guest-view-command">{install.command}</pre>
               <div className="guest-view-actions">
-                <Button label={copied ? "Copied" : "Copy command"} icon="Copy" onClick={() => copy(install.command)} />
+                <Button label={commandCopied ? "Copied" : "Copy command"} icon="Copy" onClick={() => copyCommand(install.command)} />
                 {install.canInstall ? (
                   <Button
                     label={installing ? "Installing…" : "Install it for me"}
@@ -294,7 +296,7 @@ export function GuestCard() {
                       rpc
                         .call("install_cloudflared", { threadId })
                         .then(set)
-                        .catch((e: unknown) => setInstallError(e instanceof Error ? e.message : String(e)))
+                        .catch((e: unknown) => setInstallError(messageOf(e)))
                         .finally(() => setInstalling(false));
                     }}
                   />

@@ -609,6 +609,13 @@ export class RateLimiter {
     if (this.hits.size > 1000) for (const [k, list] of this.hits) if (list.every((at) => now - at >= this.windowMs)) this.hits.delete(k);
     return true;
   }
+
+  /** Gives back one hit recorded at `at` (no effect when it has aged out of the window): the request turned out not to cost what it was counted for. */
+  refund(key: string, at: number): void {
+    const list = this.hits.get(key);
+    const index = list?.indexOf(at) ?? -1;
+    if (list && index >= 0) list.splice(index, 1);
+  }
 }
 
 // ─── Header ─────────────────────────────────────────────────────────────────

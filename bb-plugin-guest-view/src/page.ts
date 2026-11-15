@@ -8,6 +8,7 @@
 // words (see AGENTS.md) and dist/app.css is checked after a build.
 
 import { markSvg } from "./mark.ts";
+import { MERGE_SOURCE } from "./merge.ts";
 
 // Written in two parts: the plugin build reads the whole word as a utility class otherwise.
 const HID = "hid" + "den";
@@ -131,6 +132,7 @@ button,textarea,input{font:inherit;color:inherit}
 const SCRIPT = String.raw`
 (() => {
   "use strict";
+  ${MERGE_SOURCE}
   const BOOT = JSON.parse(document.getElementById("gv-boot").textContent);
   const base = "/" + BOOT.token;
   const $ = (id) => document.getElementById(id);
@@ -217,8 +219,7 @@ const SCRIPT = String.raw`
   };
 
   // Transcript state from the stream.
-  const items = new Map(), nodes = new Map(), keys = new Map();
-  let order = [];
+  const feedState = emptyFeed(), nodes = new Map(), keys = new Map();
   // The page itself scrolls (native scrollbar and touch scrolling); the composer bar sticks to its bottom.
   const feed = $("gv-feed"), scroller = document.scrollingElement || document.documentElement;
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
@@ -229,12 +230,12 @@ const SCRIPT = String.raw`
   new ResizeObserver(() => { if (pinned) scroller.scrollTop = scroller.scrollHeight; }).observe($("gv-bar"));
   const renderFeed = () => {
     const stick = nearBottom();
-    const wanted = new Set(order);
+    const wanted = new Set(feedState.order);
     for (const [id, node] of nodes) if (!wanted.has(id)) { node.remove(); nodes.delete(id); keys.delete(id); }
     let before = $("gv-feed-end");
-    for (let i = order.length - 1; i >= 0; i -= 1) {
-      const id = order[i], item = items.get(id);
-      if (!item) continue;
+    const shown = drawn(feedState);
+    for (let i = shown.length - 1; i >= 0; i -= 1) {
+      const item = shown[i], id = item.id;
       const key = JSON.stringify(item);
       let node = nodes.get(id);
       if (!node || keys.get(id) !== key) { const next = renderItem(item); if (node) node.replaceWith(next); node = next; nodes.set(id, node); keys.set(id, key); }
@@ -243,10 +244,9 @@ const SCRIPT = String.raw`
     }
     if (stick) scroller.scrollTop = scroller.scrollHeight;
   };
-  let header = null;
   const paintBusy = () => {
     const box = $("gv-busy");
-    const working = !ended && header && header.status === "Working";
+    const working = !ended && feedState.header && feedState.header.status === "Working";
     box.classList.toggle("gv-off", !working);
     if (!working) return;
     const text = "Working...";
@@ -254,7 +254,6 @@ const SCRIPT = String.raw`
     if (span.textContent !== text) span.textContent = text;
   };
   const renderHeader = (h) => {
-    header = h;
     document.title = (h.title || "Shared thread") + " · Guest view";
     const model = [h.model, h.effort].filter(Boolean).join(" ");
     const chip = $("gv-model");
@@ -267,7 +266,7 @@ const SCRIPT = String.raw`
   // Every one carries the same grey tick ("sent"): what the owner did with it is never shown.
   const TICK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
   const MORE = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
-  let everyone = null, open = false;
+  let open = false;
   const expanded = new Set();
   const atEnd = (n) => n.scrollHeight - n.scrollTop - n.clientHeight < 24;
   // A prompt cut off at two lines gets a chevron; one that fits does not. Needs the list on screen.
@@ -282,8 +281,8 @@ const SCRIPT = String.raw`
     const box = $("gv-mine");
     const stick = toEnd || atEnd(box), keep = box.scrollTop;
     const mineIds = new Set(mine.map((p) => p.id));
-    const list = everyone
-      ? everyone.map((p) => ({ id: p.id, name: mineIds.has(p.id) ? "You" : p.name || "Guest", text: p.text || "" }))
+    const list = feedState.prompts
+      ? feedState.prompts.map((p) => ({ id: p.id, name: mineIds.has(p.id) ? "You" : p.name || "Guest", text: p.text || "" }))
       : mine.map((p) => ({ id: p.id, name: "You", text: p.text }));
     box.textContent = "";
     for (const p of list) {
@@ -375,11 +374,9 @@ const SCRIPT = String.raw`
   // "sent" is the name the poll that brought "data" was sent with. A poll waits up to 25s, so the guest may have typed
   // a new name since; the owner's answer then carries the old one and must not replace what was typed.
   const apply = (data, sent) => {
-    if (data.reset) items.clear();
+    mergeFeed(feedState, data);
     if (data.header) renderHeader(data.header);
-    for (const item of data.items || []) items.set(item.id, item);
-    if (data.order) { order = data.order; const keep = new Set(order); for (const id of [...items.keys()]) if (!keep.has(id)) items.delete(id); }
-    if (data.prompts) { everyone = data.prompts.length ? data.prompts : null; renderMine(); }
+    if (data.prompts) renderMine();
     if (data.guests !== undefined) renderPresence(data.guests);
     // The owner sees the name as the server cleaned it (no colons, not the owner's own); show the same one here.
     if (name && name === sent && typeof data.you === "string" && data.you && data.you !== name) { name = data.you; store.set("guest-view:name", name); showName(); }

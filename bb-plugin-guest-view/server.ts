@@ -11,6 +11,9 @@
 // Everything lives in memory: a share ends when it is stopped, when it expires,
 // when the tunnel dies, and when the plugin stops.
 import { randomBytes, randomUUID } from "node:crypto";
+import { chmod, mkdir, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { emptyHeld, readHeld, type Held, type TimelineRead } from "./src/delta.ts";
@@ -67,53 +70,24 @@ const VIEWER_TTL_MS = 40_000;
 /** What the owner did with a prompt. Guests are never told: they only see that theirs was sent. */
 export type PromptStatus = "pending" | "used" | "dismissed";
 
-export interface OwnerPrompt {
-  id: string;
-  name: string;
-  text: string;
-  createdAt: number;
-}
-
-/** A prompt the owner has dealt with: shown in the card's History, newest first. */
-export interface OwnerHistoryItem extends OwnerPrompt {
-  status: "used" | "dismissed";
-  resolvedAt: number;
-}
-
-/** A guest connected now, as the owner sees them. */
-export interface OwnerGuest {
-  id: string;
-  name: string;
-  /** When this connection began. */
-  since: number;
-}
-
-/** What a guest learns about the other guests: nothing (only their own prompts), how many are here, or that and each other's prompts. */
-export type GuestsSee = "own" | "count" | "prompts";
+/** What guests learn about each other: nothing (only their own prompts), how many are here, or that and each other's prompts. */
 const guestsSee = z.enum(["own", "count", "prompts"]);
-
-export interface OwnerState {
-  threadId: string;
-  /** Starting the server and tunnel. */
-  starting: boolean;
-  share: { url: string; createdAt: number; expiresAt: number; viewers: number; showHistory: boolean; guestsSee: GuestsSee; showModel: boolean; guests: OwnerGuest[] } | null;
-  prompts: OwnerPrompt[];
-  /** Prompts already used or dismissed, oldest first (the newest is last). */
-  history: OwnerHistoryItem[];
-  /** Why the last share failed or ended unexpectedly. */
-  error: string | null;
-  /** Set when cloudflared is missing. */
-  install: { text: string; command: string; url: string; canInstall: boolean } | null;
-}
+export type GuestsSee = z.infer<typeof guestsSee>;
 
 const threadInput = z.object({ threadId: z.string().min(1).max(200) });
 /** `via: "app"` is what the thread menu and the card send. Anything else (the bb CLI, an agent, another plugin) starts a share too, and the owner is told. */
 const shareInput = z.object({ threadId: z.string().min(1).max(200), via: z.literal("app").optional() });
 const promptInput = z.object({ threadId: z.string().min(1).max(200), promptId: z.string().min(1).max(100) });
+
+// What the owner's page is sent. The types below are read off these, so the two cannot drift.
 const ownerPrompt = z.object({ id: z.string(), name: z.string(), text: z.string(), createdAt: z.number() });
+/** A prompt the owner has dealt with: shown in the card's History, newest last. */
 const ownerHistoryItem = ownerPrompt.extend({ status: z.enum(["used", "dismissed"]), resolvedAt: z.number() });
+/** A guest connected now, as the owner sees them; `since` is when this connection began. */
+const ownerGuest = z.object({ id: z.string(), name: z.string(), since: z.number() });
 const ownerState = z.object({
   threadId: z.string(),
+  /** Starting the server and tunnel. */
   starting: z.boolean(),
   share: z
     .object({
@@ -124,14 +98,21 @@ const ownerState = z.object({
       showHistory: z.boolean(),
       guestsSee,
       showModel: z.boolean(),
-      guests: z.array(z.object({ id: z.string(), name: z.string(), since: z.number() })),
+      guests: z.array(ownerGuest),
     })
     .nullable(),
   prompts: z.array(ownerPrompt),
+  /** Prompts already used or dismissed, oldest first (the newest is last). */
   history: z.array(ownerHistoryItem),
+  /** Why the last share failed or ended unexpectedly. */
   error: z.string().nullable(),
+  /** Set when cloudflared is missing. */
   install: z.object({ text: z.string(), command: z.string(), url: z.string(), canInstall: z.boolean() }).nullable(),
 });
+export type OwnerPrompt = z.infer<typeof ownerPrompt>;
+export type OwnerHistoryItem = z.infer<typeof ownerHistoryItem>;
+export type OwnerGuest = z.infer<typeof ownerGuest>;
+export type OwnerState = z.infer<typeof ownerState>;
 
 export const rpcContract = defineRpcContract({
   state: { input: threadInput, output: ownerState },
@@ -502,7 +483,9 @@ export default async function plugin(bb: BbPluginApi) {
     async poll(shareId: string, since: number, client: string, nameInput: string, ip: string, waitMs: number, closed: AbortSignal) {
       const share = shareById(shareId);
       if (!share) return { status: 404, body: { error: "This guest link has ended." } };
-      if (!pollLimit.take(`${share.id}:${ip}`, Date.now())) return { status: 429, body: { error: "Too many requests.", retry: true } };
+      const limitKey = `${share.id}:${ip}`;
+      const hitAt = Date.now();
+      if (!pollLimit.take(limitKey, hitAt)) return { status: 429, body: { error: "Too many requests.", retry: true } };
       if (share.kicked.has(client)) return { status: 200, body: { rev: share.feed.rev, items: [], ended: "kicked" } };
       if (!share.viewers.has(client)) {
         // A page that was not watching needs a free place, for the share and for its address. The page asks again later.
@@ -540,6 +523,11 @@ export default async function plugin(bb: BbPluginApi) {
         if (since === share.feed.rev && !share.endReason && !share.kicked.has(client)) {
           const how = await share.waiters.wait(client, ip, waitMs, closed);
           if (how === "full") return { status: 429, body: { error: "This link is busy. Trying again soon.", retry: true } };
+          // A poll held until something really changed is the page following along, not a request flood: it asks again
+          // at once after each change, so counting it would refuse a few pages behind one address (a family, a
+          // classroom) while an agent streams. A poll answered at once, released by a newer one or timed out still counts;
+          // so does one that entered, and the per-address cap on waits is unchanged.
+          if (how === "woken" && share.feed.rev !== since) pollLimit.refund(limitKey, hitAt);
         }
         if (share.kicked.has(client)) return { status: 200, body: { rev: share.feed.rev, items: [], ended: "kicked" } };
         let payload = share.feed.since(since);
@@ -765,9 +753,6 @@ export default async function plugin(bb: BbPluginApi) {
   /** The guided install: the owner clicked Install on the card. Linux only; never runs on its own. */
   async function installCloudflared() {
     if (process.platform !== "linux") throw new Error("Install cloudflared with the command shown, then share again.");
-    const { mkdir, writeFile, chmod, rename } = await import("node:fs/promises");
-    const { homedir } = await import("node:os");
-    const { join } = await import("node:path");
     const asset = pinnedAsset(process.arch);
     bb.log.info(`installing cloudflared ${CLOUDFLARED_VERSION} from ${asset?.url ?? "(no build for " + process.arch + ")"}`);
     // Nothing touches the disk until the size and SHA-256 match the pinned release.
