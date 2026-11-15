@@ -21,6 +21,19 @@ Use the **Pinned turns** submenu in a thread's actions menu (⋯ in the thread h
 | `showFullText` | on | Tooltip with the whole message when the bar cut it short. |
 | `debugLog` | off | Timing lines in the plugin log. |
 
+## How it reads the thread
+
+The newest page of the timeline is read once, then kept current with deltas: a refresh asks only for what changed since the last read (`afterTag`, about 1 KB, against 70 to 80 KB for a page) and tool rows' content is left out. A change that does not fit what is held, a rewrite of history (`history-rewritten`, `history-compacted`) and 60 s since the last full page read the whole page again. Older pages are read only when a half of the bar is missing and older rows exist. A burst of thread changes is read once, after 300 ms of quiet and at the latest every second.
+
+Nothing is read while the bar is not on the page or the tab is in the background; changes only mark the data stale, and one read catches up when the bar or tab comes back. So a bar that looks stale in a background tab is normal; it updates on return. The turn counter reads BB's `conversationOutline` (one small request) again only when the newest user message changes.
+
 ## Debugging
 
-`bb plugin logs pinned-turns` prints the log. Debug lines: `load` and `older` (timeline fetches), `attach`/`detach` (the bar finding or losing BB's scroller), `jump` (outcome, ms), and a `timeline` summary every 5s of activity with `signals` against `refetches` (`deltas` of them read as small `afterTag` deltas). The timeline is not read while the bar is off the page or the tab is in the background; it reads once on return. A reply title that stays stale while `signals` keeps rising and `refetches` stays near zero means the refetch debounce is starving.
+`bb plugin logs pinned-turns` prints the log (switch **Debug log** on first). Lines:
+
+- `load` and `older`: timeline fetches (`ms`, `rows`, `more`).
+- `attach` and `detach`: the bar finding or losing BB's scroller.
+- `jump`: outcome and `ms`.
+- `timeline`, every 5s of activity: `signals` (thread changes), `refetches` (reads they caused), `deltas` (how many of those were small deltas), `errors`, `fetchMsMax`, `rows`.
+
+A reply title that stays stale while `signals` keeps rising and `refetches` stays near zero means the refetch debounce is starving. `refetches` well above `deltas` means full pages are being read (a rewrite, or a delta that did not fit).

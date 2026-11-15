@@ -16,8 +16,6 @@ Open the thread's actions menu (⋯ in the thread header, or a sidebar row's men
 - **Debug log**: timing lines in the plugin log (`bb plugin logs pinned-turns`).
 - **Plugin settings**: opens that page.
 
-Each is also a plugin setting (`halves` is `both`, `message` or `reply`). Every pane of a split workspace has its own bar. The submenu itself can be removed from the plugin's page in BB settings (**Show in thread menus**). Options that cannot apply here are greyed out, with the reason below the list.
+Each is also a plugin setting (`halves` is `both`, `message` or `reply`). Every pane of a split workspace has its own bar. Options that cannot apply here (the turn counter on a narrow thread view, full text on hover on a touch-only device) are greyed out, with the reason below the list. **Show in thread menus** on the plugin's page in BB settings removes the submenu; that page then holds every option, so it is the way back.
 
-It reads BB's timeline DOM, which is undocumented; the selectors it relies on are in `src/dom.ts` and the repo's `AGENTS.md`.
-
-On a narrow thread view or a touch-only device, options that cannot apply (the turn counter, full text on hover) are greyed out in the menu.
+It reads BB's timeline DOM, which is undocumented; the selectors it relies on are in `src/dom.ts` and `NOTES.md`. It needs BB 0.48 or later, and no account or service besides BB.

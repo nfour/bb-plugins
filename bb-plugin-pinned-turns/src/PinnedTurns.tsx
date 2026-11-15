@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../server";
 import { findTimeline, mountedRows, prefersReducedMotion, rankOfRow, rowById, type Timeline } from "./dom";
-import { PIN_ROW_HEIGHT, bandAt, jumpOffset, lastAtOrAbove, type Message, type TurnStatus } from "./model";
+import { ARRIVED_PX, JUMP_EASE, PIN_ROW_HEIGHT, bandAt, jumpOffset, jumpStep, lastAtOrAbove, searchStep, type Message, type TurnStatus } from "./model";
 import { useOptions } from "./options";
 import { useOutline, useTimeline, type Debug, type TimelineIndex } from "./timeline";
 import { COUNTER_ROOM, setCounterRoom, useCounterRoom, useTabVisible } from "./viewport";
@@ -198,7 +198,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
     };
     const inputs = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
     for (const name of inputs) window.addEventListener(name, stop, { capture: true, passive: true });
-    const ease = prefersReducedMotion() ? 1 : 0.22;
+    const ease = prefersReducedMotion() ? 1 : JUMP_EASE;
     let settled = 0;
     let stuck = 0;
     let outcome = "timeout";
@@ -216,7 +216,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
         let step: number;
         if (row) {
           const delta = jumpOffset(row.getBoundingClientRect().top, scroller.getBoundingClientRect().top, LANDING);
-          if (Math.abs(delta) <= 1) {
+          if (Math.abs(delta) <= ARRIVED_PX) {
             // Arrived; watch a moment longer for a late shift before letting go.
             if (++settled >= 20) {
               outcome = "settled";
@@ -226,7 +226,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
             continue;
           }
           settled = 0;
-          step = Math.sign(delta) * Math.min(Math.abs(delta), Math.max(1, Math.min(Math.abs(delta) * ease, scroller.clientHeight * 1.5)));
+          step = jumpStep(delta, ease, scroller.clientHeight);
         } else {
           // Windowed out: which way it lies is read from where the mounted rows stand in the thread.
           const rows = mountedRows(items);
@@ -236,7 +236,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
             await nextFrame();
             continue;
           }
-          step = Math.sign(target.rank - here) * scroller.clientHeight * 0.8;
+          step = searchStep(target.rank, here, scroller.clientHeight);
         }
         const before = scroller.scrollTop;
         // BB's scroll keeper (0.48) writes a scroll it cannot explain back to the
@@ -272,16 +272,16 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
         <Half message={shown.reply} onJump={jump} className="pinned-half--reply" ink={REPLY_INK} status={options.showStatus} tooltip={options.showFullText} />
       ) : null}
       {options.halves !== "reply" ? (
-      <Half
-        message={shown.message}
-        onJump={jump}
-        className="pinned-half--message"
-        glide
-        ink={MESSAGE_INK}
-        status={options.showStatus}
-        tooltip={options.showFullText}
-        position={tally && nth ? { nth, total: tally.total } : undefined}
-      />
+        <Half
+          message={shown.message}
+          onJump={jump}
+          className="pinned-half--message"
+          glide
+          ink={MESSAGE_INK}
+          status={options.showStatus}
+          tooltip={options.showFullText}
+          position={tally && nth ? { nth, total: tally.total } : undefined}
+        />
       ) : null}
     </div>,
     host,

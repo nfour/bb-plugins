@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rankOfRow } from "./dom.ts";
 import { flatten, indexOf, mergeNewest, outlineOf, prependOlder, type Titles } from "./rows.ts";
-import { PIN_ROW_HEIGHT, bandAt, bandContent, dataIdOf, jumpOffset, lastAtOrAbove, oneLine, turnStatus, type Message, type Pin } from "./model.ts";
+import { ARRIVED_PX, JUMP_EASE, PIN_ROW_HEIGHT, bandAt, bandContent, dataIdOf, jumpOffset, jumpStep, lastAtOrAbove, oneLine, searchStep, turnStatus, type Message, type Pin } from "./model.ts";
 
 test("bandContent: last message and last reply past the line, same line for both", () => {
   const pin = (top: number, title: string): Pin<string> => ({ top, title, ref: title });
@@ -19,6 +19,33 @@ test("jumpOffset lands the row one bar below the line", () => {
   assert.equal(jumpOffset(500, 48), 500 - 48 - PIN_ROW_HEIGHT);
   assert.equal(jumpOffset(500, 48, 0), 452);
   assert.equal(jumpOffset(500, 48, -5), 452, "a negative room is no room");
+});
+
+test("jumpStep closes a share of what is left, at least 1px, never past the landing", () => {
+  assert.equal(jumpStep(100, JUMP_EASE, 800), 100 * JUMP_EASE, "a share of the way");
+  assert.equal(jumpStep(-100, JUMP_EASE, 800), -100 * JUMP_EASE, "up is negative");
+  assert.equal(jumpStep(100, 1, 800), 100, "no easing (reduced motion) lands in one step");
+  assert.equal(jumpStep(3, JUMP_EASE, 800), 1, "a short way still moves a pixel");
+  assert.equal(jumpStep(0.5, JUMP_EASE, 800), 0.5, "and never overshoots");
+  assert.equal(jumpStep(50_000, JUMP_EASE, 600), 900, "a long way is capped at 1.5 viewports");
+  assert.equal(jumpStep(-50_000, 1, 600), -900);
+  assert.equal(jumpStep(0, JUMP_EASE, 600), 0);
+});
+
+test("jumpStep converges on the landing within ARRIVED_PX", () => {
+  let delta = 7_300;
+  let frames = 0;
+  while (Math.abs(delta) > ARRIVED_PX && frames < 500) {
+    delta -= jumpStep(delta, JUMP_EASE, 585);
+    frames++;
+  }
+  assert.ok(Math.abs(delta) <= ARRIVED_PX && frames < 60, `arrived after ${frames} frames`);
+});
+
+test("searchStep heads for the target a screen at a time", () => {
+  assert.equal(searchStep(3, 40, 500), -400, "a row before the mounted ones is up");
+  assert.equal(searchStep(90, 40, 500), 400, "after them is down");
+  assert.equal(searchStep(40, 40, 500), 0);
 });
 
 test("lastAtOrAbove is a binary search over non-decreasing tops", () => {

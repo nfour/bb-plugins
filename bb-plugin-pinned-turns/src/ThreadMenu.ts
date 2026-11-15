@@ -5,9 +5,9 @@ import {
   useRpc,
   type PluginThreadActionRegistration,
 } from "@get-bb/plugin-sdk/app";
-import type { SettingKey, rpcContract } from "../server";
-import { HALVES, type Halves } from "./halves";
+import type { rpcContract } from "../server";
 import { useOptions, type Options } from "./options";
+import { HALVES, type Halves, type SettingKey } from "./shared";
 import { useCanHover, useCounterRoom } from "./viewport";
 
 /** The options the submenu switches, in its order, after the bar's own on/off. */
@@ -102,8 +102,7 @@ export const threadMenu: PluginThreadActionRegistration<Data> = {
         else if (typeof value === "string" && value.startsWith(HALF_PREFIX)) {
           const picked = HALVES.find((one) => one === value.slice(HALF_PREFIX.length));
           if (picked) data.setHalves(picked);
-        }
-        else if (value === "enabled" || OPTIONS.some((option) => option.key === value)) data.toggle(value as SettingKey);
+        } else if (value === "enabled" || OPTIONS.some((option) => option.key === value)) data.toggle(value as SettingKey);
       },
     };
   },

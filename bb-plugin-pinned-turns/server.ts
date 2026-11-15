@@ -6,12 +6,7 @@
 // over debug lines (the frontend has no plugin logger).
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { HALVES } from "./src/halves";
-
-/** The boolean settings the thread menu switches. */
-export const SETTING_KEYS = ["enabled", "showStatus", "showPosition", "showFullText", "debugLog", "showPinButton"] as const;
-export type SettingKey = (typeof SETTING_KEYS)[number];
-
+import { DEFAULTS, DEFAULT_HALVES, HALVES, SETTING_KEYS } from "./src/shared";
 
 export const rpcContract = defineRpcContract({
   set_setting: { input: z.object({ key: z.enum(SETTING_KEYS), value: z.boolean() }), output: z.null() },
@@ -27,42 +22,42 @@ export const rpcContract = defineRpcContract({
 
 export default async function plugin(bb: BbPluginApi) {
   const settings = bb.settings.define({
-    enabled: { type: "boolean", label: "Pin the current turn", default: true },
+    enabled: { type: "boolean", label: "Pin the current turn", default: DEFAULTS.enabled },
     showStatus: {
       type: "boolean",
       label: "Show turn status",
       description: "Your message and the reply pulse while the turn runs; a dot marks a reply that failed or was interrupted.",
-      default: true,
+      default: DEFAULTS.showStatus,
     },
     showPosition: {
       type: "boolean",
       label: "Show turn counter",
       description: "Which of the thread's turns the pinned message is, like 7/23.",
-      default: true,
+      default: DEFAULTS.showPosition,
     },
     showFullText: {
       type: "boolean",
       label: "Show full text on hover",
       description: "A tooltip with the whole message when the bar had to cut it short.",
-      default: true,
+      default: DEFAULTS.showFullText,
     },
     showPinButton: {
       type: "boolean",
       label: "Show in thread menus",
       description: "The Pinned turns submenu in each thread's actions menu, where the bar and its options are switched.",
-      default: true,
+      default: DEFAULTS.showPinButton,
     },
     halves: {
       type: "string",
       label: "Halves shown",
       description: "both, message (only the message you are under) or reply (only the latest reply).",
-      default: "both",
+      default: DEFAULT_HALVES,
     },
     debugLog: {
       type: "boolean",
       label: "Debug log",
       description: "Write timeline fetch timing to the plugin log (`bb plugin logs pinned-turns`).",
-      default: false,
+      default: DEFAULTS.debugLog,
     },
   });
   bb.rpc.register(rpcContract, {

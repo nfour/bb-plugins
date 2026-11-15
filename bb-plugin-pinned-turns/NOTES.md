@@ -4,7 +4,8 @@ Pins the message you are reading under and the latest reply to the top of the ti
 
 ## Layout
 
-- `src/model.ts`: the pure rules. `bandAt` (what the bar says at a boundary row) is tested against the plain `bandContent` oracle; `jumpOffset`, `lastAtOrAbove`, `turnStatus`, `oneLine`, `dataIdOf`.
+- `src/model.ts`: the pure rules. `bandAt` (what the bar says at a boundary row) is tested against the plain `bandContent` oracle; `lastAtOrAbove`, `turnStatus`, `oneLine`, `dataIdOf`, and the jump's steering: `jumpOffset` (where a row must land), `jumpStep` (this frame's move toward a mounted row: a share of what is left, 1px at least, 1.5 viewports at most), `searchStep` (a screen toward a row that is not mounted), `ARRIVED_PX`, `JUMP_EASE`.
+- `src/shared.ts`: import-free; the setting keys, their defaults and `HALVES`, read by `server.ts`, `src/options.ts` and `src/ThreadMenu.ts`. Page code may import only types from `server.ts`; a value import bundles the server's SDK and zod into `app.js` (217 KB instead of 23 KB).
 - `src/rows.ts`: timeline rows to an index. `flatten`, `mergeNewest`, `prependOlder`, `applyDelta`, `indexOf` (titles, ranks, turn status), `outlineOf` (turn counter). `indexOf` takes a `Titles` memo (per thread, by row id, keyed on what a title is made from: text, mentions, attachments, initiator) so a delta only reads the text of rows that changed, and a message whose fields did not change is handed out as the same object. Measured on synthetic rows: 600 rows 9.2 ms without, 0.18 ms with; 2,000 rows 36 ms against 1 ms.
 - `src/watch.ts`: the timeline watcher, no React import, so `src/watch.test.ts` runs it under `node --test` with `mock.timers` and a fake SDK. `src/timeline.ts` holds the hooks (`useTimeline`, `useOutline`) around it.
 - `src/PinnedTurns.tsx`: one bar per thread; `src/dom.ts` finds BB's scroller; `src/viewport.ts` (counter room, hover, tab visibility); `src/ThreadMenu.ts` + `src/options.ts` + `server.ts` the options.
@@ -24,6 +25,11 @@ Pins the message you are reading under and the latest reply to the top of the ti
 - Attaching: a MutationObserver (childList only, no subtree, on the frame and 6 boxes above it) re-attaches when BB replaces the scroller, frame or items, retrying for up to 30 frames while the new timeline has no rows yet. It replaced a 500 ms `setInterval`; removing the bar's host element by hand brought it back within 300 ms.
 - Jumps steer by the row's live position every frame (BB re-measures rows mid-scroll; a single `scrollTo` ends up elsewhere), never touch the URL or history, and end on the reader's own input. BB 0.48's scroll keeper writes an unexplained scroll back to the bottom while attached there, so every jump frame first dispatches a `wheel` event on the scroller.
 - `halves` (both / message / reply) is a string setting set through `set_halves`; the menu shows it as three rows above the other options. Reply only has no counter.
+
+## Measured and left alone
+
+- Paint per scroll frame (`PinnedTurns.tsx` `paint`: mounted-rows list, the scroller's rect, a binary search over a few row tops) replayed after each scroll write on a thread of 19,000px: median 0.1 ms, worst 0.2 ms including the layout read. Not worth caching row tops.
+- `conversationOutline` as the bar's source instead of timeline pages (spike, on a 547-message thread of this repo's checkout): one read is 147 KB / 10 ms for the whole thread, against 16 pages / 674 KB / 660 ms to walk its timeline back to the start. But it has no tag or delta (every new reply would re-read 147 KB; the timeline delta is about 1 KB), it carries no turn status (errors, interruptions and pending come from system rows it leaves out), its previews are raw (`@thread:thr_x` for a mention, 4 of the 5 mention rows; `[bb system]` kept) and cut at 200 characters (43 of 210 user messages; the bar's title is 240 and its tooltip 800), and another agent's message is told apart only by its envelope. The gain is only on a far scroll up, which costs a few pages; not adopted. The turn counter keeps using it (`role=user`, 43 KB on that thread, read when the newest message changes).
 
 ## Options
 

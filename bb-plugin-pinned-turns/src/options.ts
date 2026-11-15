@@ -1,16 +1,5 @@
 import { useSettings } from "@get-bb/plugin-sdk/app";
-import type { SettingKey } from "../server";
-import { HALVES, type Halves } from "./halves";
-
-/** What a setting is until the server says otherwise; the same defaults as `server.ts`. */
-export const DEFAULTS: Record<SettingKey, boolean> = {
-  enabled: true,
-  showStatus: true,
-  showPosition: true,
-  showFullText: true,
-  debugLog: false,
-  showPinButton: true,
-};
+import { DEFAULTS, DEFAULT_HALVES, HALVES, SETTING_KEYS, type Halves, type SettingKey } from "./shared";
 
 export type Options = Record<SettingKey, boolean> & {
   /** Which halves of the bar are drawn. */
@@ -24,14 +13,6 @@ export function useOptions(): Options {
   const { values, isLoading } = useSettings();
   const read = (key: SettingKey) => (typeof values?.[key] === "boolean" ? (values[key] as boolean) : DEFAULTS[key]);
   const halves = values?.halves;
-  return {
-    ready: !isLoading,
-    halves: HALVES.find((one) => one === halves) ?? "both",
-    enabled: read("enabled"),
-    showStatus: read("showStatus"),
-    showPosition: read("showPosition"),
-    showFullText: read("showFullText"),
-    debugLog: read("debugLog"),
-    showPinButton: read("showPinButton"),
-  };
+  const flags = Object.fromEntries(SETTING_KEYS.map((key) => [key, read(key)])) as Record<SettingKey, boolean>;
+  return { ...flags, ready: !isLoading, halves: HALVES.find((one) => one === halves) ?? DEFAULT_HALVES };
 }

@@ -2,6 +2,10 @@
 
 Releases are the tags `pinned-turns/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.6 (2026-11-15)
+
+- Nothing changes on screen: the agent skill now explains how the plugin reads a thread, and the settings are kept in one list.
+
 ## 0.1.5 (2026-11-12)
 
 - Every pane of a split workspace has its own bar; before, only the focused pane had one.

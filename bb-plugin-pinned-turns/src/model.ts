@@ -53,6 +53,33 @@ export function jumpOffset(rowTop: number, pinTop: number, height = PIN_ROW_HEIG
   return rowTop - pinTop - (height > 0 ? height : 0);
 }
 
+/** Within this many px of its landing a jumped-to row has arrived. */
+export const ARRIVED_PX = 1;
+/** A jump's share of the distance left that it closes each frame, unless the reader prefers reduced motion. */
+export const JUMP_EASE = 0.22;
+/** The most one frame of a jump moves, in viewport heights, so a long way is not crossed in one lurch. */
+const MAX_STEP_VIEWPORTS = 1.5;
+/** How far a jump to a row that is not mounted moves per frame, in viewport heights: a screen at a time mounts the rows on the way. */
+const SEARCH_STEP_VIEWPORTS = 0.8;
+
+/**
+ * How far to scroll this frame to bring a mounted row to its landing: `ease` of the distance
+ * `delta` (from `jumpOffset`) that is left, at least 1px, at most `MAX_STEP_VIEWPORTS`
+ * viewports, and never past the landing. Signed like `delta`.
+ */
+export function jumpStep(delta: number, ease: number, viewport: number): number {
+  const size = Math.abs(delta);
+  return Math.sign(delta) * Math.min(size, Math.max(1, Math.min(size * ease, viewport * MAX_STEP_VIEWPORTS)));
+}
+
+/**
+ * How far to scroll this frame toward a row that is not mounted: a screen's worth, up when it
+ * ranks before the rows mounted (`here`) and down when after. Zero when it ranks the same.
+ */
+export function searchStep(targetRank: number, here: number, viewport: number): number {
+  return Math.sign(targetRank - here) * viewport * SEARCH_STEP_VIEWPORTS;
+}
+
 // ---------------------------------------------------------------------------
 // The fast path. `bandContent` above reads every row's top on every paint; BB's
 // timeline is windowed and its rows are in chronological order, so none of that
