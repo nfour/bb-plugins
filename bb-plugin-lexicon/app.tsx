@@ -2,8 +2,11 @@
 //
 // A content script, nothing rendered. It paints the project's terms over the
 // thread timeline with the CSS Custom Highlight API (src/paint.ts); a null
-// overlay (src/Loader.tsx) hands it the lexicon and the setting.
+// overlay (src/Loader.tsx) hands it the lexicon and the settings. "Add to lexicon"
+// (a message action, so also in the text-selection menu) opens src/AddDialog.tsx.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
+import { AddDialog } from "./src/AddDialog";
+import { openAdd } from "./src/addState";
 import { Loader } from "./src/Loader";
 import { install } from "./src/paint";
 import { Settings } from "./src/Settings";
@@ -12,6 +15,8 @@ import "./src/styles.css";
 
 export default definePluginApp((app) => {
   app.slots.experimental_appOverlay({ id: "loader", component: Loader });
+  app.slots.experimental_appOverlay({ id: "add", component: AddDialog });
+  app.slots.messageAction({ id: "add", title: "Add to lexicon", icon: "BookOpen", run: ({ threadId, selectedText }) => openAdd(selectedText ?? "", threadId) });
   app.slots.experimental_threadAction(threadMenu);
   app.slots.settingsSection({ id: "review", title: "Terms", description: "What agents added, what waits for your approval, and what went stale.", component: Settings });
   // The same page as a tab of its own; BB gives a nav panel no scroller, so it scrolls itself.

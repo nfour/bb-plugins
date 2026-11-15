@@ -10,6 +10,22 @@ built-in set of outcomes and actions, and names learned from the project's sourc
 Ask for `bb lexicon export --format md` (or json, yaml, txt) to keep a copy in the
 codebase. `examples/lexicon.json` shows the shape; `bb lexicon import` loads one.
 
+## The Lexicon page
+
+Open Lexicon in the nav (or the plugin's settings) to see every project's terms, grouped by kind: names, features, options, code, actions, outcomes and topics. The built-in outcome and action words are a "Global rules" row. Use "+ Add term" on a kind to add one, Pin, Keep, Remove and Disable on a row, and "Undo last change" to take back the newest edit. The "Plugin global settings" box at the top switches colouring on and off, learning names from the source, agent maintenance (and whether their changes wait for your approval), colouring your own messages, and which kinds are coloured. Each project has its own lexicon, and two panes on different projects each use their own.
+
+## Clicking a word
+
+Click a coloured word in a reply to see which term it is: the canonical wording, its kind, what it means, its other wordings, and whose it is. Clicking an alias or an old wording says what it stands for. Links and selecting text work as usual; click elsewhere or press Escape to close the card.
+
+## Adding from a reply
+
+Select words in an assistant reply and choose "Add to lexicon" (it is also on each message's action bar). Add them as a new term of a kind, or as another wording of a term the project already has.
+
+## Agents
+
+Agents get the project's terms and the `lexicon` and `mine` tools: they use one wording per concept and may add, alias, rename and retire terms. Their additions are painted lighter until you pin them, terms that go out of use are flagged stale, and a setting makes agent changes wait for your approval.
+
 ## Switching a term off
 
 Each term on the Lexicon page has a Disable button. A disabled term stays in the

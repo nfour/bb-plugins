@@ -14,6 +14,7 @@ const OPTIONS: { key: SettingKey; label: string }[] = [
   { key: "symbols", label: "Learn names from the source" },
   { key: "agents", label: "Let agents maintain the lexicon" },
   { key: "proposals", label: "Agents propose terms for review" },
+  { key: "paintPrompts", label: "Colour my own messages" },
 ];
 
 const SETTINGS = "settings";

@@ -15,29 +15,26 @@
 //
 // The page asks for a project's terms every few seconds with the revision it holds
 // and gets `unchanged` back until something moved.
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { cliCommand, defineCli, defineRpcContract, PluginCliError, type BbPluginApi } from "@get-bb/plugin-sdk";
+import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { DEFAULT_REVISION, DEFAULT_TERMS } from "./src/defaults.ts";
-import { exportTerms, FORMATS } from "./src/export.ts";
-import { KINDS, lintOwnership, parseLexicon, TONES, type Entry, type Issue } from "./src/lexicon.ts";
+import { lexiconCli } from "./src/cli.ts";
+import { CHANGED, type Changed } from "./src/signal.ts";
+import { assemble, hash, KIND_KEYS, KINDS, parseLexicon, TONES, type Entry, type Kind } from "./src/lexicon.ts";
 import { mineTerms } from "./src/mine.ts";
-import { applyOp, byteSize, describe, digest, emptyStore, MAX_OPS_PER_THREAD, MAX_STORE_BYTES, briefing, search, suggest, sweep, undo, userAdd, userEdit, ownerOf, type AgentOp, type Outcome, type Store } from "./src/store.ts";
-import { exportedNames, isCompound, packageName, symbolEntries } from "./src/symbols.ts";
+import { applyOp, byteSize, describe, digest, emptyStore, MAX_OPS_PER_THREAD, MAX_STORE_BYTES, briefing, search, suggest, sweep, undo, userAdd, userAlias, userEdit, ownerOf, type AgentOp, type Outcome, type Store } from "./src/store.ts";
+import { MAX_FILE_BYTES, scan, trackedFiles } from "./src/scan.ts";
+import { isCompound, symbolEntries } from "./src/symbols.ts";
 
-/** Larger imports are refused: a vocabulary is a few hundred lines. */
-const MAX_BYTES = 256 * 1024;
 /** How long a source scan is trusted before the next poll starts another. */
 const SCAN_TTL_MS = 60_000;
-const MAX_FILES = 1200;
-const MAX_FILE_BYTES = 200 * 1024;
 /** Characters of the session instructions given to the digest of the project's terms. */
 const DIGEST_BUDGET = 2800;
 
 /** The switches the thread menu and the settings page write (the page can only read settings). */
-export const SETTING_KEYS = ["enabled", "symbols", "agents", "proposals"] as const;
+export const SETTING_KEYS = ["enabled", "symbols", "agents", "proposals", "paintPrompts", "kindName", "kindFeature", "kindOption", "kindCode", "kindAction", "kindOutcome", "kindTopic"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 const entry = z.object({
@@ -60,7 +57,6 @@ const entry = z.object({
   staleAt: z.number().optional(),
   retired: z.array(z.string()).optional(),
 });
-const issue = z.object({ level: z.enum(["error", "warning"]), entry: z.string().optional(), message: z.string() });
 
 const agentOp = z.object({
   op: z.enum(["add", "alias", "rename", "retire", "list"]),
@@ -83,13 +79,12 @@ export const rpcContract = defineRpcContract({
   lexicon: {
     input: z.object({ environmentId: z.string().min(1), known: z.string().optional(), symbols: z.boolean() }),
     output: z.object({
-      /** Whether the project has terms of its own, or only the built-in ones. */
-      source: z.enum(["project", "defaults"]),
+      /** The project the environment belongs to, to match the `changed` signals against. */
+      projectId: z.string(),
       revision: z.string(),
       /** The caller already holds this revision; `entries` is left empty. */
       unchanged: z.boolean(),
       entries: z.array(entry),
-      issues: z.array(issue),
     }),
   },
   /** What the settings page shows for a project: its terms, the proposals waiting, the latest changes. */
@@ -116,6 +111,16 @@ export const rpcContract = defineRpcContract({
     input: z.object({ projectId: z.string().min(1), term: z.string().max(80), kind: z.enum(KINDS), note: z.string().max(400).optional(), aliases: z.array(z.string().max(80)).max(16).optional(), tone: z.enum(TONES).optional() }),
     output: z.object({ ok: z.boolean(), reply: z.string() }),
   },
+  /** What the add dialog needs for a thread: its project and the terms that can take an alias. */
+  context: {
+    input: z.object({ threadId: z.string().min(1) }),
+    output: z.object({ projectId: z.string().nullable(), terms: z.array(z.object({ id: z.string(), term: z.string(), kind: z.enum(KINDS) })) }),
+  },
+  /** The user gives a term another wording. */
+  add_alias: {
+    input: z.object({ projectId: z.string().min(1), id: z.string().min(1), alias: z.string().max(80) }),
+    output: z.object({ ok: z.boolean(), reply: z.string() }),
+  },
   /** The user's edit of a term or a proposal. `undo` takes back the newest change. */
   edit: {
     input: z.object({ projectId: z.string().min(1), action: z.enum(["pin", "keep", "remove", "approve", "reject", "undo", "disable", "enable"]), id: z.string().optional() }),
@@ -139,6 +144,20 @@ const PROTOCOL = `The project keeps a lexicon: its names, features, options (set
 - When you learn two wordings mean one thing, add the extra wording as an alias. When a term changes name, use rename (the old wording stays as stale). When something was removed or no longer applies, retire it with the reason.
 - Terms marked user-added are the user's: only add aliases to them. Do not add terms for one-off details; a handful per session is plenty.
 - Before adding, call list with a query to check it is not there. Ask the user before adding many terms at once; use the mine tool to find candidates, after asking how deep to look.`;
+
+/** One switch per kind: which kinds of term are painted. */
+function kindSettings() {
+  const flag = (kind: Kind, label: string) => ({ type: "boolean" as const, label: `Colour ${label}`, description: `Paint the project's ${label} (kind "${kind}"). Off, they are kept but not painted.`, default: true });
+  return {
+    [KIND_KEYS.name]: flag("name", "names"),
+    [KIND_KEYS.feature]: flag("feature", "features"),
+    [KIND_KEYS.option]: flag("option", "options"),
+    [KIND_KEYS.code]: flag("code", "code identifiers"),
+    [KIND_KEYS.action]: flag("action", "actions"),
+    [KIND_KEYS.outcome]: flag("outcome", "outcomes"),
+    [KIND_KEYS.topic]: flag("topic", "topics"),
+  } as const;
+}
 
 export default async function plugin(bb: BbPluginApi) {
   const { kv } = bb.storage;
@@ -167,6 +186,13 @@ export default async function plugin(bb: BbPluginApi) {
       description: "Agents' additions wait for your approval on the settings page instead of being added at once.",
       default: false,
     },
+    paintPrompts: {
+      type: "boolean",
+      label: "Colour my own messages",
+      description: "Paint terms in your prompts as well as in replies. Off, only replies are painted.",
+      default: true,
+    },
+    ...kindSettings(),
   });
   let current = await settings.get();
   settings.onChange((next) => {
@@ -214,6 +240,7 @@ export default async function plugin(bb: BbPluginApi) {
         if (byteSize(result.store) > MAX_STORE_BYTES) throw new Error("the lexicon is too large to keep; remove terms first");
         await kv.set(storeKey(projectId), result.store);
         remember(projectId, result.store);
+        bb.realtime.publish(CHANGED, { projectId } satisfies Changed);
       }
       return result;
     });
@@ -248,6 +275,8 @@ export default async function plugin(bb: BbPluginApi) {
   }
   /** What the last scan of each environment's source found. A stale one is served while the next scans. */
   const scans = new Map<string, Scan>();
+  /** The last assembled lexicon of each environment, with the revision it answers. */
+  const assembled = new Map<string, { revision: string; entries: Entry[] }>();
   const symbolsFor = (environmentId: string, projectId: string, path: string | null, wanted: boolean) => {
     if (!wanted || !path) return { revision: "-", entries: [] as Entry[] };
     const held = scans.get(environmentId);
@@ -258,7 +287,11 @@ export default async function plugin(bb: BbPluginApi) {
       void scan(path)
         .then(async (found) => {
           next.entries = symbolEntries(found.packages, found.identifiers);
-          next.revision = hash(next.entries.map((e) => e.term).join("\n"));
+          const revision = hash(next.entries.map((e) => e.term).join("\n"));
+          if (revision !== next.revision) {
+            next.revision = revision;
+            bb.realtime.publish(CHANGED, { projectId } satisfies Changed);
+          }
           next.exported = found.complete ? found.identifiers : null;
           const result = await mutate(projectId, (store) => {
             const swept = sweep(store, Date.now(), next.exported, isCompound);
@@ -278,15 +311,6 @@ export default async function plugin(bb: BbPluginApi) {
 
   // --- the page -------------------------------------------------------------
 
-  /** Reports a project's lint issues once per revision, not on every poll. */
-  const reported = new Map<string, string>();
-  const report = (projectId: string, revision: string, issues: Issue[]) => {
-    if (reported.get(projectId) === revision) return;
-    reported.set(projectId, revision);
-    for (const found of issues) bb.log[found.level === "error" ? "warn" : "info"](`lexicon ${projectId}: ${found.entry ? `${found.entry}: ` : ""}${found.message}`);
-  };
-
-  const when = (at: number) => new Date(at).toISOString().slice(0, 16).replace("T", " ");
   const summarize = (op: AgentOp): string => {
     const subject = op.term ?? "";
     switch (op.op) {
@@ -313,10 +337,14 @@ export default async function plugin(bb: BbPluginApi) {
       const store = await load(projectId);
       const learned = symbolsFor(environmentId, projectId, path, symbols);
       const revision = `${store.rev}-${learned.revision}-${DEFAULT_REVISION}-${hash([...off].sort().join(","))}`;
-      const source = store.terms.length ? ("project" as const) : ("defaults" as const);
-      if (known === revision) return { source, revision, unchanged: true, entries: [], issues: [] };
-      report(projectId, revision, []);
-      return { source, revision, unchanged: false, entries: assemble(store.terms, learned.entries, off), issues: [] };
+      if (known === revision) return { projectId, revision, unchanged: true, entries: [] };
+      // One assembly per revision, shared by every pane of the environment.
+      let held = assembled.get(environmentId);
+      if (held?.revision !== revision) {
+        held = { revision, entries: assemble(store.terms, DEFAULT_TERMS, learned.entries, off) };
+        assembled.set(environmentId, held);
+      }
+      return { projectId, revision, unchanged: false, entries: held.entries };
     },
     async overview() {
       const ids = new Set<string>();
@@ -343,10 +371,22 @@ export default async function plugin(bb: BbPluginApi) {
       if (disabled) off.add(id);
       else off.delete(id);
       await kv.set(OFF_KEY, [...off]);
+      bb.realtime.publish(CHANGED, { projectId: null } satisfies Changed);
       return null;
     },
     async add_term({ projectId, ...term }) {
       const { reply, ok } = await mutate<Outcome>(projectId, (store) => userAdd(store, term, { now: Date.now(), defaults: DEFAULT_TERMS }));
+      return { ok, reply };
+    },
+    async context({ threadId }) {
+      const { environmentId } = await bb.sdk.threads.get({ threadId });
+      if (!environmentId) return { projectId: null, terms: [] };
+      const { projectId } = await environmentOf(environmentId);
+      const { terms } = await load(projectId);
+      return { projectId, terms: terms.map(({ id, term, kind }) => ({ id, term, kind })) };
+    },
+    async add_alias({ projectId, ...alias }) {
+      const { reply, ok } = await mutate<Outcome>(projectId, (store) => userAlias(store, alias, { now: Date.now(), defaults: DEFAULT_TERMS }));
       return { ok, reply };
     },
     async edit({ projectId, action, id }) {
@@ -467,130 +507,8 @@ export default async function plugin(bb: BbPluginApi) {
     };
   });
 
-  // --- CLI ------------------------------------------------------------------
-
-  const projectOf = (context: { projectId?: string }) => {
-    if (!context.projectId) throw new PluginCliError("no project: run this from a BB thread", { code: "no_project" });
-    return context.projectId;
-  };
-
-  bb.cli.register(
-    defineCli({
-      name: "lexicon",
-      summary: "The project's vocabulary, kept in BB's storage",
-      commands: {
-        lint: cliCommand({
-          summary: "Check a lexicon file for duplicate terms, wordings with two owners and bad parents",
-          positionals: [{ name: "file", description: "Path to a JSON lexicon", required: true }],
-          options: { json: { type: "boolean", description: "Emit machine-readable JSON" } },
-          async run(input, context) {
-            const { entries, issues } = parseLexicon(await readText(input.positionals.file, context.cwd));
-            const errors = issues.filter((found) => found.level === "error").length;
-            if (input.options.json) return { exitCode: errors ? 1 : 0, stdout: JSON.stringify({ terms: entries.length, issues }, null, 2) };
-            const lines = issues.map((found) => `${found.level}: ${found.entry ? `${found.entry}: ` : ""}${found.message}`);
-            lines.push(`${entries.length} terms, ${errors} errors, ${issues.length - errors} warnings`);
-            return { exitCode: errors ? 1 : 0, stdout: lines.join("\n") };
-          },
-        }),
-        import: cliCommand({
-          summary: "Keep a JSON lexicon file as this project's terms (replaces the current ones and the proposals waiting)",
-          positionals: [{ name: "file", description: "Path to a JSON lexicon", required: true }],
-          async run(input, context) {
-            const projectId = projectOf(context);
-            const text = await readText(input.positionals.file, context.cwd);
-            if (text.length > MAX_BYTES) throw new PluginCliError("the file is too large", { code: "lexicon_too_large" });
-            const { entries, issues } = parseLexicon(text);
-            if (!entries.length) throw new PluginCliError("no usable terms in the file", { code: "lexicon_empty", hint: issues[0]?.message });
-            await mutate(projectId, (store) => ({ store: { ...emptyStore(), terms: entries, rev: store.rev + 1 } }));
-            return { exitCode: 0, stdout: `kept ${entries.length} terms${issues.length ? `, ${issues.length} issues (run bb lexicon lint)` : ""}` };
-          },
-        }),
-        export: cliCommand({
-          summary: "Print this project's terms as json, md, yaml or txt, to save wherever the project wants them",
-          options: {
-            format: { type: "enum", values: [...FORMATS], default: "json", description: "Output format" },
-            all: { type: "boolean", description: "Include the built-in outcomes and actions" },
-          },
-          async run(input, context) {
-            const own = (await load(projectOf(context))).terms;
-            const ids = new Set(own.map((e) => e.id));
-            const entries = input.options.all ? [...own, ...DEFAULT_TERMS.filter((e) => !ids.has(e.id))] : own;
-            return { exitCode: 0, stdout: exportTerms(entries, input.options.format) };
-          },
-        }),
-      },
-    }),
-  );
+  bb.cli.register(lexiconCli({ load, mutate }));
 
   bb.log.info("loaded");
   bb.onDispose(() => bb.log.info("disposed"));
-}
-
-/** The project's terms first, then the built-in set, then learned names: where two claim a wording the earlier keeps it. */
-function assemble(project: Entry[], learned: Entry[], off: ReadonlySet<string> = new Set()): Entry[] {
-  const ids = new Set(project.map((e) => e.id));
-  const defaults = DEFAULT_TERMS.filter((e) => !ids.has(e.id)).map((e) => (off.has(e.id) ? { ...e, disabled: true } : e));
-  const all = [...project, ...defaults, ...learned].map((e) => ({ ...e }));
-  lintOwnership(all, []);
-  return all;
-}
-
-const run = (file: string, args: string[]) =>
-  new Promise<string>((done, fail) => execFile(file, args, { timeout: 5000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => (error ? fail(error) : done(stdout))));
-
-const SOURCE_GLOBS = ["*.ts", "*.tsx", "*.mts", "*.js", "*.jsx", "*.mjs"];
-
-/** Tracked source and docs files in `path` (a local git checkout), optionally under one folder, at most `max`. */
-async function trackedFiles(path: string, folder: string, max: number): Promise<string[]> {
-  const listed = await run("git", ["-C", path, "ls-files", "-z", "--", ...[...SOURCE_GLOBS, "*.md", "*.py", "*.go", "*.rs", "*.java", "*.kt", "*.rb", "*.cs"].map((glob) => (folder ? `${folder}/**/${glob}` : glob))]);
-  return listed
-    .split("\0")
-    .filter((file) => file && !file.includes(".test.") && !file.endsWith(".d.ts") && !file.includes("node_modules/") && !file.endsWith("lock.json"))
-    .slice(0, max);
-}
-
-/** Package names and exported compound identifiers of the tracked source in `path`. `complete` is false when files were left unread, so absences prove nothing. */
-async function scan(path: string): Promise<{ packages: string[]; identifiers: Set<string>; complete: boolean }> {
-  const listed = await run("git", ["-C", path, "ls-files", "-z", "--", ...SOURCE_GLOBS, "package.json", "*/package.json"]);
-  const all = listed.split("\0").filter((file) => file && !file.includes(".test.") && !file.endsWith(".d.ts") && !file.includes("node_modules/"));
-  const files = all.slice(0, MAX_FILES);
-  const packages: string[] = [];
-  const identifiers = new Set<string>();
-  let complete = all.length <= MAX_FILES;
-  for (let at = 0; at < files.length; at += 16) {
-    await Promise.all(
-      files.slice(at, at + 16).map(async (file) => {
-        try {
-          const text = await readFile(resolve(path, file), "utf8");
-          if (text.length > MAX_FILE_BYTES) {
-            complete = false;
-            return;
-          }
-          if (file.endsWith("package.json")) {
-            const name = packageName(text);
-            if (name) packages.push(name);
-          } else for (const name of exportedNames(text)) identifiers.add(name);
-        } catch {
-          complete = false;
-        }
-      }),
-    );
-  }
-  return { packages, identifiers, complete };
-}
-
-async function readText(file: string, cwd: string | undefined): Promise<string> {
-  const path = resolve(cwd ?? process.cwd(), file);
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    throw new PluginCliError(`cannot read ${path}`, { code: "file_not_found" });
-  }
-}
-
-/** A short, stable digest of a string, for the revision of what changed. */
-function hash(text: string): string {
-  let h = 5381;
-  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
 }

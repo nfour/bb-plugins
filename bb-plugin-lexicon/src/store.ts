@@ -303,6 +303,22 @@ export function userAdd(store: Store, input: UserTerm, ctx: Pick<Context, "now" 
   return { ...done, ok: true, reply: `Added ${term}.` };
 }
 
+/** The user gives a term another wording. Any term of the project may take it (an agent's too), a disabled one as well; a wording another term or a built-in owns is refused. */
+export function userAlias(store: Store, input: { id: string; alias: string }, ctx: Pick<Context, "now" | "defaults">): Outcome {
+  const fail = (reply: string): Outcome => ({ store, ok: false, reply });
+  const target = store.terms.find((e) => e.id === input.id);
+  if (!target) return fail("That term is gone.");
+  const alias = houseForm(input.alias, target.kind);
+  const bad = checkWording(alias, "wording");
+  if (bad) return fail(`${bad[0]!.toUpperCase()}${bad.slice(1)}.`);
+  const owner = ownerOf([...store.terms, ...ctx.defaults], alias);
+  if (owner) return fail(owner === target ? `"${alias}" is already a wording of ${target.term}.` : `"${alias}" already belongs to "${owner.term}".`);
+  if (target.aliases.length >= 16) return fail(`${target.term} already has 16 aliases.`);
+  const after: Entry = { ...target, aliases: [...target.aliases, alias], seen: ctx.now };
+  const done = withChange(store, { at: ctx.now, by: "user", op: "alias", id: target.id, summary: `${alias} is now an alias of ${target.term}`, before: target, after }, store.terms.map((e) => (e === target ? after : e)));
+  return { ...done, ok: true, reply: `${alias} is now an alias of ${target.term}.` };
+}
+
 export function userEdit(store: Store, action: UserAction, id: string, ctx: Pick<Context, "now" | "defaults">): Outcome {
   if (action === "approve" || action === "reject") {
     const pending = store.pending.find((p) => p.id === id);

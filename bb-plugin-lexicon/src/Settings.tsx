@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useBbContext, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { rpcContract, SettingKey } from "../server";
 import { DEFAULT_TERMS } from "./defaults";
-import { KINDS, TONES, type Entry, type Kind, type Tone } from "./lexicon";
+import { KIND_KEYS, KINDS, TONES, type Entry, type Kind, type Tone } from "./lexicon";
 import { useOptions } from "./options";
 
 interface Line {
@@ -38,6 +38,7 @@ const SWITCHES: { key: SettingKey; label: string; about: string }[] = [
   { key: "enabled", label: "Colour terms", about: "Paints the lexicon's terms in replies and prompts, in the same colour every time. Off leaves chat plain; your terms are kept." },
   { key: "symbols", label: "Learn names", about: "Also paints package and identifier names it reads from the project's source files (read-only; nothing is stored in your workspace)." },
   { key: "agents", label: "Agents maintain", about: "Gives agents the lexicon tools and the project's terms, so they use the same wording and can add, alias, rename or retire terms. Off hides all of that from them." },
+  { key: "paintPrompts", label: "Colour my messages", about: "Paints terms in your own prompts too. Off, only replies are painted." },
   { key: "proposals", label: "Agents propose", about: "Agent changes wait here for your approval instead of applying at once. Only matters while agents maintain the lexicon." },
 ];
 
@@ -111,7 +112,21 @@ export function Settings({ standalone = false }: { standalone?: boolean }) {
               </label>
             );
           })}
-        </div></div>
+        </div>
+        <div className="lexicon-kinds" data-off={options.enabled ? undefined : ""}>
+          <span className="lexicon-switch-text">
+            <span className="lexicon-switch-label">Colour these kinds</span>
+            <span className="lexicon-meta">Kinds left off stay in the lexicon but are not painted.</span>
+          </span>
+          <span className="lexicon-kind-chips">
+            {KINDS.map((kind) => (
+              <button className="lexicon-kind-chip" key={kind} title={KIND_LABEL[kind].hint} aria-pressed={options[KIND_KEYS[kind]]} disabled={!options.enabled} onClick={() => toggle(KIND_KEYS[kind])}>
+                {KIND_LABEL[kind].title}
+              </button>
+            ))}
+          </span>
+        </div>
+        </div>
         ) : null}
       </section>
       <section className="lexicon-settings">

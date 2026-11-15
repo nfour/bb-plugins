@@ -14,6 +14,11 @@
 .lexicon-switch-text { display: grid; gap: 2px; min-width: 0; }
 .lexicon-switch-label { font-weight: 500; }
 
+.lexicon-kinds { display: grid; gap: 8px; padding: 9px 12px; border-top: 1px solid color-mix(in oklab, currentColor 10%, transparent); }
+.lexicon-kinds[data-off] { opacity: 0.45; }
+.lexicon-kind-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lexicon-kind-chip { padding: 2px 10px; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); border-radius: 10px; background: none; color: inherit; font: inherit; font-size: 12px; cursor: pointer; opacity: 0.6; }
+.lexicon-kind-chip[aria-pressed="true"] { opacity: 1; background: color-mix(in oklab, oklch(0.65 0.14 185) 22%, transparent); border-color: color-mix(in oklab, oklch(0.65 0.14 185) 60%, transparent); }
 .lexicon-switch[data-off] { opacity: 0.45; cursor: default; }
 .lexicon-toggle-input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: inherit; }
 .lexicon-track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: color-mix(in oklab, currentColor 22%, transparent); transition-property: background-color; transition-duration: 0.12s; }
@@ -59,3 +64,10 @@
 .lexicon-button { font: inherit; font-size: 12px; padding: 1px 8px; border-radius: 6px; cursor: pointer; border: 1px solid color-mix(in oklab, currentColor 25%, transparent); background: transparent; color: inherit; }
 .lexicon-button:disabled { opacity: 0.45; cursor: default; }
 .lexicon-empty { padding: 8px; opacity: 0.6; }
+.lexicon-dialog { position: fixed; top: 14vh; left: 50%; translate: -50% 0; z-index: 60; display: grid; gap: 8px; width: min(420px, 92vw); padding: 12px; box-sizing: border-box; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); border-radius: 10px; background: var(--surface-raised-solid, Canvas); color: var(--foreground, CanvasText); box-shadow: 0 8px 28px rgb(0 0 0 / 0.25); font-size: 13px; }
+.lexicon-dialog-title { font-weight: 600; }
+
+.lexicon-pop { position: fixed; z-index: 60; display: grid; gap: 4px; max-width: min(320px, 92vw); padding: 10px 12px; box-sizing: border-box; border: 1px solid color-mix(in oklab, currentColor 18%, transparent); border-radius: 10px; background: var(--surface-raised-solid, Canvas); color: var(--foreground, CanvasText); box-shadow: 0 8px 28px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; }
+.lexicon-pop-title { font-weight: 600; }
+.lexicon-pop-kind { opacity: 0.65; font-size: 12px; }
+.lexicon-pop-line { overflow-wrap: anywhere; }

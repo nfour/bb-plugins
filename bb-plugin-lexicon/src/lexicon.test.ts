@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { properNoun, houseForm, compile, findTerms, highlightName, highlightRule, parseLexicon, type Matcher } from "./lexicon.ts";
+import { assemble, ownership, hash, KIND_KEYS, KINDS, properNoun, houseForm, compile, findTerms, highlightName, highlightRule, parseLexicon, type Entry, type Matcher } from "./lexicon.ts";
 
 const file = (terms: unknown[]) => JSON.stringify({ terms });
 
@@ -145,4 +145,39 @@ test("concepts are written as proper nouns; identifiers and verbs are left alone
   assert.equal(houseForm("flat list", "option"), "Flat List");
   assert.equal(houseForm("reverted", "outcome"), "reverted");
   assert.equal(houseForm("useStuckRows", "code"), "useStuckRows");
+});
+
+test("assemble: project terms win, built-ins come next, switched-off built-ins are marked, stored entries are not changed", () => {
+  const e = (id: string, term: string, aliases: string[] = []): Entry => ({ id, term, kind: "feature", aliases, code: [] });
+  const project = [e("a", "Alpha Page", ["Beta Page"])];
+  const defaults = [e("d1", "Gamma Page"), e("d2", "Beta Page")];
+  const learned = [e("l1", "alpha page")];
+  const out = assemble(project, defaults, learned, new Set(["d1"]));
+  assert.deepEqual(out.map((x) => [x.id, x.term]), [["a", "Alpha Page"], ["d1", "Gamma Page"], ["d2", ""], ["l1", ""]]);
+  assert.equal(out[1]!.disabled, true);
+  assert.equal(defaults[0]!.disabled, undefined);
+  assert.deepEqual(project[0]!.aliases, ["Beta Page"]);
+  assert.equal(assemble(project, [e("a", "Other Page")], []).length, 1);
+});
+
+test("hash is stable and tells different texts apart", () => {
+  assert.equal(hash("abc"), hash("abc"));
+  assert.notEqual(hash("abc"), hash("abd"));
+});
+
+test("every kind has its own setting key", () => {
+  assert.deepEqual(Object.keys(KIND_KEYS).sort(), [...KINDS].sort());
+  assert.equal(new Set(Object.values(KIND_KEYS)).size, KINDS.length);
+});
+
+test("ownership: reports who lost a wording, shares what is clean, and never changes its input", () => {
+  const e = (id: string, term: string, aliases: string[] = [], code: string[] = []): Entry => ({ id, term, kind: "feature", aliases, code });
+  const input = [e("a", "Alpha Page", ["Beta Page"]), e("b", "Beta Page", ["Gamma Page"], ["alpha page"]), e("c", "Clean Page")];
+  const before = JSON.stringify(input);
+  const { entries, issues } = ownership(input);
+  assert.equal(JSON.stringify(input), before);
+  assert.equal(entries[0], input[0]);
+  assert.equal(entries[2], input[2]);
+  assert.deepEqual(entries[1], { id: "b", term: "", kind: "feature", aliases: ["Gamma Page"], code: [] });
+  assert.deepEqual(issues.map((i) => i.entry), ["b", "b"]);
 });

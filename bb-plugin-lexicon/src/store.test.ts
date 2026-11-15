@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { userAdd, briefing, suggest, applyOp, digest, emptyStore, isPlainWord, sweep, undo, userEdit, STALE_AFTER_MS, RETIRE_AFTER_MS, type AgentOp, type Context, type Store } from "./store.ts";
+import { userAdd, userAlias, briefing, suggest, applyOp, digest, emptyStore, isPlainWord, sweep, undo, userEdit, STALE_AFTER_MS, RETIRE_AFTER_MS, type AgentOp, type Context, type Store } from "./store.ts";
 import { mineTerms, tokensOf } from "./mine.ts";
 import { DEFAULT_TERMS } from "./defaults.ts";
 import { compile, findTerms, highlightRule } from "./lexicon.ts";
@@ -186,4 +186,18 @@ test("a disabled term is kept and still owns its wordings, but is not painted, s
   assert.equal(on.store.terms[0]?.disabled, undefined);
   assert.equal(findTerms("the frozen folders", compile(on.store.terms)).length, 1);
   assert.equal(undo(off.store).store.terms[0]?.disabled, undefined);
+});
+
+test("the user gives a term another wording: any term, owned wordings refused, undoable", () => {
+  const made = must(emptyStore(), add());
+  const now = { now: NOW, defaults: DEFAULT_TERMS };
+  const out = userAlias(made, { id: "frozen-folders", alias: "stuck folders" }, now);
+  assert.ok(out.ok, out.reply);
+  assert.deepEqual(out.store.terms[0]?.aliases, ["Stuck Folders"]);
+  assert.equal(findTerms("the stuck folders", compile(out.store.terms)).length, 1);
+  assert.equal(out.store.log.at(-1)?.by, "user");
+  assert.match(userAlias(out.store, { id: "frozen-folders", alias: "Stuck Folders" }, now).reply, /already a wording/);
+  assert.match(userAlias(out.store, { id: "frozen-folders", alias: "reverted" }, now).reply, /already belongs to/);
+  assert.match(userAlias(out.store, { id: "ghost", alias: "stuck" }, now).reply, /gone/);
+  assert.equal(undo(out.store).store.terms[0]?.aliases.length, 0);
 });

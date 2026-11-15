@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-lexicon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "build": "bb plugin build",
     "dev": "bb plugin dev",
     "check": "tsc --noEmit",
-    "test": "node --test src/lexicon.test.ts src/symbols.test.ts src/store.test.ts"
+    "test": "node --test src/lexicon.test.ts src/symbols.test.ts src/store.test.ts src/spans.test.ts src/export.test.ts src/signal.test.ts src/explain.test.ts"
   },
   "bb": {
     "name": "Lexicon",

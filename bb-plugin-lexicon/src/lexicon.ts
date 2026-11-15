@@ -11,6 +11,8 @@
 
 export const KINDS = ["name", "feature", "option", "code", "action", "outcome", "topic"] as const;
 export type Kind = (typeof KINDS)[number];
+/** The boolean setting that switches each kind's colouring on or off. */
+export const KIND_KEYS = { name: "kindName", feature: "kindFeature", option: "kindOption", code: "kindCode", action: "kindAction", outcome: "kindOutcome", topic: "kindTopic" } as const satisfies Record<Kind, string>;
 /** Kinds written as proper nouns in Title Case. Actions and outcomes are plain verbs and results; code is written as the code spells it. */
 export const PROPER_KINDS: readonly Kind[] = ["name", "feature", "option", "topic"];
 const MINOR = new Set(["a", "an", "the", "of", "on", "in", "to", "and", "or", "for", "at", "by", "as"]);
@@ -51,7 +53,7 @@ export interface Entry {
   tone?: Tone;
   /** 0-359. Overrides the hue the term would take from its parent or its kind. */
   hue?: number;
-  /** One line saying what the term is. Required of agents, shown on hover. */
+  /** One line saying what the term is. Required of agents, shown when the word is clicked. */
   note?: string;
   /** Who stands behind it: `pinned` (the user's, agents cannot change or remove it; the default) or `auto` (an agent's, painted lighter until the user pins it). */
   status?: "pinned" | "auto";
@@ -164,8 +166,8 @@ export function parseLexicon(text: string): Parsed {
   });
 
   lintParents(entries, issues);
-  lintOwnership(entries, issues);
-  return { entries, issues };
+  const owned = ownership(entries);
+  return { entries: owned.entries, issues: [...issues, ...owned.issues] };
 }
 
 function validPhrase(value: string): boolean {
@@ -194,10 +196,15 @@ function lintParents(entries: Entry[], issues: Issue[]): void {
   }
 }
 
-/** Every wording belongs to one entry, compared without regard to case; the later claim loses. */
-export function lintOwnership(entries: Entry[], issues: Issue[]): void {
+/**
+ * Every wording belongs to one entry, compared without regard to case; the later
+ * claim loses. Nothing in `entries` is changed: an entry that keeps all its
+ * wordings is returned as it is, and one that loses some comes back as a copy.
+ */
+export function ownership(entries: readonly Entry[]): { entries: Entry[]; issues: Issue[] } {
   const owner = new Map<string, string>();
-  for (const entry of entries) {
+  const issues: Issue[] = [];
+  const out = entries.map((entry) => {
     const claim = (word: string): boolean => {
       const key = word.toLowerCase();
       const held = owner.get(key);
@@ -210,11 +217,15 @@ export function lintOwnership(entries: Entry[], issues: Issue[]): void {
     };
     // A term that loses its wording to an earlier entry stays in the file but paints nothing.
     const termOwned = claim(entry.term);
-    if (!termOwned) entry.term = "";
-    entry.aliases = entry.aliases.filter(claim);
-    entry.code = entry.code.filter(claim);
-    if (entry.retired) entry.retired = entry.retired.filter(claim);
-  }
+    const aliases = entry.aliases.filter(claim);
+    const code = entry.code.filter(claim);
+    const retired = entry.retired?.filter(claim);
+    if (termOwned && aliases.length === entry.aliases.length && code.length === entry.code.length && (retired?.length ?? 0) === (entry.retired?.length ?? 0)) return entry;
+    const copy: Entry = { ...entry, term: termOwned ? entry.term : "", aliases, code };
+    if (retired) copy.retired = retired;
+    return copy;
+  });
+  return { entries: out, issues };
 }
 
 /** Whether `word` is a wording of any entry, ignoring case. */
@@ -397,4 +408,18 @@ export function findTerms(text: string, matcher: Matcher): Found[] {
     kept.push(next);
   }
   return kept;
+}
+
+/** The project's terms first, then the built-in set (those switched off marked), then learned names: where two claim a wording the earlier keeps it. Copies, so the stored entries are never changed. */
+export function assemble(project: readonly Entry[], defaults: readonly Entry[], learned: readonly Entry[], off: ReadonlySet<string> = new Set()): Entry[] {
+  const ids = new Set(project.map((e) => e.id));
+  const builtIn = defaults.filter((e) => !ids.has(e.id)).map((e) => (off.has(e.id) ? { ...e, disabled: true } : e));
+  return ownership([...project, ...builtIn, ...learned]).entries;
+}
+
+/** A short, stable digest of a string, for the revision of what changed. */
+export function hash(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
 }
