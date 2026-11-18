@@ -15,120 +15,127 @@ export function flatten(rows: readonly Row[], out: Row[] = []): Row[] {
   return out;
 }
 
-/** How a delta lists the page's order: a `[start, count]` stretch of the rows already held (`count` rows from index `start`), or the id of one row. */
+/** How a delta lists the page's order: a `[start, count]` stretch of the rows already held (`count` rows from index `start`), or the id of one new row. */
 export type RowOrder = readonly (string | readonly [number, number])[];
 
-/** One step of a row patch (bb 0.50): `path` is a non-empty list of keys and array indexes into the row's JSON. */
-export type PatchOp = readonly ["append", Path, string] | readonly ["set", Path, unknown] | readonly ["delete", Path];
-type Path = readonly (string | number)[];
+/** Where in a row an op acts: string keys and array indexes, never empty. */
+type PatchPath = readonly (string | number)[];
+/** One change to a row already held, as BB (0.50 and later) sends it in a delta's `patchRows`. */
+export type RowOp = readonly ["append", PatchPath, string] | readonly ["set", PatchPath, unknown] | readonly ["delete", PatchPath];
 export interface RowPatch {
   id: string;
-  ops: readonly PatchOp[];
+  ops: readonly RowOp[];
 }
 
-type Json = Record<string, unknown> | unknown[];
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const BAD = Symbol("a patch that does not fit");
 
-const isContainer = (value: unknown): value is Json => typeof value === "object" && value !== null;
-/** Keys that would reach the prototype chain are never followed. */
-const SAFE_KEY = (key: string | number): boolean => key !== "__proto__" && key !== "constructor" && key !== "prototype";
+/** The value an op leaves at its last key: `set` replaces it, `append` extends a string that is there. */
+function leaf(held: unknown, op: RowOp): unknown {
+  if (op[0] === "set") return op[2];
+  return op[0] === "append" && typeof held === "string" ? held + op[2] : BAD;
+}
 
 /**
- * `row` with the ops of one patch applied, as a new row: the objects and arrays along each path are copied and every
- * other part is shared, so the held row is never changed. The ops mean what bb's `diffJsonValue` makes of them: `append`
- * adds text to the string at the path, `set` puts a value there (objects along the way are created; an array takes an
- * index up to its length), `delete` removes an object's key. Returns null when an op does not fit the row (a path that
- * does not resolve, an `append` to something that is not a string, a `delete` of an array element, which bb never sends),
- * and the caller reads a full page.
+ * `node` with `op` applied at `op[1][depth]` and below: copied along the path, `node` itself never
+ * touched. Follows BB's own client, and reads only a row's own keys: no key is created on the way (`set` makes only its last key, or the
+ * array slot just past the end), `append` needs a string, `delete` needs an object key that exists
+ * (an array element is replaced as a whole array, never deleted), and anything else is `BAD`.
  */
-export function patchRow<T extends object>(row: T, ops: readonly PatchOp[]): T | null {
-  const root: Record<string, unknown> = { ...(row as Record<string, unknown>) };
-  /** The nodes already copied by this patch, so a second op on the same one does not copy it again. */
-  const copied = new WeakSet<object>([root]);
-  const own = (node: Json): Json => {
-    if (copied.has(node)) return node;
-    const copy = Array.isArray(node) ? [...node] : { ...node };
-    copied.add(copy);
+function patchAt(node: unknown, op: RowOp, depth: number): unknown {
+  const path = op[1];
+  const key = path[depth]!;
+  const last = depth === path.length - 1;
+  if (Array.isArray(node)) {
+    if (typeof key !== "number" || !Number.isInteger(key) || key < 0 || key > node.length) return BAD;
+    if (last && op[0] === "delete") return BAD;
+    const next = last ? leaf(node[key], op) : patchAt(node[key], op, depth + 1);
+    if (next === BAD) return BAD;
+    const copy = [...node];
+    copy[key] = next;
     return copy;
-  };
-  for (const op of ops) {
-    const [kind, path] = op;
-    if (!Array.isArray(path) || path.length === 0 || !path.every(SAFE_KEY)) return null;
-    // Walk to the node that holds the last step, copying each node on the way and re-linking it to its parent.
-    let at: Json = root;
-    for (let step = 0; step < path.length - 1; step++) {
-      const key = path[step]!;
-      const child = (at as Record<string | number, unknown>)[key];
-      let next: Json;
-      if (isContainer(child)) next = own(child);
-      else if (child === undefined && kind === "set" && typeof key === "string" && !Array.isArray(at)) next = {};
-      else if (child === undefined && kind === "set" && typeof key === "number" && Array.isArray(at) && key === at.length) next = {};
-      else return null;
-      if (!placeable(at, key)) return null;
-      (at as Record<string | number, unknown>)[key] = next;
-      at = next;
-    }
-    const last = path[path.length - 1]!;
-    const target = at as Record<string | number, unknown>;
-    if (kind === "append") {
-      const text = op[2];
-      if (typeof text !== "string" || typeof target[last] !== "string") return null;
-      target[last] = (target[last] as string) + text;
-    } else if (kind === "set") {
-      if (!placeable(at, last)) return null;
-      target[last] = op[2];
-    } else if (kind === "delete") {
-      if (Array.isArray(at) || !(typeof last === "string" && Object.hasOwn(at, last))) return null;
-      delete target[last];
-    } else return null;
   }
-  return root as unknown as T;
+  if (!isObject(node) || typeof key !== "string") return BAD;
+  // Only the row's own keys are read: `toString` or `__proto__` are never found through the prototype.
+  const held = Object.hasOwn(node, key) ? node[key] : undefined;
+  if (last && op[0] === "delete") {
+    if (held === undefined) return BAD;
+    const { [key]: _gone, ...rest } = node;
+    return rest;
+  }
+  const next = last ? leaf(held, op) : patchAt(held, op, depth + 1);
+  if (next === BAD) return BAD;
+  const copy = { ...node };
+  // Not an assignment: a key like `__proto__` must stay a plain key.
+  Object.defineProperty(copy, key, { configurable: true, enumerable: true, value: next, writable: true });
+  return copy;
 }
 
-/** Whether `key` can be written in `node`: a string key in an object, an index up to the length in an array. */
-function placeable(node: Json, key: string | number): boolean {
-  if (Array.isArray(node)) return typeof key === "number" && Number.isInteger(key) && key >= 0 && key <= node.length;
-  return typeof key === "string";
+/** A copy of `row` with `ops` applied in order, or null when one does not fit or the row would change its id or kind. */
+export function patchRow<T extends { id: string }>(row: T, ops: readonly RowOp[]): T | null {
+  let now: unknown = row;
+  for (const op of ops) {
+    if (op[1].length === 0) return null;
+    now = patchAt(now, op, 0);
+    if (now === BAD) return null;
+  }
+  const kind = (row as { kind?: unknown }).kind;
+  return isObject(now) && now.id === row.id && now.kind === kind ? (now as T) : null;
 }
 
 /**
- * The page a delta read stands for: `page` (the rows as the last read left them) with `upsertRows`
- * put in their places and `patchRows` applied to the rows held. Without `rowOrder` the order is unchanged and every
- * upsert must already be on the page; with it, the page is rebuilt from the stretches and ids listed. Returns null when
- * the delta does not fit what is held (a stretch out of range, an id nowhere, a patch for a row not held or one that
- * does not apply), and the caller reads a full page instead.
+ * The page a delta read stands for: `page` (the rows as the last read left them) with the delta's
+ * changes put in their places. `upsertRows` are new or whole replacement rows; `patchRows` are changes to rows
+ * held (BB 0.50 sends a changed row as ops, not whole). Without `rowOrder` the order is unchanged and every
+ * upsert and patch must be for a row already on the page; with it, the page is rebuilt from the stretches
+ * (`[start, count]`) and ids listed. Returns null when the delta does not fit what is held (a stretch out of range, an id
+ * nowhere, a patch that does not apply, a row left out or counted twice), and the caller reads a full
+ * page instead. The held rows are never changed.
  */
 export function applyDelta<T extends { id: string }>(
   page: readonly T[],
   delta: { upsertRows: readonly T[]; patchRows?: readonly RowPatch[]; rowOrder?: RowOrder },
 ): T[] | null {
   const upserts = new Map(delta.upsertRows.map((row) => [row.id, row]));
-  for (const patch of delta.patchRows ?? []) {
-    const held = page.find((row) => row.id === patch.id);
-    const next = held ? patchRow(held, patch.ops) : null;
-    if (!next) return null;
-    upserts.set(patch.id, next);
-  }
-  if (!delta.rowOrder) {
-    const out = page.map((row) => upserts.get(row.id) ?? row);
-    for (const id of upserts.keys()) if (!page.some((row) => row.id === id)) return null;
-    return out;
-  }
-  const held = new Map(page.map((row) => [row.id, row]));
-  const out: T[] = [];
-  for (const entry of delta.rowOrder) {
-    if (typeof entry === "string") {
-      const row = upserts.get(entry) ?? held.get(entry);
-      if (!row) return null;
-      out.push(row);
-      continue;
+  const patches = new Map((delta.patchRows ?? []).map((patch) => [patch.id, patch.ops]));
+  if (upserts.size !== delta.upsertRows.length || patches.size !== (delta.patchRows ?? []).length) return null;
+  let upserted = 0;
+  let patched = 0;
+  let broken = false;
+  // A held row as the delta leaves it.
+  const place = (row: T): T => {
+    const whole = upserts.get(row.id);
+    if (whole) {
+      upserted++;
+      return whole;
     }
-    const [start, count] = entry;
-    if (!(Number.isInteger(start) && Number.isInteger(count) && start >= 0 && count >= 0 && start + count <= page.length)) return null;
-    for (let i = start; i < start + count; i++) out.push(upserts.get(page[i]!.id) ?? page[i]!);
+    const ops = patches.get(row.id);
+    if (!ops) return row;
+    patched++;
+    const next = patchRow(row, ops);
+    if (!next) broken = true;
+    return next ?? row;
+  };
+  const out: T[] = [];
+  if (!delta.rowOrder) {
+    for (const row of page) out.push(place(row));
+  } else {
+    for (const entry of delta.rowOrder) {
+      if (typeof entry === "string") {
+        // A row named by id is a new one; a held row comes in a stretch.
+        const row = upserts.get(entry);
+        if (!row) return null;
+        upserted++;
+        out.push(row);
+        continue;
+      }
+      const [start, count] = entry;
+      if (!(Number.isInteger(start) && Number.isInteger(count) && start >= 0 && count >= 0 && start + count <= page.length)) return null;
+      for (let i = start; i < start + count; i++) out.push(place(page[i]!));
+    }
   }
-  // Every upsert must have a place, or a row would be lost.
-  for (const id of upserts.keys()) if (!out.some((row) => row.id === id)) return null;
-  return out;
+  // Every upsert and patch must have found its row exactly once, or a change would be lost.
+  return !broken && upserted === upserts.size && patched === patches.size ? out : null;
 }
 
 /**

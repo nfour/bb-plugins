@@ -336,6 +336,58 @@ test("a delta that does not fit what is held is answered with a full read", asyn
   }
 });
 
+test("a delta that names another read than the held one is answered with a full read", async () => {
+  clock();
+  try {
+    const f = scripted((q) => (q.afterTag === "t1" ? delta("zzz", "t2", [row("a", 1, "changed")]) : full([row("a", 1)], q.afterTag ? "x" : "t1")));
+    const seen: Rows[] = [];
+    const watch = watchTimeline(f.sdk, "t", (rows) => seen.push(rows), false, true);
+    await flush();
+    f.signal("message-added");
+    mock.timers.tick(400);
+    await flush();
+    assert.equal(f.calls.length, 3, "the delta, then a full read");
+    assert.equal(f.calls[2]!.afterTag, undefined);
+    assert.equal(seen[seen.length - 1]!.items[0]!.tip, "hello", "the changed row of the stale delta was not used");
+    watch.stop();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a delta that does not fit while the pane goes inactive is read as a full page when it wakes", async () => {
+  clock();
+  try {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const f = scripted(async (q) => {
+      if (q.afterTag === "t1") {
+        await gate;
+        return delta("t1", "t2", [], [[0, 9]]);
+      }
+      return full([row("a", 1, q.afterTag === undefined && f.calls.length > 2 ? "second" : "hello")], "t1");
+    });
+    const seen: Rows[] = [];
+    const watch = watchTimeline(f.sdk, "t", (rows) => seen.push(rows), false, true);
+    await flush();
+    f.signal("message-added");
+    mock.timers.tick(400);
+    await flush();
+    assert.equal(f.calls.length, 2, "the delta is in flight");
+    watch.setActive(false);
+    release();
+    await flush();
+    assert.equal(f.calls.length, 2, "an inactive pane reads nothing more");
+    watch.setActive(true);
+    await flush();
+    assert.equal(f.calls.length, 3, "it reads a full page when it wakes");
+    assert.equal(f.calls[2]!.afterTag, undefined);
+    watch.stop();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
 test("a rewrite of history and a minute of deltas both force a full read", async () => {
   clock();
   try {

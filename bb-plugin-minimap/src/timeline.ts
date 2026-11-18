@@ -117,19 +117,23 @@ export function watchTimeline(sdk: Sdk, threadId: string, publish: (rows: Rows) 
     const rewrite = replace;
     replace = false;
     try {
-      const asDelta = loaded && !rewrite && tag !== null && Date.now() - fullAt < FULL_EVERY_MS;
+      const asTag = tag;
+      const asDelta = loaded && !rewrite && asTag !== null && Date.now() - fullAt < FULL_EVERY_MS;
       // Tool rows' content is never read here (a row's size does not depend on it), so it is left out.
       const page = asDelta
-        ? await sdk.threads.timeline({ threadId, afterTag: tag!, deferContent: "true", signal: controller.signal })
+        ? await sdk.threads.timeline({ threadId, afterTag: asTag!, deferContent: "true", signal: controller.signal })
         : await sdk.threads.timeline({ threadId, deferContent: "true", signal: controller.signal });
       if (disposed || mine !== issued) return;
       let updates: readonly Row[] = [];
       let startOver = false;
       if ("delta" in page) {
-        const next = applyDelta(pageRows, page.delta);
+        // A delta stands on the read it names; if that is not the one held, or it does not fit what is held (a patch that
+        // does not apply, a row it names that is not here), read the whole page.
+        const next = page.delta.afterTag === asTag ? applyDelta(pageRows, page.delta) : null;
         if (!next) {
-          // The delta does not fit what is held: read the whole page.
           tag = null;
+          // The retry may find the pane inactive and return at once; what was missed is then read when it wakes.
+          stale = true;
           void newest();
           return;
         }
