@@ -38,6 +38,14 @@ Colours a project's key terms in replies and prompts with the CSS Custom Highlig
 - `src/ThreadMenu.ts`: a "Lexicon" thread action whose `choices` submenu has the switches and a link to the settings page (like Chat Dock's). The settings page is the only place for the kind switches.
 - BB icon names are its own set; an unknown name renders a bolt. The `~` picker uses `DiffModified`.
 
+## BB page facts relied on (checked in a headless page on bb 0.50.1, SDK 0.6.157, 2026-11-19)
+
+- One `[data-page-scroll-viewport]` holding one `[data-timeline-items]` per pane; rows `[data-timeline-row-id]` start with the thread id; replies match `:assistant:` and the reader's messages `:user-seed:` (`:user[-:]`); a `[data-timeline-window-spacer]` stands for rows BB left out. Reply text sits in P, LI, A, SPAN, STRONG and CODE inside `[data-markdown-preview]`; a prompt has P and A.
+- `document.caretPositionFromPoint` exists, and the Custom Highlight API paints the ranges (all kinds seen). BB has no slot to decorate words inside a message (a message renderer covers only a plugin's own rows), so the content script stays the way.
+- A nav panel still gets no scroller from BB, so the page scrolls itself (`.lexicon-page[data-standalone]`). A settings section is now given `PluginSettingsSectionProps` (BB's own setup hooks, none used), so it is passed as `() => <Settings />`.
+- The thread menu's "Plugin settings" row still works by `history.pushState` to `/settings/plugins/lexicon` and a `popstate`; the SDK has `toPluginPanel(path)` for a nav panel but no call for a plugin's settings page.
+- `experimental_hideFromNavigation` on a nav panel removes its sidebar, rail and palette entry; Lexicon keeps its entry (the page is where terms are reviewed).
+
 ## Gotchas
 
 - `bb plugin build` turns any Tailwind utility word standing alone anywhere in the folder (code, comments, tests, README, examples and this file: the common CSS keyword names, `position` values and display values, text-decoration and text-transform words) into a page-wide `:where([data-bb-plugin="lexicon"]…) .word` rule. After every build `grep -c ":where(\[data-bb-plugin=" dist/app.css` must be 0; to find the word, list the rules with `grep -o ":where(\[data-bb-plugin=lexicon\][^{]*" dist/app.css`. Split or reword it: `TABLE = "ta" + "ble"` in `src/Settings.tsx`, `GLOW` in `src/lexicon.ts`, `tabAway` in `src/tab.ts`, tests use "frozen" where a feature needs a name. Property values in `src/styles.css` (a `position` value) are fine. No Tailwind classes; the page's own classes are `lexicon-*` in `src/styles.css`.
