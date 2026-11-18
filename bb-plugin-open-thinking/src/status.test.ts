@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createStatus, isRunning } from "./status.ts";
+import { createStatus, isRunning, RETRY_MS } from "./status.ts";
 
 type Callback = (event: { id?: string; changes: string[]; metadata?: { statusChange?: { status: string } } }) => void;
 
@@ -98,19 +98,78 @@ test("a signal that arrives while the first read is out wins over that older rea
   assert.equal(status.working("a"), false);
 });
 
-test("a failed read is asked again on the next look", async () => {
+test("a failed read is not asked again for RETRY_MS, then on the next look", async () => {
   let calls = 0;
+  let clock = 1000;
   const sdk = {
     subscribe: () => () => {},
     threads: { get: () => (++calls === 1 ? Promise.reject(new Error("down")) : Promise.resolve({ status: "active" })) },
   };
-  const status = createStatus(sdk as never, () => {});
+  const status = createStatus(sdk as never, () => {}, () => clock);
   assert.equal(status.working("a"), null);
   await new Promise((resolve) => setImmediate(resolve));
+  // Looks inside the gap send nothing.
+  for (let look = 0; look < 5; look++) assert.equal(status.working("a"), null);
+  clock += RETRY_MS - 1;
   assert.equal(status.working("a"), null);
+  assert.equal(calls, 1);
+  clock += 1;
+  assert.equal(status.working("a"), null);
+  assert.equal(calls, 2);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(status.working("a"), true);
   assert.equal(calls, 2);
+});
+
+test("a thread that keeps failing is asked once per gap", async () => {
+  let calls = 0;
+  let clock = 0;
+  const sdk = { subscribe: () => () => {}, threads: { get: () => (++calls, Promise.reject(new Error("down"))) } };
+  const status = createStatus(sdk as never, () => {}, () => clock);
+  for (let look = 0; look < 30; look++) {
+    status.working("a");
+    await new Promise((resolve) => setImmediate(resolve));
+    clock += 1000;
+  }
+  assert.equal(calls, 6);
+});
+
+test("refresh reads every asked thread again and a signal during that read wins", async () => {
+  const f = fake({ a: "active", b: "idle" });
+  const seen: string[] = [];
+  const status = createStatus(f.sdk, () => seen.push("change"));
+  status.working("a");
+  status.working("b");
+  await f.settle();
+  assert.equal(status.working("a"), true);
+  assert.equal(status.working("b"), false);
+  assert.deepEqual(f.reads, ["a", "b"]);
+  status.refresh();
+  assert.deepEqual(f.reads, ["a", "b", "a", "b"]);
+  f.emit({ id: "a", changes: ["status-changed"], metadata: { statusChange: { status: "idle" } } });
+  await f.settle();
+  assert.equal(status.working("a"), false);
+});
+
+test("refresh does not send a second read while one is out", () => {
+  const f = fake({ a: "active" });
+  const status = createStatus(f.sdk, () => {});
+  status.working("a");
+  status.refresh();
+  status.refresh();
+  assert.deepEqual(f.reads, ["a"]);
+});
+
+test("a refresh that fails keeps the known answer", async () => {
+  let fail = false;
+  const sdk = { subscribe: () => () => {}, threads: { get: () => (fail ? Promise.reject(new Error("down")) : Promise.resolve({ status: "active" })) } };
+  const status = createStatus(sdk as never, () => {});
+  status.working("a");
+  await new Promise((resolve) => setImmediate(resolve));
+  fail = true;
+  status.refresh();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(status.working("a"), true);
 });
 
 test("dispose unsubscribes and drops late answers", async () => {

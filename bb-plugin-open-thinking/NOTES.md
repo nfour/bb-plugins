@@ -24,7 +24,7 @@ What an agent working on this plugin must know. The user-facing description is `
 - `src/controller.ts`: one `MutationObserver` on `#root` (child list, subtree, added nodes only, filtered to nodes that are or hold a row, a scroller or a toggle), one capture-phase `click` listener on `document`, one `visibilitychange` listener. No timer except the one look after a click. In a background tab the observer is disconnected; on return it plans once. A toggle element is clicked again only for a different target than the last time (the guard that prevents loops), and the state change lands a moment after `click()`, so the page is not re-read for it.
 - `src/follow.ts`: `follow(box)` scrolls the live line's scroll box (BB's own child that scrolls) to its end while its text grows, until the reader scrolls up in it. A scroll event arrives after the text grew again, so only a move up counts as leaving. The box is found by computed overflow, so it needs no class name.
 - Keep-latest in the controller: per pane it remembers the newest thought and the toggle-bearing rows around it (`chainOf`); while the thread works a chain row found closed is clicked open unless the reader closed it (a trusted click on any row toggle marks it theirs). A toggle is clicked again for the same target only after 400 ms and at most 3 times in a row (BB folds a group again when different work follows); one `setTimeout` per click looks again. This is the plugin's one timer.
-- `src/status.ts` (tested with a fake sdk): one `threads.get` the first time a thread is asked about, then its own status from `thread:changed` (a signal that arrives during the read wins over it).
+- `src/status.ts` (tested with a fake sdk): one `threads.get` the first time a thread is asked about, then its own status from `thread:changed` (a signal that arrives during the read wins over it). A thread whose read failed is not asked again for `RETRY_MS` (5 s), so looks do not hammer it; `refresh()` reads every asked thread again, and the controller calls it when the page comes back to the foreground, because a `status-changed` signal missed during a gap would leave `working` stuck (whether bb replays missed signals was not checked). A refresh that fails keeps the known answer.
 - Settings: `SETTING_KEYS` in `src/shared.ts` (import-free); `server.ts` defines them and `set_setting`; the thread action is a `choices` submenu (`src/ThreadMenu.ts`).
 
 ## bb 0.50.1 re-check (2026-11-19)
@@ -34,13 +34,21 @@ What an agent working on this plugin must know. The user-facing description is `
 - **BB now follows streaming output itself in `TimelineDetailScroll` (`useStickyBottomScroll`), but only for terminal, tool and similar detail; the reasoning detail is a plain scrolling div, so `follow.ts` is still needed.**
 - **`threads.experimental_headState`** returns to-dos, slash commands, session options, extension states, plan prompt mode, model fallback and context usage. It has no status and no turn state, so it does not replace `threads.get` + `thread:changed` for "is the turn working". `thread:changed` metadata already lists `eventTypes` including `turn/started` and `turn/completed`; `status-changed` with `statusChange.status` stays the better signal, because a thread can start the next turn (a queued steer) straight after one completes.
 
+## Costs, measured on bb 0.50.1 (2026-11-19, headless, a 22-row thread)
+
+- A page read (`readPane`'s `querySelectorAll`) ran 3 times in 4.6 s of scrolling the whole thread up and down, at most once per frame, 0.1 ms each. Scrolling mounts few rows, so `sync` is not coalesced per frame: it would not save anything measurable.
+- The live line's box search (`liveScrollBox`) looks at the 16 descendants of the row's frame (the same component as a "Thought" row) and costs 0.03 ms for all of them with styles clean, so it is not cached.
+
 ## Decisions
 
 - **Page, not timeline data**: a row must be on the page to be opened and BB's folding decides when it is, so the page is watched anyway; no timeline reads also keeps it clear of bb 0.50's delta change (#7613).
 - **The reader's click is `isTrusted`**: keyboard activation raises a trusted click too. The plugin's own clicks are not. The list is per page session, not stored, so a reload governs everything again.
 - **Dropped from the plan**: the corrective second click when BB forces a row open (search does). It was rare, and the once-per-target guard already prevents loops.
+- **The reader's-click window starts only on a click on a row toggle** (a thinking row, a group, a "Worked for" row, or the live line), not on any click: a click on the composer or the sidebar is not the reader unfolding old thoughts, and used to hide the next new thought from keep-latest for 2 s.
+- **Row ids go into selectors through `CSS.escape`.** The item part of an id is a provider's string and bb escapes row ids for its own lookups; none of 522 real ids held a quote or backslash.
+- **`engines`**: `bb >=0.49` and SDK `>=0.6.94` are kept on purpose; the plugin uses only `sdk.subscribe`, `sdk.threads.get` and the thread-action and overlay slots, all in 0.6.94, but it is only tested on bb 0.49 and 0.50.1 with SDK 0.6.157.
 - **Version `0.0.0`**: the first release sets it.
 
 ## Not checked
 
-A background tab and back, the phone layout, a long streamed answer's observer cost, `completedTurnDisplay: "flat"`, providers that stream thinking for long, a real turn end closing thoughts live (checked on a finished turn and a forced idle thread, not at the moment of the flip), and bb 0.50.
+The phone layout; a background tab only as a simulated `visibilitychange` (going away and coming back sends one status read; that the observer stays disconnected while away is from reading the code); `completedTurnDisplay: "flat"`; providers that stream thinking for long and a live line that really overflows (the follow logic was run on a synthetic box); a real turn end closing thoughts live (checked on a finished turn and a forced idle thread, not at the moment of the flip); a thought group windowed out and back (not reproduced on 0.50.1).

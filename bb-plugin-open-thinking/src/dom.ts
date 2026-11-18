@@ -1,5 +1,5 @@
 /**
- * The only file that knows BB's markup (bb-app 0.49, undocumented): a timeline scroller
+ * The only file that knows BB's markup (bb-app 0.49 and 0.50.1, undocumented): a timeline scroller
  * `[data-page-scroll-viewport]` holds rows `[data-timeline-row-id]`; a thinking row's id is
  * `<thread>:op:reasoning:…|turn:<turn>|…`; its own `button[aria-expanded]` toggles it; a finished
  * turn is one `…:turn:<n>` row; the live "Thinking…" line is a toggle after the row list, outside
@@ -102,8 +102,9 @@ export function chainOf(row: Element): string[] {
   return ids;
 }
 
+/** Row ids carry a provider's item id, so they go into a selector escaped (BB escapes them for its own lookups too). */
 function rowById(scroller: Element, id: string): Element | null {
-  return scroller.querySelector(`[${ROW}="${id}"]`);
+  return scroller.querySelector(`[${ROW}="${CSS.escape(id)}"]`);
 }
 
 /** The thinking row with this id, on the page now. */
@@ -113,7 +114,7 @@ export function thinkingRow(scroller: Element, key: string): Element | null {
 
 /** The id of the group on the page that opens with this thought (a group's id ends with its first child's). */
 export function groupLedBy(scroller: Element, key: string): string | null {
-  return scroller.querySelector(`[${ROW}$=":work-summary:${key}"]`)?.getAttribute(ROW) ?? null;
+  return scroller.querySelector(`[${ROW}$="${CSS.escape(`:work-summary:${key}`)}"]`)?.getAttribute(ROW) ?? null;
 }
 
 /** A row's own toggle and whether it is open, when the row is on the page. */

@@ -164,8 +164,11 @@ export function startController(sdk: Sdk, rules: Rules): () => void {
   /** A click the reader made on a toggle: theirs from now on. The plugin's own `click()` is not trusted. */
   const onClick = (event: MouseEvent) => {
     if (!event.isTrusted) return;
-    readerAt = Date.now();
     const hit = thinkingToggleAt(event.target);
+    const row = hit ? null : rowToggleAt(event.target);
+    // Only a click on a row's toggle can bring old thoughts onto the page; a click on the composer or the sidebar
+    // must not hide the next new thought from keep-latest.
+    if (hit || row) readerAt = Date.now();
     if (hit) {
       if (!hit.live) own(owned, hit.thread, hit.key);
       else if (hit.scroller) {
@@ -175,13 +178,14 @@ export function startController(sdk: Sdk, rules: Rules): () => void {
       return;
     }
     // A group the reader closes is not reopened to keep the newest thought in view.
-    const row = rowToggleAt(event.target);
     if (row) own(owned, row.thread, row.key);
   };
   const onVisibility = () => {
     if (document.hidden) unobserve();
     else {
       observe();
+      // Signals may have been missed while the page was away: read each asked thread again.
+      status.refresh();
       sync();
     }
   };
