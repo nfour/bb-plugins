@@ -108,6 +108,22 @@ test("a patch that does not fit the row gives null", () => {
   assert.equal(patched([["delete", ["id"]]]), null);
 });
 
+test("a key named like a prototype member is a plain own key: followed when the row has it, missing when it does not", () => {
+  // JSON.parse makes `__proto__` an own key, as a row from bb's JSON has it.
+  const odd = JSON.parse('{"id":"m","kind":"message","constructor":{"name":"n"},"prototype":{"a":"x"},"__proto__":{"text":"p"}}') as Row;
+  const out = patchRow(odd, [["append", ["constructor", "name"], "!"], ["append", ["prototype", "a"], "y"], ["append", ["__proto__", "text"], "q"], ["set", ["__proto__", "more"], 1]])!;
+  assert.equal((out.constructor as unknown as { name: string }).name, "n!");
+  assert.deepEqual(out.prototype, { a: "xy" });
+  assert.deepEqual(Object.getOwnPropertyDescriptor(out, "__proto__")!.value, { text: "pq", more: 1 }, "an own key, not the prototype");
+  assert.equal(Object.getPrototypeOf(out), Object.prototype);
+  assert.deepEqual(odd.prototype, { a: "x" }, "the held row is as it was");
+  assert.equal(patchRow(row(), [["set", ["constructor", "name"], "x"]]), null, "a row without it: missing, not the prototype's");
+  assert.equal(patchRow(row(), [["delete", ["constructor"]]]), null);
+  assert.equal(patchRow(row(), [["append", ["prototype", "a"], "x"]]), null);
+  assert.equal(patchRow(row(), [["delete", ["__proto__"]]]), null);
+  assert.equal(patchRow(row(), [["set", ["__proto__", "x"], 1]]), null, "a path through the prototype is not made into an own key");
+});
+
 test("the prototype is not reachable and not changed by a patch", () => {
   assert.equal(patched([["append", ["__proto__", "x"], "y"]]), null);
   assert.equal(patched([["set", ["toString", "x"], 1]]), null, "a name only the prototype has");
@@ -132,6 +148,13 @@ test("a slid window with a patched row: what bb sends for it comes out right", (
   const page = ["a", "b", "c", "d", "e"].map((id) => r(id, id));
   const out = applyDelta(page, { upsertRows: [r("f", "f")], patchRows: [patch("c", ["append", ["text"], "!"])], rowOrder: [[1, 4], "f"] });
   assert.deepEqual(ids(out), ["bb", "cc!", "dd", "ee", "ff"]);
+});
+
+test("an id named twice among the upserts or the patches cannot be applied", () => {
+  const page = [r("a", "1"), r("b", "2")];
+  assert.equal(applyDelta(page, { upsertRows: [r("c", "x"), r("c", "y")], rowOrder: [[0, 2], "c"] }), null, "two upserts of one new row");
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: [patch("a", ["append", ["text"], "x"]), patch("a", ["append", ["text"], "y"])] }), null, "two patches of one row");
+  assert.equal(applyDelta(page, { upsertRows: [r("b", "x"), r("b", "y")] }), null, "two whole rows for one held row");
 });
 
 test("a delta whose patches or upserts are not each placed exactly once cannot be applied", () => {
@@ -275,7 +298,7 @@ function fakeServer() {
     const tag = `t${version}`;
     const timelinePage = { olderCursor: mode.older ? { anchorId: "x" } : null };
     if (afterTag && !mode.answerWholeToDelta) {
-      if (mode.badDelta) return { tag, delta: { upsertRows: [], rowOrder: [[0, 99]] } };
+      if (mode.badDelta) return { tag, delta: { afterTag, upsertRows: [], rowOrder: [[0, 99]] } };
       const last = rows[rows.length - 1]!;
       const fields = { timelinePage: mode.cursorField ?? timelinePage };
       if (mode.patch) return { tag, delta: { afterTag: mode.afterTag ?? afterTag, upsertRows: [], patchRows: mode.patch, fields } };
@@ -341,6 +364,22 @@ test("a patch that does not fit is followed by a whole read, and the page is nev
   s.edit("a", "again");
   assert.deepEqual(await readHeld(held, s.read), { delta: false }, "and a patch for a row that is not held");
   assert.deepEqual(ids(held.rows), ["aagain", "bwhole"]);
+});
+
+test("a delta that names no tag is not applied either", async () => {
+  const s = fakeServer();
+  const held = emptyHeld<Row>();
+  await readHeld(held, s.read);
+  s.push("c");
+  const named = s.read;
+  const unnamed = async (afterTag?: string): Promise<TimelineRead<Row>> => {
+    const page = await named(afterTag);
+    if ("delta" in page) delete page.delta.afterTag;
+    return page;
+  };
+  assert.deepEqual(await readHeld(held, unnamed), { delta: false });
+  assert.deepEqual(ids(held.rows), ["a", "b", "c"]);
+  assert.deepEqual(s.asked.slice(-2), ["t1", undefined], "a whole read followed");
 });
 
 test("a delta against another tag than the one held is not applied", async () => {

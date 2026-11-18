@@ -75,11 +75,14 @@ export function patchRow<T extends { id: string; kind?: unknown }>(row: T, ops: 
  * their places and `patchRows` applied to the rows held. Without `rowOrder` the order is unchanged; with it, the page
  * is rebuilt from the `[start, count]` stretches and the new ids listed. Returns null when the delta does not fit
  * what is held (a stretch out of range, an id that is not an upsert, a patch for a row not held or that does not
- * apply, an upsert or patch that was not placed exactly once), and the caller reads a full page instead.
+ * apply, an id named twice among the upserts or the patches, an upsert or patch that was not placed exactly once), and
+ * the caller reads a full page instead.
  */
 export function applyDelta<T extends { id: string; kind?: unknown }>(page: readonly T[], delta: { upsertRows: readonly T[]; patchRows?: readonly RowPatch[]; rowOrder?: RowOrder }): T[] | null {
   const upserts = new Map(delta.upsertRows.map((row) => [row.id, row]));
   const patches = new Map((delta.patchRows ?? []).map((patch) => [patch.id, patch.ops]));
+  // A row named twice would have one of its entries silently dropped.
+  if (upserts.size !== delta.upsertRows.length || patches.size !== (delta.patchRows ?? []).length) return null;
   let upserted = 0;
   let patched = 0;
   let broken = false;
@@ -152,8 +155,8 @@ export async function readHeld<T extends { id: string; kind?: unknown }>(held: H
   if (held.tag !== null && began - held.fullAt < FULL_EVERY_MS) {
     const page = await read(held.tag);
     if ("delta" in page) {
-      // A delta against another tag than the one held is not for this page.
-      const rows = page.delta.afterTag === undefined || page.delta.afterTag === held.tag ? applyDelta(held.rows, page.delta) : null;
+      // A delta is against the tag it names: one against another tag (or none) is not for this page.
+      const rows = page.delta.afterTag === held.tag ? applyDelta(held.rows, page.delta) : null;
       if (rows) {
         held.rows = rows;
         held.tag = page.tag ?? null;
