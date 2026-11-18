@@ -41,6 +41,9 @@ interface FakeThread {
   reads?: { afterTag?: string; deferContent?: string; includeNestedRows?: string }[];
   /** Make the next delta one that cannot be applied. */
   badDelta?: boolean;
+  /** Bumped by `edit`: the tag carries it, and the next delta says what changed in a held row. */
+  rev?: number;
+  patches?: { id: string; ops: unknown[] }[];
 }
 interface Push {
   title: string;
@@ -103,16 +106,19 @@ while true; do sleep 1; done
               throw new Error("timeline is not ready");
             }
             if (!thread.tagged) return { rows: thread.rows };
-            // The tag is the number of rows a read saw; a delta lists the rows added since.
-            const tag = `t${thread.rows.length}`;
-            const seen = afterTag ? Number(afterTag.slice(1)) : -1;
+            // The tag is the number of rows a read saw and the edits made; a delta lists the rows added since, and the
+            // patches of rows edited (the order is [start, count] stretches, as bb sends it).
+            const tag = `t${thread.rows.length}.${thread.rev ?? 0}`;
+            const seen = afterTag ? Number(afterTag.slice(1).split(".")[0]) : -1;
             if (afterTag && thread.badDelta) {
               thread.badDelta = false;
               return { tag, delta: { afterTag, upsertRows: [], rowOrder: [[0, 9999]] } };
             }
             if (afterTag && seen >= 0 && seen <= thread.rows.length) {
               const added = thread.rows.slice(seen);
-              return { tag, delta: { afterTag, upsertRows: added, rowOrder: [[0, seen], ...added.map((row) => String(row.id))] } };
+              const patchRows = thread.patches;
+              thread.patches = undefined;
+              return { tag, delta: { afterTag, upsertRows: added, ...(patchRows ? { patchRows } : {}), ...(added.length ? { rowOrder: [[0, seen], ...added.map((row) => String(row.id))] } : {}) } };
             }
             return { tag, rows: thread.rows, timelinePage: { olderCursor: null } };
           },
@@ -419,6 +425,62 @@ test("a watched share reads the timeline as deltas, and a guest still gets every
   assert.equal(reads.filter((r) => !r.afterTag).length, 1, "one whole read, at the start");
   assert.ok(reads.filter((r) => r.afterTag).length >= 3, "every later read named a tag");
   assert.ok(reads.every((r) => r.deferContent === "true" && r.includeNestedRows === "true"), "tool content is left out, nested rows are kept");
+});
+
+test("a streaming reply reaches the guest from patches, with no whole read", async () => {
+  const w = await fresh();
+  const thread = w.threads.get(THREAD)!;
+  thread.tagged = true;
+  thread.reads = [];
+  thread.rows = [message("m1", "user", "hello"), message("m2", "assistant", "The answer")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  const client = hex24();
+  type Answer = { rev: number; items: { id: string; blocks?: unknown }[] };
+  const first = (await (await poll(base, token, client)).json()) as Answer;
+  assert.equal(first.items.length, 2);
+  const textOf = (answer: Answer, id: string) => JSON.stringify(answer.items.find((i) => i.id === id)?.blocks ?? "");
+
+  let since = first.rev;
+  let text = "The answer";
+  for (const more of [" is", " forty", "-two."]) {
+    text += more;
+    thread.rows[1] = message("m2", "assistant", text);
+    thread.rev = (thread.rev ?? 0) + 1;
+    thread.patches = [{ id: "m2", ops: [["append", ["text"], more]] }];
+    const next = poll(base, token, client, { since }).then((r) => r.json()) as Promise<Answer>;
+    await sleep(60);
+    gv.fire("experimental_thread.events", { thread: { id: THREAD } });
+    const got = await next;
+    assert.deepEqual(got.items.map((i) => i.id), ["m2"], "only the row that changed is sent");
+    assert.ok(textOf(got, "m2").includes(text.slice(-4)), `the guest has the text so far: ${textOf(got, "m2")}`);
+    since = got.rev;
+  }
+  assert.equal(thread.reads.filter((r) => !r.afterTag).length, 1, "one whole read, at the start; the rest were deltas");
+  assert.ok(thread.reads.filter((r) => r.afterTag).length >= 3);
+});
+
+test("a patch that does not fit costs one whole read, and the guest still gets the text", async () => {
+  const w = await fresh();
+  const thread = w.threads.get(THREAD)!;
+  thread.tagged = true;
+  thread.reads = [];
+  thread.rows = [message("m1", "assistant", "one")];
+  const gv = await w.load();
+  const token = tokenOf(await gv.share());
+  const base = await gv.guestBase();
+  const client = hex24();
+  const first = (await (await poll(base, token, client)).json()) as { rev: number };
+  thread.rows[0] = message("m1", "assistant", "one two");
+  thread.rev = 1;
+  thread.patches = [{ id: "m1", ops: [["append", ["nowhere"], " two"]] }];
+  const next = poll(base, token, client, { since: first.rev }).then((r) => r.json()) as Promise<{ items: { id: string; blocks?: unknown }[] }>;
+  await sleep(60);
+  gv.fire("experimental_thread.events", { thread: { id: THREAD } });
+  const got = await next;
+  assert.ok(JSON.stringify(got.items[0]?.blocks).includes("one two"));
+  assert.equal(thread.reads.filter((r) => !r.afterTag).length, 2, "the patch failed and a whole read followed");
 });
 
 test("a delta that cannot be applied costs one whole read, not a wrong transcript", async () => {
