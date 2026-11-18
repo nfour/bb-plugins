@@ -275,6 +275,48 @@ test("a refresh asks for what changed since the last tag and applies it", async 
   }
 });
 
+test("a patch of a row streams its text into the held row without a full read", async () => {
+  clock();
+  try {
+    const patched = (ops: unknown[], id = "a") => ({ tag: "t2", delta: { afterTag: "t1", upsertRows: [], patchRows: [{ id, ops }], fields: {} } });
+    const f = scripted((q) => (q.afterTag === "t1" ? patched([["append", ["text"], " world"]]) : full([row("a", 1, "Hello"), row("b", 2)], "t1")));
+    const seen: Rows[] = [];
+    const watch = watchTimeline(f.sdk, "t", (rows) => seen.push(rows), false, true);
+    await flush();
+    assert.equal(seen[0]!.items[0]!.tip, "Hello");
+    f.signal("message-added");
+    mock.timers.tick(400);
+    await flush();
+    assert.equal(f.calls.length, 2, "one full read and one delta");
+    assert.equal(seen[seen.length - 1]!.items[0]!.tip, "Hello world");
+    watch.stop();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a patch for a row not held, or that does not apply, is answered with a full read", async () => {
+  clock();
+  try {
+    for (const bad of [{ id: "zzz", ops: [["set", ["text"], "x"]] }, { id: "a", ops: [["append", ["nope"], "x"]] }]) {
+      const f = scripted((q) =>
+        q.afterTag === "t1" ? { tag: "t2", delta: { afterTag: "t1", upsertRows: [], patchRows: [bad], fields: {} } } : full([row("a", 1, "Hello")], q.afterTag ? "x" : "t1"),
+      );
+      const seen: Rows[] = [];
+      const watch = watchTimeline(f.sdk, "t", (rows) => seen.push(rows), false, true);
+      await flush();
+      f.signal("message-added");
+      mock.timers.tick(400);
+      await flush();
+      assert.equal(f.calls.length, 3, "a full read after the delta");
+      assert.equal(f.calls[2]!.afterTag, undefined);
+      watch.stop();
+    }
+  } finally {
+    mock.timers.reset();
+  }
+});
+
 test("a delta that does not fit what is held is answered with a full read", async () => {
   clock();
   try {

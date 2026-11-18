@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyDelta, flatten, itemsOf, mergeNewest, prependOlder, type Memo, type Row } from "./rows.ts";
+import { applyDelta, flatten, itemsOf, mergeNewest, patchRow, prependOlder, type Memo, type PatchOp, type Row } from "./rows.ts";
 
 const r = (id: string, v = "") => ({ id, v });
 const ids = (rows: { id: string }[] | null) => rows?.map((x) => x.id + ((x as { v?: string }).v ?? ""));
@@ -20,18 +20,96 @@ test("an order of a stretch and new ids rebuilds the page", () => {
 
 test("an order may drop rows and name a held row by id", () => {
   const page = [r("a"), r("b"), r("c")];
-  assert.deepEqual(ids(applyDelta(page, { upsertRows: [], rowOrder: [[1, 3], "a"] })), ["b", "c", "a"]);
+  assert.deepEqual(ids(applyDelta(page, { upsertRows: [], rowOrder: [[1, 2], "a"] })), ["b", "c", "a"]);
 });
 
 test("a stretch out of range, or an id nowhere, cannot be applied", () => {
   const page = [r("a"), r("b")];
   assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[0, 3]] }), null);
-  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[2, 1]] }), null);
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[1, 2]] }), null, "start 1 and 2 rows is 3 rows of 2");
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[-1, 1]] }), null);
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[0, -1]] }), null);
   assert.equal(applyDelta(page, { upsertRows: [], rowOrder: ["nope"] }), null);
 });
 
 test("an upsert the order never places would lose a row, so it is refused", () => {
   assert.equal(applyDelta([r("a"), r("b")], { upsertRows: [r("c")], rowOrder: [[0, 2]] }), null);
+});
+
+/** A row with nesting like a turn's: a string, a list of children and an object. */
+const deep = () => ({ id: "t", status: "working", text: "He", meta: { n: 1 }, children: [{ id: "c0", text: "a" }, { id: "c1", text: "b" }] });
+const patch = (ops: PatchOp[]) => patchRow(deep(), ops);
+
+test("a patch appends to a string, sets a value and deletes a key", () => {
+  assert.deepEqual(patch([["append", ["text"], "llo"]]), { ...deep(), text: "Hello" });
+  assert.deepEqual(patch([["set", ["status"], "done"]]), { ...deep(), status: "done" });
+  const { meta, ...rest } = deep();
+  assert.deepEqual(patch([["delete", ["meta"]]]), rest);
+  assert.equal(meta.n, 1);
+});
+
+test("a patch follows nested paths and sets the next index of a list", () => {
+  assert.deepEqual(patch([["append", ["children", 1, "text"], "!"]])?.children[1], { id: "c1", text: "b!" });
+  const grown = patch([["set", ["children", 2], { id: "c2", text: "c" }]]);
+  assert.deepEqual(grown?.children.map((c) => c.id), ["c0", "c1", "c2"]);
+  assert.deepEqual(patch([["set", ["meta", "deeper", "x"], 5]])?.meta, { n: 1, deeper: { x: 5 } });
+});
+
+test("a patch never changes the row it was made from, and shares what it did not touch", () => {
+  const row = deep();
+  const frozen = JSON.stringify(row);
+  const next = patchRow(row, [["append", ["children", 0, "text"], "z"], ["append", ["text"], "y"], ["set", ["children", 2], { id: "c2", text: "" }]])!;
+  assert.equal(JSON.stringify(row), frozen);
+  assert.equal(next.children[1], row.children[1]);
+  assert.equal(next.meta, row.meta);
+  assert.notEqual(next.children, row.children);
+});
+
+test("ops that do not fit the row are refused", () => {
+  assert.equal(patch([["append", ["status", "x"], "!"]]), null, "a path through a string");
+  assert.equal(patch([["append", ["meta"], "!"]]), null, "append to a non-string");
+  assert.equal(patch([["append", ["nope"], "!"]]), null, "append to a missing key");
+  assert.equal(patch([["delete", ["nope"]]]), null, "delete of a missing key");
+  assert.equal(patch([["delete", ["children", 0]]]), null, "delete of an array element");
+  assert.equal(patch([["set", ["children", 5], 1]]), null, "set past the end of a list");
+  assert.equal(patch([["set", ["children", 5, "id"], 1]]), null, "set through a missing element");
+  assert.equal(patch([["set", [], 1]]), null, "an empty path");
+  assert.equal(patch([["set", ["__proto__", "x"], 1]]), null, "a prototype key");
+  assert.equal(patch([["set", ["status"], "ok"], ["append", ["gone"], "!"]]), null, "the second op fails, so the patch does");
+});
+
+test("a delta's patches are applied to the rows held, in place or with an order", () => {
+  const page = [{ id: "a", text: "x" }, { id: "b", text: "y" }];
+  const patchRows = [{ id: "b", ops: [["append", ["text"], "!"]] as PatchOp[] }];
+  assert.deepEqual(applyDelta(page, { upsertRows: [], patchRows }), [page[0], { id: "b", text: "y!" }]);
+  assert.equal(page[1]!.text, "y");
+  const moved = applyDelta(page, { upsertRows: [{ id: "c", text: "" }], patchRows, rowOrder: [[1, 1], [0, 1], "c"] });
+  assert.deepEqual(moved?.map((x) => x.text), ["y!", "x", ""]);
+});
+
+test("a patch for a row not held, or one that does not apply, makes the delta unusable", () => {
+  const page = [{ id: "a", text: "x" }];
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: [{ id: "z", ops: [["set", ["text"], "q"]] }] }), null);
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: [{ id: "a", ops: [["append", ["gone"], "q"]] }] }), null);
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: [{ id: "a", ops: [["set", ["text"], "q"]] }], rowOrder: [] }), null, "a patched row the order drops");
+});
+
+test("a stretch is a start and a count: a window that slid by one row keeps every row it still holds", () => {
+  // What bb 0.50.1's computeThreadTimelineDelta writes when rows a..e become b,c,d,e,f with c changed: the stretch
+  // [1, 4] is four rows from index 1 (b to e), then the new row's id.
+  const page = ["a", "b", "c", "d", "e"].map((id) => ({ id, text: id }));
+  const out = applyDelta(page, {
+    upsertRows: [{ id: "f", text: "f" }],
+    patchRows: [{ id: "c", ops: [["append", ["text"], "!"]] }],
+    rowOrder: [[1, 4], "f"],
+  });
+  assert.deepEqual(out?.map((x) => x.id + ":" + x.text), ["b:b", "c:c!", "d:d", "e:e", "f:f"]);
+});
+
+test("a stretch in the middle of the page, and two stretches that skip a row between them", () => {
+  const page = ["a", "b", "c", "d", "e"].map((id) => ({ id }));
+  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[1, 3]] })?.map((x) => x.id), ["b", "c", "d"]);
+  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[0, 2], [3, 2]] })?.map((x) => x.id), ["a", "b", "d", "e"]);
 });
 
 const msg = (id: string, seq: number, role: "user" | "assistant", text: string, turnId: string | null = null) =>

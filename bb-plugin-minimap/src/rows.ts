@@ -15,18 +15,99 @@ export function flatten(rows: readonly Row[], out: Row[] = []): Row[] {
   return out;
 }
 
-/** How a delta lists the page's order: a `[from, to]` stretch of the rows already held (to exclusive), or the id of one row. */
+/** How a delta lists the page's order: a `[start, count]` stretch of the rows already held (`count` rows from index `start`), or the id of one row. */
 export type RowOrder = readonly (string | readonly [number, number])[];
+
+/** One step of a row patch (bb 0.50): `path` is a non-empty list of keys and array indexes into the row's JSON. */
+export type PatchOp = readonly ["append", Path, string] | readonly ["set", Path, unknown] | readonly ["delete", Path];
+type Path = readonly (string | number)[];
+export interface RowPatch {
+  id: string;
+  ops: readonly PatchOp[];
+}
+
+type Json = Record<string, unknown> | unknown[];
+
+const isContainer = (value: unknown): value is Json => typeof value === "object" && value !== null;
+/** Keys that would reach the prototype chain are never followed. */
+const SAFE_KEY = (key: string | number): boolean => key !== "__proto__" && key !== "constructor" && key !== "prototype";
+
+/**
+ * `row` with the ops of one patch applied, as a new row: the objects and arrays along each path are copied and every
+ * other part is shared, so the held row is never changed. The ops mean what bb's `diffJsonValue` makes of them: `append`
+ * adds text to the string at the path, `set` puts a value there (objects along the way are created; an array takes an
+ * index up to its length), `delete` removes an object's key. Returns null when an op does not fit the row (a path that
+ * does not resolve, an `append` to something that is not a string, a `delete` of an array element, which bb never sends),
+ * and the caller reads a full page.
+ */
+export function patchRow<T extends object>(row: T, ops: readonly PatchOp[]): T | null {
+  const root: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  /** The nodes already copied by this patch, so a second op on the same one does not copy it again. */
+  const copied = new WeakSet<object>([root]);
+  const own = (node: Json): Json => {
+    if (copied.has(node)) return node;
+    const copy = Array.isArray(node) ? [...node] : { ...node };
+    copied.add(copy);
+    return copy;
+  };
+  for (const op of ops) {
+    const [kind, path] = op;
+    if (!Array.isArray(path) || path.length === 0 || !path.every(SAFE_KEY)) return null;
+    // Walk to the node that holds the last step, copying each node on the way and re-linking it to its parent.
+    let at: Json = root;
+    for (let step = 0; step < path.length - 1; step++) {
+      const key = path[step]!;
+      const child = (at as Record<string | number, unknown>)[key];
+      let next: Json;
+      if (isContainer(child)) next = own(child);
+      else if (child === undefined && kind === "set" && typeof key === "string" && !Array.isArray(at)) next = {};
+      else if (child === undefined && kind === "set" && typeof key === "number" && Array.isArray(at) && key === at.length) next = {};
+      else return null;
+      if (!placeable(at, key)) return null;
+      (at as Record<string | number, unknown>)[key] = next;
+      at = next;
+    }
+    const last = path[path.length - 1]!;
+    const target = at as Record<string | number, unknown>;
+    if (kind === "append") {
+      const text = op[2];
+      if (typeof text !== "string" || typeof target[last] !== "string") return null;
+      target[last] = (target[last] as string) + text;
+    } else if (kind === "set") {
+      if (!placeable(at, last)) return null;
+      target[last] = op[2];
+    } else if (kind === "delete") {
+      if (Array.isArray(at) || !(typeof last === "string" && Object.hasOwn(at, last))) return null;
+      delete target[last];
+    } else return null;
+  }
+  return root as unknown as T;
+}
+
+/** Whether `key` can be written in `node`: a string key in an object, an index up to the length in an array. */
+function placeable(node: Json, key: string | number): boolean {
+  if (Array.isArray(node)) return typeof key === "number" && Number.isInteger(key) && key >= 0 && key <= node.length;
+  return typeof key === "string";
+}
 
 /**
  * The page a delta read stands for: `page` (the rows as the last read left them) with `upsertRows`
- * put in their places. Without `rowOrder` the order is unchanged and every upsert must already be on
- * the page; with it, the page is rebuilt from the stretches and ids listed. Returns null when the
- * delta does not fit what is held (a stretch out of range, an id nowhere), and the caller reads a
- * full page instead.
+ * put in their places and `patchRows` applied to the rows held. Without `rowOrder` the order is unchanged and every
+ * upsert must already be on the page; with it, the page is rebuilt from the stretches and ids listed. Returns null when
+ * the delta does not fit what is held (a stretch out of range, an id nowhere, a patch for a row not held or one that
+ * does not apply), and the caller reads a full page instead.
  */
-export function applyDelta<T extends { id: string }>(page: readonly T[], delta: { upsertRows: readonly T[]; rowOrder?: RowOrder }): T[] | null {
+export function applyDelta<T extends { id: string }>(
+  page: readonly T[],
+  delta: { upsertRows: readonly T[]; patchRows?: readonly RowPatch[]; rowOrder?: RowOrder },
+): T[] | null {
   const upserts = new Map(delta.upsertRows.map((row) => [row.id, row]));
+  for (const patch of delta.patchRows ?? []) {
+    const held = page.find((row) => row.id === patch.id);
+    const next = held ? patchRow(held, patch.ops) : null;
+    if (!next) return null;
+    upserts.set(patch.id, next);
+  }
   if (!delta.rowOrder) {
     const out = page.map((row) => upserts.get(row.id) ?? row);
     for (const id of upserts.keys()) if (!page.some((row) => row.id === id)) return null;
@@ -41,9 +122,9 @@ export function applyDelta<T extends { id: string }>(page: readonly T[], delta: 
       out.push(row);
       continue;
     }
-    const [from, to] = entry;
-    if (!(from >= 0 && from <= to && to <= page.length)) return null;
-    for (let i = from; i < to; i++) out.push(upserts.get(page[i]!.id) ?? page[i]!);
+    const [start, count] = entry;
+    if (!(Number.isInteger(start) && Number.isInteger(count) && start >= 0 && count >= 0 && start + count <= page.length)) return null;
+    for (let i = start; i < start + count; i++) out.push(upserts.get(page[i]!.id) ?? page[i]!);
   }
   // Every upsert must have a place, or a row would be lost.
   for (const id of upserts.keys()) if (!out.some((row) => row.id === id)) return null;
