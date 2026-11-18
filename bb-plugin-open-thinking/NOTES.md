@@ -1,0 +1,46 @@
+# Open Thinking: design notes
+
+What an agent working on this plugin must know. The user-facing description is `README.md`; this is the why. Everything about BB below was checked against bb-app 0.49 (source tag `desktop-v0.49.0` of get-bb/bb and a headless browser) and again on bb 0.50.1 (tag `desktop-v0.50.1`, SDK 0.6.157, 2026-11-19); it is undocumented BB behaviour.
+
+## Rules that bite
+
+- **No Tailwind utility words anywhere in the folder.** `bb plugin build` turns a bare utility word in code, comments, labels, tests, README or this file into a page-wide `:where([data-bb-plugin="open-thinking"], …) .word` rule. Two words already slipped in: the singular of the plugin's own noun for a thinking entry, and the adjective for a thread that is working (both are Tailwind classes). The code says `entry` and `working`, and the labels use the plural. After every build run `grep -c ':where(\[data-bb-plugin=' dist/app.css`: it must print 0, and when it does not, list the classes with `grep -o '\.[a-zA-Z0-9\\:\[\]-]*{[^}]*}' dist/app.css`.
+- **Headless pages read the user's real settings.** `GET /api/v1/plugins/open-thinking/settings` returns `{ok, schema, values}`. Force values with `page.setRequestInterception(true)` and answer that request with the real body and different `values`; never write the user's settings. The browser-automation run deadline is 30s unless `--timeout` is given, and a run that overruns kills the session: install a `MutationObserver` that logs into `window` in one run and read it in the next to watch something over minutes.
+- A thread action; `bb plugin reload open-thinking` after each build.
+
+## What BB does (the facts the plugin stands on)
+
+- **Open state is React state.** `ExpandableTimelineRow` keeps `useState`, initialised from a per-thread `Map<reasoningId, boolean>` in `TimelineReasoningExpansionProvider` (`key={threadId}` in `ThreadTimelineSurface.tsx`). The "Thinking…" line uses the same map keyed by `activeThinking.id`, which is the id the "Thought" row gets, so opening the line makes the row mount open. A plugin cannot reach the map; the only way in is the toggle, and `button.click()` works (its `isTrusted` is false, a real click's is true). The map is dropped when the thread's timeline unmounts.
+- **Thinking row**: id `<thread>:op:reasoning:kind:reasoning|turn:<turn>|parent:root|item:<item>`, own `button[aria-expanded]`. A work group's id is `<thread>:<turn>:work-summary:<first child id>`, so it contains the same text; `isThinkingId` checks what directly follows the thread id. A finished turn is one `<thread>:<turn>:turn:<n>` row.
+- **The live line** has no id or data attribute: a toggle in the scroller, outside every `[data-timeline-row-id]` and outside `[data-timeline-row-list]`, titled "Thinking…". It lasts about a second with Claude Code; short thoughts skip it.
+- **Folding**: a completed thought joins the work group before it; a closed group takes its thinking off the page, and a finished turn is one closed row. Originally the plugin unfolded nothing (decided by the user, 2026-11-17); the user then asked (same day) that the newest thought stay shown while tools run, so `keepLatest` re-opens the group holding it while the thread works. BB regroups on every new row: a thought is appended to the last group (or leads the next group of a different kind), so the group that holds it can fold again when different work follows. A step closed by a non-pending user message (a steer) becomes one `step-summary` row whose id is built from its first child, so the tracked group id can stop matching.
+- **Status**: `thread:changed` events carry `metadata.statusChange.status` on `status-changed`; `sdk.threads.get().status` reads it once. `button[aria-label="Stop run"]` is not usable: Chat Dock moves the composer out of the pane.
+
+## Shape
+
+- `app.tsx` is an app overlay that renders nothing: while `autoExpand` is on it runs `startController` (re-run when a setting changes; the reader's-click list is module state and survives that).
+- `src/model.ts` (pure, tested): `plan({entries, rules, working, owned})` returns the clicks. State-based on purpose: the same page gives the same answer after a remount, thread switch or reload. `claimLive` hands a reader's click on the live line to the row that appears after it (a row new within 5s of the line going).
+- `src/dom.ts`: the only file that knows the markup. `readPane` reads one scroller; `thinkingToggleAt` classifies a click.
+- `src/controller.ts`: one `MutationObserver` on `#root` (child list, subtree, added nodes only, filtered to nodes that are or hold a row, a scroller or a toggle), one capture-phase `click` listener on `document`, one `visibilitychange` listener. No timer except the one look after a click. In a background tab the observer is disconnected; on return it plans once. A toggle element is clicked again only for a different target than the last time (the guard that prevents loops), and the state change lands a moment after `click()`, so the page is not re-read for it.
+- `src/follow.ts`: `follow(box)` scrolls the live line's scroll box (BB's own child that scrolls) to its end while its text grows, until the reader scrolls up in it. A scroll event arrives after the text grew again, so only a move up counts as leaving. The box is found by computed overflow, so it needs no class name.
+- Keep-latest in the controller: per pane it remembers the newest thought and the toggle-bearing rows around it (`chainOf`); while the thread works a chain row found closed is clicked open unless the reader closed it (a trusted click on any row toggle marks it theirs). A toggle is clicked again for the same target only after 400 ms and at most 3 times in a row (BB folds a group again when different work follows); one `setTimeout` per click looks again. This is the plugin's one timer.
+- `src/status.ts` (tested with a fake sdk): one `threads.get` the first time a thread is asked about, then its own status from `thread:changed` (a signal that arrives during the read wins over it).
+- Settings: `SETTING_KEYS` in `src/shared.ts` (import-free); `server.ts` defines them and `set_setting`; the thread action is a `choices` submenu (`src/ThreadMenu.ts`).
+
+## bb 0.50.1 re-check (2026-11-19)
+
+- **Unchanged, in source and in a headless browser:** `[data-page-scroll-viewport]`, `[data-timeline-row-list="top-level"]`, `[data-scroll-attached]`, `data-timeline-row-id` / `data-timeline-window-key` / `[data-timeline-window-spacer]` (PRs #7599 #7612 #7613 touched `ThreadTimelineRows.tsx` and `TimelineWindowedItems.tsx` but kept them), `[data-split-pane-id]` and `[data-thread-window]`, row id shapes (`op:reasoning`, `work-summary`, `turn:<n>`), `TimelineReasoningExpansion.tsx`, `timeline-auto-expand.ts`, `timeline-view.ts` and `TimelineWorkingIndicator.tsx` (no diff 0.49.0 → 0.50.1), the reasoning detail box (a plain scrolling div, `TimelineReasoningDetail.tsx` unchanged). The only change in `ExpandableTimelineRow.tsx` swaps two effects for set-state-in-render; the toggle and `aria-expanded` behave the same.
+- **Checked live on 0.50.1:** thought rows arrive open; the live line appears and is opened; the newest thought and the last group stay open while the thread works; a split shows two panes, each read on its own; windowed top-level rows (mounted rows 13 → 17 → 9 → 16 as the scroller moved, one spacer) kept every thought's state. A thought group actually windowed out and back was not reproduced: the thread's thought groups all sat inside the always-mounted tail. The group fold and unfold remount (remembered by BB's per-thread map) was checked on 0.49.
+- **BB now follows streaming output itself in `TimelineDetailScroll` (`useStickyBottomScroll`), but only for terminal, tool and similar detail; the reasoning detail is a plain scrolling div, so `follow.ts` is still needed.**
+- **`threads.experimental_headState`** returns to-dos, slash commands, session options, extension states, plan prompt mode, model fallback and context usage. It has no status and no turn state, so it does not replace `threads.get` + `thread:changed` for "is the turn working". `thread:changed` metadata already lists `eventTypes` including `turn/started` and `turn/completed`; `status-changed` with `statusChange.status` stays the better signal, because a thread can start the next turn (a queued steer) straight after one completes.
+
+## Decisions
+
+- **Page, not timeline data**: a row must be on the page to be opened and BB's folding decides when it is, so the page is watched anyway; no timeline reads also keeps it clear of bb 0.50's delta change (#7613).
+- **The reader's click is `isTrusted`**: keyboard activation raises a trusted click too. The plugin's own clicks are not. The list is per page session, not stored, so a reload governs everything again.
+- **Dropped from the plan**: the corrective second click when BB forces a row open (search does). It was rare, and the once-per-target guard already prevents loops.
+- **Version `0.0.0`**: the first release sets it.
+
+## Not checked
+
+A background tab and back, the phone layout, a long streamed answer's observer cost, `completedTurnDisplay: "flat"`, providers that stream thinking for long, a real turn end closing thoughts live (checked on a finished turn and a forced idle thread, not at the moment of the flip), and bb 0.50.

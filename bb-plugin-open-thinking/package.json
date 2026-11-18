@@ -1,0 +1,44 @@
+{
+  "name": "bb-plugin-open-thinking",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nfour/bb-plugins.git",
+    "directory": "bb-plugin-open-thinking"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bb": ">=0.49",
+    "bbPluginSdk": ">=0.6.94"
+  },
+  "scripts": {
+    "build": "bb plugin build",
+    "dev": "bb plugin dev",
+    "check": "tsc --noEmit",
+    "test": "node --test src/*.test.ts"
+  },
+  "bb": {
+    "name": "Open Thinking",
+    "description": "Opens the agent's thinking blocks by itself, with options to close the earlier one when a new one arrives or when the turn finishes.",
+    "branding": {
+      "icon": "AiBrain01"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "skills": [
+      "skills"
+    ]
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.157",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
