@@ -1,0 +1,216 @@
+/* bb-plugin-reply-style — the reply surface.
+ *
+ * Ported from ~/.agents/skills/reply-style/styling.css, which was pasted into a theme before this
+ * plugin existed. Comments in this file are not scanned for utility words by `bb plugin build`, so
+ * they can say what they mean; README, NOTES and every .ts file cannot.
+ *
+ * Scope. Every rule sits under a timeline row's rendered markdown:
+ *   [data-timeline-row-id]  a row of a thread's timeline
+ *   [data-markdown-preview] BB's rendered-markdown root inside it
+ * so the composer, Docs, the Diff tab and other plugins' views are untouched. Data attributes and
+ * element names only: a rule on one of BB's class names breaks silently on an app update. Both
+ * attributes are wrapped in :where(), so each rule weighs what its element selector weighs and a
+ * theme can override any of them.
+ *
+ * No !important. BB's own classes (the accent quote bar, the text colour on a quote's paragraphs)
+ * live in @layer utilities; plugin CSS is unlayered, and unlayered beats layered whatever the
+ * specificity.
+ *
+ * Colours. Every one is derived from --ink and --canvas with color-mix, so it follows any theme.
+ *
+ * Options. The plugin writes an attribute on <html> only while an option differs from its default
+ * (app.tsx), so the default look needs no script:
+ *   data-reply-style-guides="off"  no guide lines
+ *   data-reply-style-quote="on"    Spoiler As Quote
+ *   data-reply-style-tables="off"  tables without their own surface
+ * The numbers in the settings panel arrive the same way, as custom properties on <html> written only
+ * while they differ from their defaults; every var(--reply-style-*, x) below carries its default as
+ * the fallback, and src/shared.ts holds the same default (a test keeps the two equal).
+ */
+
+:where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  /* Quotes borrow the selection accent by default (--surface-selected-border, 35% of --primary),
+     which reads as orange. Give them a neutral grey instead, leaving selection and message borders
+     alone. The text rules name p/li/em/strong as well as the quote itself: BB puts a colour class on
+     the paragraphs inside a quote, and a class beats inheritance. code, kbd and links are left out
+     on purpose, so chips keep their own colour. */
+  blockquote {
+    border-color: color-mix(in oklch, var(--ink) var(--reply-style-quote-bar, 30%), var(--canvas));
+    border-inline-start-width: var(--reply-style-quote-width, 2px);
+  }
+  blockquote,
+  blockquote p,
+  blockquote li,
+  blockquote em,
+  blockquote strong {
+    color: color-mix(in oklch, var(--ink) var(--reply-style-quote-text, 80%), var(--canvas));
+  }
+
+  /* A spoiler summary is one line: the inventory chips, then the description in <em>. Only the
+     <em> is dimmed — BB's inline code chips set no colour of their own, so colouring the whole
+     summary would drag the chips down with it. */
+  details > summary em {
+    color: color-mix(in oklch, var(--ink) var(--reply-style-summary, 66%), var(--canvas));
+    font-style: italic;
+    margin-left: 0.4em;
+  }
+
+  /* Tables. BB centres a table wider than the message on the pane, so a wide one under a list item
+     or in a quote runs left across the guide line and the quote bar. The table keeps that span and
+     covers them instead: an opaque surface, and a position so it paints after the guide line (an
+     absolutely placed pseudo-element earlier in the tree) and over the quote's border.
+     `background: inherit` was tried and computes to transparent, since the table's parent paints
+     nothing. --canvas is the message surface; on a message BB is flashing or highlighting, the
+     table keeps the plain surface while the rows around it tint. Tables Surface off drops both. */
+  :where(:root:not([data-reply-style-tables="off"])) & table {
+    position: relative;
+    background: var(--canvas);
+  }
+
+  /* Hovering a spoiler summary: a faint surface behind the whole line and the description brought
+     up towards body text, so the target is obvious without the row moving. Negative inline margin
+     keeps the text where it was. */
+  details > summary {
+    cursor: pointer;
+    border-radius: 0.3rem;
+    padding: 0.1rem 0.35rem;
+    margin-inline: -0.35rem;
+    transition: background-color 120ms ease;
+  }
+  details > summary:hover {
+    background: color-mix(in oklch, var(--ink) var(--reply-style-hover, 9%), var(--canvas));
+  }
+  details > summary em {
+    transition: color 120ms ease;
+  }
+  details > summary:hover em {
+    color: color-mix(in oklch, var(--ink) 88%, var(--canvas));
+  }
+
+  /* Replace the triangle disclosure marker with a chevron drawn from two borders: right-pointing
+     when closed, down when open, rotating between. */
+  details > summary {
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+  details > summary::before {
+    content: "";
+    display: inline-block;
+    width: 0.5em;
+    height: 0.5em;
+    margin-left: -2px;
+    margin-right: 0.2em;
+    border-right: 2px solid color-mix(in oklch, var(--ink) var(--reply-style-chevron, 55%), var(--canvas));
+    border-bottom: 2px solid color-mix(in oklch, var(--ink) var(--reply-style-chevron, 55%), var(--canvas));
+    transform: translateY(calc(-0.16em + 2px)) rotate(-45deg);
+    transition: transform 150ms ease, border-color 120ms ease;
+  }
+  details[open] > summary::before {
+    transform: translateY(calc(-0.28em + 2px)) rotate(45deg);
+  }
+  details > summary:hover::before {
+    border-right-color: color-mix(in oklch, var(--ink) 85%, var(--canvas));
+    border-bottom-color: color-mix(in oklch, var(--ink) 85%, var(--canvas));
+  }
+
+  /* Grow and shrink a spoiler instead of snapping. ::details-content plus interpolate-size animates
+     to and from auto height (Chromium 129+); the keyframe below is the fallback, and only runs on
+     open. interpolate-size is set on the spoiler itself, not on :root as the theme did, so the
+     plugin changes nothing outside the timeline.
+     The reveal is clipped with clip-path rather than overflow, because overflow clips both axes and
+     would cut off a table that spans wider than the message by design. inset(0 -100vw 0 -100vw)
+     clips top and bottom at the box edges and lets the sides bleed, so a table still spans while
+     the height animates. */
+  details {
+    interpolate-size: allow-keywords;
+  }
+  details::details-content {
+    block-size: 0;
+    overflow: visible;
+    clip-path: inset(0 -100vw 0 -100vw);
+    transition: block-size var(--reply-style-open, 220ms) ease, content-visibility var(--reply-style-open, 220ms) allow-discrete;
+  }
+  details[open]::details-content {
+    block-size: auto;
+  }
+}
+
+@supports not selector(details::details-content) {
+  :where([data-timeline-row-id]) :where([data-markdown-preview]) details[open] > *:not(summary) {
+    animation: reply-style-open 200ms ease;
+  }
+  @keyframes reply-style-open {
+    from { opacity: 0; transform: translateY(-0.25rem); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* Guide lines. A list item that holds something under its own line (a spoiler, a quote, a
+   sub-list, a code block) draws a 1px line in its marker column, from just under its first text
+   line to its end. Everything nested under the item sits to the right of that line, so it reads as
+   belonging to the line above; a nested item with its own evidence draws its own line one level in.
+   It serves both of the format's shapes: `- [x]` items with evidence under them, and `1. [ ]`
+   questions with `1) [ ]` options.
+   Why on the parent item and not a border on the nested list: a border on ul/ol draws nothing for a
+   spoiler or quote under an item, which is the format's main shape. Why not on the nested block: a
+   quote already has a bar, and two parallel bars 12px apart read as noise.
+   18% ink, lighter than the 30% quote bar, so the hierarchy line and the quote bar do not compete.
+   BB's list items have no position and no ::before of their own (bb 0.49). */
+:where(:root:not([data-reply-style-guides="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  li:has(> :is(ul, ol, details, blockquote, pre)) {
+    position: relative;
+  }
+  li:has(> :is(ul, ol, details, blockquote, pre))::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset-block: 1.75em 0.15em;
+    inset-inline-start: -0.9em;
+    inline-size: var(--reply-style-guide-width, 1px);
+    background: color-mix(in oklch, var(--ink) var(--reply-style-guide, 18%), var(--canvas));
+  }
+}
+
+/* Spoiler As Quote (off by default). The bar is drawn on the opened part of every spoiler, so a
+   spoiler's body needs no `>` on each line. It changes what the format writes, so it is only on
+   when the user turns it on and changes the format with it.
+   - The bar is on ::details-content, not on details: the summary line stays outside the bar, and
+     the bar grows and shrinks with the content.
+   - A quote that is a direct child of a spoiler loses its own bar and padding, so a quoted body
+     from older replies and a plain body from the new format render the same: one bar, not two.
+     A quote nested deeper (inside a list inside the spoiler) keeps its bar.
+   - Without ::details-content support the mode does nothing and spoilers look as they do by
+     default. */
+@supports selector(details::details-content) {
+  :where(:root[data-reply-style-quote="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+    details::details-content {
+      border-inline-start: var(--reply-style-quote-width, 2px) solid color-mix(in oklch, var(--ink) var(--reply-style-quote-bar, 30%), var(--canvas));
+      padding-inline-start: 0.75rem;
+    }
+    details[open]::details-content {
+      margin-block: 0.5rem;
+    }
+    details > blockquote {
+      border-inline-start-width: 0;
+      padding-inline-start: 0;
+    }
+  }
+}
+
+/* Reduced motion: spoilers open and close at once, the summary's hover lands at once, and the
+   chevron turns without rotating through. */
+@media (prefers-reduced-motion: reduce) {
+  :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+    details::details-content,
+    details > summary,
+    details > summary em,
+    details > summary::before {
+      transition: none;
+    }
+    details[open] > *:not(summary) {
+      animation: none;
+    }
+  }
+}
