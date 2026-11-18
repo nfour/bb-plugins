@@ -1,5 +1,5 @@
 /**
- * BB's thread page DOM, as found in bb-app 0.47.1. Undocumented: see AGENTS.md.
+ * BB's thread page DOM, as found through bb 0.50.1. Undocumented: see AGENTS.md.
  *
  * A thread page is a horizontal split: `#thread-detail-timeline-panel` (the chat
  * column) beside `#thread-detail-secondary-panel` (the right panel), both under
