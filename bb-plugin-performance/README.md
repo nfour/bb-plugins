@@ -81,7 +81,7 @@ Each day goes to `~/.bb/plugins/performance/metrics/YYYY-MM-DD.jsonl`, appended 
 - `slow`: one frame or input over 100 ms, with what you were doing, the plugins whose scripts ran in it (with forced layout and what started each) its `split` and, for an input, `phases` (wait, handlers, paint) (at most 5 per minute).
 - `nav`: a thread switch, page change or panel opening and how long it took to settle, with the route (ids removed).
 - `start`: cold start (`settled`: ms from navigation start to first paint plus 500 ms without a long frame, `quietMs` 500; `capped` when still busy at 10 s; lines without `quietMs` are from before this and measured something else), first paint, and each plugin's start time.
-- `css`: page-wide CSS rules per plugin, and `words`, the class words behind them (a key ending in `:` is a variant, such as `hover:`). Written once per distinct content per day, so a day with no `css` line after the first means nothing changed.
+- `css`: page-wide CSS rules per plugin, and `words`, the class words behind them (a key ending in `:` is a variant, such as `hover:`). Written once per distinct content per day, so a day with no `css` line after the first means nothing changed. `scope` is how BB scoped the stylesheets: `keyed` (BB 0.50's `keyedPluginCss` experiment) or `owned`; older lines have none and were `owned`.
 - `mark`: a press of **This lagged**.
 - `bench`: a thread-switch benchmark: each switch's time, median and 95th percentile (`cssOff` marks the run with plugin stylesheets off).
 - `probe`: a style probe: one recalculation with and without the plugin stylesheets, and the time each plugin's adds.

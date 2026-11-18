@@ -34,6 +34,7 @@ import {
   series,
   shares,
   splitOf,
+  sane,
   toneOf,
   worstGap,
 } from "./model.ts";
@@ -350,5 +351,19 @@ test("the in-memory server line is not changed by slimming it", () => {
 test("two css lines with the same rules and words have the same key", () => {
   assert.equal(cssKey({ cssRules: { a: 1 }, words: { a: { zed: 1 } } }), cssKey({ cssRules: { a: 1 }, words: { a: { zed: 1 } } }));
   assert.notEqual(cssKey({ cssRules: { a: 1 } }), cssKey({ cssRules: { a: 2 } }));
+  assert.notEqual(cssKey({ cssRules: { a: 1 }, scope: "keyed" }), cssKey({ cssRules: { a: 1 }, scope: "owned" }));
   assert.notEqual(cssKey({ cssRules: { a: 1 }, words: { a: { zed: 1 } } }), cssKey({ cssRules: { a: 1 }, words: { a: { zed: 2 } } }));
+});
+
+test("a frame with no style work reports 0 for its start, which is no style time", () => {
+  const s = splitOf({ duration: 150, startTime: 14_700_000, styleAndLayoutStart: 0, scripts: [{ duration: 140, forcedStyleAndLayoutDuration: 5 }] });
+  assert.equal(s.styleMs, 0);
+  assert.equal(s.otherMs, 10);
+});
+
+test("a window written with an impossible style time is read as having none", () => {
+  const bad = { frameMs: 150, scriptMs: 140, forcedMs: 5, styleMs: 14_747_893, otherMs: 1 };
+  assert.deepEqual(sane(bad), { frameMs: 150, scriptMs: 140, forcedMs: 5, styleMs: 0, otherMs: 10 });
+  const fine = { frameMs: 100, scriptMs: 40, forcedMs: 0, styleMs: 30, otherMs: 30 };
+  assert.equal(sane(fine), fine);
 });

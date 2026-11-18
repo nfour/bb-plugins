@@ -57,3 +57,19 @@ test("recent skips a half-written last line and a missing file", async () => {
     await rm(dir, { recursive: true });
   }
 });
+
+test("a header is written again when the key moves, not on every append", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "perf-"));
+  try {
+    const w = createWriter(dir);
+    await w.append([{ t: T, kind: "window" } as { t: number }], header, "bb 0.49");
+    await w.append([{ t: T + 1, kind: "window" } as { t: number }], header, "bb 0.49");
+    await w.append([{ t: T + 2, kind: "window" } as { t: number }], header, "bb 0.50");
+    // a new writer (the server restarted) has no key yet, so it opens its run with one too
+    await createWriter(dir).append([{ t: T + 3, kind: "window" } as { t: number }], header, "bb 0.50");
+    const lines = (await readFile(join(dir, `${dayOf(T)}.jsonl`), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    assert.deepEqual(lines.map((l) => l.kind), ["targets", "window", "window", "targets", "window", "targets", "window"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

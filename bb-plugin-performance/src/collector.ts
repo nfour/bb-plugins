@@ -84,6 +84,8 @@ export interface Live {
   /** Lines waiting for the next flush. */
   queued: Line[];
   css: Record<string, number>;
+  /** How BB scopes plugin stylesheets on this page, read from their rules; null before any was seen. */
+  cssScope: CssLine["scope"] | null;
   startPluginMs: Record<string, number>;
   startSettled: number | null;
   /** Start-up was still busy when it was read, so `startSettled` is a floor. */
@@ -166,6 +168,7 @@ function createCollector() {
   let slowCandidates: SlowLine[] = [];
   let queued: Line[] = [];
   let css: Record<string, number> = {};
+  let cssScope: CssLine["scope"];
   let startPluginMs: Record<string, number> = {};
   let startSettled: number | null = null;
   let startCapped = false;
@@ -294,11 +297,15 @@ function createCollector() {
     else setTimeout(run, 2000);
   }
 
+  /** `:where([data-bb-plugin-scope-<id>])` is BB 0.50's keyed scoping; `:where([data-bb-plugin=<id>], …)` is the older one. */
+  const scopeOf = (selector: string): CssLine["scope"] => (selector.startsWith(":where([data-bb-plugin-scope-") ? "keyed" : "owned");
+
   function countCss() {
     const counts: Record<string, number> = {};
     const words: Record<string, Map<string, number>> = {};
     let total = 0;
     let current = "";
+    let scope: CssLine["scope"];
     const walk = (rules: CSSRuleList): number => {
       let n = 0;
       for (const rule of Array.from(rules)) {
@@ -306,6 +313,7 @@ function createCollector() {
         // `bb plugin build` scopes a utility class as `:where([data-bb-plugin=…], …) .name`, which matches on every element.
         if (selector && selector.startsWith(":where([data-bb-plugin") && /\)\s+\.[\w-]/.test(selector)) {
           n++;
+          scope ??= scopeOf(selector);
           const cls = classOfSelector(selector);
           if (cls) {
             // `.max-md\:zed` is the class `max-md:zed`: tally its bare word, and its variant apart (stored as `max-md:`).
@@ -332,6 +340,7 @@ function createCollector() {
       }
     }
     css = counts;
+    cssScope = scope ?? cssScope;
     const top: NonNullable<CssLine["words"]> = {};
     cssWords = {};
     for (const [id, map] of Object.entries(words)) {
@@ -341,7 +350,7 @@ function createCollector() {
       cssWords[id] = ranked;
       top[id] = Object.fromEntries(ranked);
     }
-    const line: CssLine = { v: 1, t: Date.now(), kind: "css", session, cssRules: counts, total, words: top };
+    const line: CssLine = { v: 1, t: Date.now(), kind: "css", session, cssRules: counts, total, words: top, ...(scope ? { scope } : {}) };
     queue(line);
   }
 
@@ -820,6 +829,7 @@ function createCollector() {
       window: live,
       queued: [...queued, ...slowCandidates],
       css,
+      cssScope: cssScope ?? null,
       startPluginMs,
       startSettled,
       startCapped,

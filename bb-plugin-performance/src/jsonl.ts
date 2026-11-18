@@ -22,17 +22,17 @@ export function expired(names: string[], now: number, keep = KEEP_DAYS): string[
 }
 
 export interface Writer {
-  /** Appends lines (already objects with a `t`), grouped into the file of each one's day. Returns how many were written. */
-  append(lines: { t: number }[], header: () => { t: number }): Promise<number>;
+  /** Appends lines (already objects with a `t`), grouped into the file of each one's day. Returns how many were written. A file opens with `header()`; given a `key`, a file also gets a new header whenever the key differs from the last one this writer wrote to it (so a BB update in the middle of a day is a line a reader can split on, not a day filed under the old version). */
+  append(lines: { t: number }[], header: () => { t: number }, key?: string): Promise<number>;
   /** The newest `limit` lines of today's file (for the dashboard after a restart). */
   recent(limit: number, now: number): Promise<unknown[]>;
   prune(now: number): Promise<string[]>;
 }
 
 export function createWriter(dir: string): Writer {
-  const started = new Set<string>();
+  const keyOf = new Map<string, string>();
   return {
-    async append(lines, header) {
+    async append(lines, header, key) {
       if (lines.length === 0) return 0;
       await mkdir(dir, { recursive: true });
       const byDay = new Map<string, { t: number }[]>();
@@ -50,10 +50,10 @@ export function createWriter(dir: string): Writer {
           size = 0;
         }
         if (size >= MAX_FILE_BYTES) continue;
-        // The first write of a file (this run or a new day) opens it with the targets, so a reader can compare.
-        const fresh = size === 0 || !started.has(file);
-        started.add(file);
-        const out = (fresh && size === 0 ? [header(), ...group] : group).map((l) => JSON.stringify(l)).join("\n") + "\n";
+        // A new file opens with the targets, so a reader can compare; so does the first write after the key moved (this run starts at none).
+        const moved = key !== undefined && keyOf.get(file) !== key;
+        if (key !== undefined) keyOf.set(file, key);
+        const out = (size === 0 || moved ? [header(), ...group] : group).map((l) => JSON.stringify(l)).join("\n") + "\n";
         await appendFile(file, out);
         written += group.length;
       }

@@ -128,11 +128,18 @@ interface FrameShape {
   scripts: { duration: number; forcedStyleAndLayoutDuration: number }[];
 }
 
+/** A split from a file written before `splitOf` clamped style and layout: a style time over the frame's own is not one, and counts as none. */
+export function sane(split: Split | undefined): Split | undefined {
+  if (!split || split.styleMs <= split.frameMs * 1.01) return split;
+  return { ...split, styleMs: 0, otherMs: Math.max(0, split.frameMs - split.scriptMs) };
+}
+
 /** The split of one Long Animation Frames entry. Style and layout is what ran after `styleAndLayoutStart`, paint included. */
 export function splitOf(e: FrameShape): Split {
   const script = e.scripts.reduce((a, x) => a + x.duration, 0);
   const forced = e.scripts.reduce((a, x) => a + x.forcedStyleAndLayoutDuration, 0);
-  const style = Math.max(0, e.startTime + e.duration - e.styleAndLayoutStart);
+  // Chrome reports 0 when a frame had no style or layout work: that is no work, not one since the page opened.
+  const style = e.styleAndLayoutStart >= e.startTime ? Math.min(e.duration, Math.max(0, e.startTime + e.duration - e.styleAndLayoutStart)) : 0;
   return { frameMs: e.duration, scriptMs: script, forcedMs: Math.min(forced, script), styleMs: style, otherMs: Math.max(0, e.duration - script - style) };
 }
 
@@ -264,6 +271,8 @@ export interface CssLine {
   session: string;
   cssRules: Record<string, number>;
   total: number;
+  /** How BB scoped the plugin stylesheets: "keyed" (`[data-bb-plugin-scope-<id>]`, BB 0.50's `keyedPluginCss`) or "owned" (`[data-bb-plugin=<id>]`). Absent in older files, which were all "owned". */
+  scope?: "keyed" | "owned";
   /** The class names behind each plugin's page-wide rules, most common first. */
   words?: Record<string, Record<string, number>>;
 }
@@ -382,8 +391,8 @@ export function slimServer(line: ServerLine, prev: WorkerState | null, day: stri
 }
 
 /** What a `css` line says, for telling whether the last one written already holds it. */
-export function cssKey(line: { cssRules: Record<string, number>; words?: unknown }): string {
-  return JSON.stringify([line.cssRules, line.words ?? null]);
+export function cssKey(line: { cssRules: Record<string, number>; words?: unknown; scope?: string }): string {
+  return JSON.stringify([line.cssRules, line.words ?? null, line.scope ?? null]);
 }
 
 export interface TargetsLine {
@@ -443,7 +452,7 @@ export function mergeWindows(windows: WindowLine[]): WindowLine {
     }
     if (w.heapMB != null) out.heapMB = w.heapMB;
     out.selfMs += w.selfMs;
-    addSplit(out.split!, w.split);
+    addSplit(out.split!, sane(w.split));
     for (const [k, v] of Object.entries(w.sites ?? {})) {
       out.sites ??= {};
       const into = (out.sites[k] ??= { ms: 0, n: 0 });

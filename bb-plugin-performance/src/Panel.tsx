@@ -691,6 +691,7 @@ function Panel() {
       rangeLabel: RANGES.find((r) => r.id === range)!.label,
       minutes: merged.visibleMs ? Math.round(merged.visibleMs / 60000) : 0,
       bb: live.bb,
+      cssScope: live.cssScope,
       rows,
       merged,
       plugins: reportPlugins,

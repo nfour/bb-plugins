@@ -65,3 +65,10 @@ test("the report says where layout was forced, how inputs waited, and which valu
   assert.match(text, /Rows on screen \(median\): 60 in the slow ones, 6 in the fast ones/);
   assert.match(text, /plugins 0 ms, BB core 180 ms\. No plugin bundle ran in a slow frame/);
 });
+
+test("the report says how BB scopes plugin stylesheets, and nothing when it does not know", () => {
+  const input = { at: Date.UTC(2026, 10, 19), rangeLabel: "1 hour", minutes: 5, bb: "0.50.1", rows: [], merged: emptyWindow("s", 1), plugins: [], slows: [], marks: [], probe: null, bench: null };
+  assert.match(buildReport({ ...input, cssScope: "keyed" }), /BB 0\.50\.1 · 0 plugins · plugin CSS keyed per plugin \(keyedPluginCss on\)/);
+  assert.match(buildReport({ ...input, cssScope: "owned" }), /scoped to the plugin root \(keyedPluginCss off\)/);
+  assert.doesNotMatch(buildReport({ ...input, cssScope: null }), /plugin CSS/);
+});

@@ -33,6 +33,8 @@ export interface ReportInput {
   benchOff?: BenchLine | null;
   /** The thread switches, panel opens and page changes of the period. */
   navs?: NavLine[];
+  /** How BB scopes plugin stylesheets (BB 0.50's `keyedPluginCss`), when known. */
+  cssScope?: "keyed" | "owned" | null;
 }
 
 const num = (x: number) => (Math.abs(x) >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
@@ -54,7 +56,7 @@ export function buildReport(input: ReportInput): string {
   const navs = input.navs ?? [];
   const out: string[] = [];
   out.push(`# BB performance report`);
-  out.push(`${new Date(input.at).toISOString()} · last ${input.rangeLabel}, ${input.minutes} min on screen${input.bb ? ` · BB ${input.bb}` : ""} · ${plugins.length} plugins`);
+  out.push(`${new Date(input.at).toISOString()} · last ${input.rangeLabel}, ${input.minutes} min on screen${input.bb ? ` · BB ${input.bb}` : ""} · ${plugins.length} plugins${input.cssScope ? ` · plugin CSS ${input.cssScope === "keyed" ? "keyed per plugin (keyedPluginCss on)" : "scoped to the plugin root (keyedPluginCss off)"}` : ""}`);
 
   out.push("", "## Against the targets");
   for (const r of rows) {

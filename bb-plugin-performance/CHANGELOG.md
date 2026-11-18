@@ -15,4 +15,5 @@ Releases are the tags `performance/vX.Y.Z` of https://github.com/nfour/bb-plugin
 - Pages driven by automation (headless or scripted browsers, `navigator.webdriver`) are measured for their own dashboard but write nothing to the metrics files, so bots and tests no longer pass for your real use.
 - Cold start is now first paint plus the first 500 ms without a long frame (it used to be the end of the last long frame in the first 10 s, which was always near the 10 s cap).
 - A badge on the nav icon with the biggest gap as a multiple of its target.
+- The Copy report says whether BB's "Faster styles inside plugins" experiment (`keyedPluginCss`) is on. A BB update in the middle of a day is now marked in the day's file, and the share of slow-frame time spent in style and layout is no longer inflated by a few frames that reported no style work.
 - The metrics files are about a third smaller (a day of 2.3 MB becomes 1.7 MB): the page-wide CSS line is written once a day instead of at every page load, and the server line keeps only what changed. The dashboard and `bb performance summary` read the same.

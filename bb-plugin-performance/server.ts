@@ -136,7 +136,7 @@ export default async function plugin(bb: BbPluginApi) {
     for (const line of lines) keep(line);
     if (!(await settings.get()).writeFile) return 0;
     try {
-      const n = await writer.append(forFile(lines), header);
+      const n = await writer.append(forFile(lines), header, JSON.stringify([bbVersion, versions]));
       lastWriteError = null;
       return n;
     } catch (error) {
