@@ -3,4 +3,4 @@ packages:
 allowBuilds:
   better-sqlite3: false
 minimumReleaseAgeExclude:
-  - '@get-bb/plugin-sdk@0.6.75 || 0.6.94'
+  - '@get-bb/plugin-sdk@0.6.75 || 0.6.94 || 0.6.157'
