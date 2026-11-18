@@ -17,6 +17,7 @@
 import { execFile } from "node:child_process";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { LEASE_MS, SWEEP_MS } from "./src/lease.ts";
 
 const target = z.discriminatedUnion("type", [
   z.object({ type: z.literal("uncommitted") }),
@@ -68,12 +69,14 @@ export const rpcContract = defineRpcContract({
   recent_commits: { input: z.object({ environmentId: z.string().min(1), count: z.number().int().min(1).max(50) }), output: commits },
   /** Moves the merge base back `count` commits so BB lists them; `moved` true while a record stands for it. */
   show_recent: { input: z.object({ environmentId: z.string().min(1), count: z.number().int().min(1).max(50) }), output: moved },
+  /** The page still shows its picked commit: keeps the moved base from being put back for LEASE_MS more. */
+  keep_base: { input: z.object({ environmentId: z.string().min(1) }), output: z.object({ ok: z.boolean() }) },
   /** Puts back the merge base `show_recent` replaced; `moved` false when there was nothing to put back. */
   restore_base: {
     input: z.object({
       environmentId: z.string().min(1),
       /** Why, for the log. */
-      reason: z.enum(["scope", "abandoned", "recent-off", "dispose", "startup"]).default("scope"),
+      reason: z.enum(["scope", "abandoned", "recent-off", "dispose", "startup", "page-gone"]).default("scope"),
     }),
     output: moved,
   },
@@ -87,6 +90,8 @@ interface Recent {
   sha: string;
 }
 const recentKey = (environmentId: string) => `recent:${environmentId}`;
+// A moved base is put back when its page stops saying it is still looking (src/lease.ts): a closed tab
+// or a crashed browser runs no code, and bb 0.50 skips page teardown.
 
 /** `git log` in `path`: the newest `count` commits of HEAD, newest first. */
 const log = (path: string, count: number) =>
@@ -121,6 +126,8 @@ export default async function plugin(bb: BbPluginApi) {
   };
   // One move at a time per environment, so two calls never interleave their
   // read-modify-write of the base and its record.
+  /** When each moved environment's page last said it was still looking. */
+  const lastSeen = new Map<string, number>();
   const chains = new Map<string, Promise<unknown>>();
   const serial = <T>(environmentId: string, task: () => Promise<T>): Promise<T> => {
     const run = (chains.get(environmentId) ?? Promise.resolve()).then(task, task);
@@ -145,6 +152,7 @@ export default async function plugin(bb: BbPluginApi) {
     if (!record) return false;
     await setMergeBase(environmentId, record.previous);
     await kv.delete(recentKey(environmentId));
+    lastSeen.delete(environmentId);
     bb.log.info(`base restored ${environmentId}: ${record.sha} -> ${record.previous ?? "default"} (${reason})`);
     return true;
   };
@@ -195,6 +203,7 @@ export default async function plugin(bb: BbPluginApi) {
             await (record ? kv.set(recentKey(environmentId), record) : kv.delete(recentKey(environmentId)));
             throw cause;
           }
+          lastSeen.set(environmentId, Date.now());
           bb.log.info(`base moved ${environmentId}: ${environment.mergeBaseBranch ?? "default"} -> ${sha} (last ${count})`);
           return { ok: true as const, moved: true };
         } catch (cause) {
@@ -202,6 +211,11 @@ export default async function plugin(bb: BbPluginApi) {
           return { ok: false as const, message: message(cause) };
         }
       }),
+    keep_base: async ({ environmentId }) => {
+      const known = lastSeen.has(environmentId);
+      if (known) lastSeen.set(environmentId, Date.now());
+      return { ok: known };
+    },
     restore_base: ({ environmentId, reason }) =>
       serial(environmentId, async () => {
         try {
@@ -228,9 +242,18 @@ export default async function plugin(bb: BbPluginApi) {
       bb.log.warn(`restoring the merge bases (${reason}) failed: ${message(cause)}`);
     }
   };
+  const sweep = setInterval(() => {
+    for (const [environmentId, seen] of lastSeen)
+      if (Date.now() - seen > LEASE_MS)
+        void serial(environmentId, () => restore(environmentId, "page-gone")).catch((cause) =>
+          bb.log.warn(`restoring the merge base failed for ${environmentId}: ${message(cause)}`),
+        );
+  }, SWEEP_MS);
+  sweep.unref?.();
   bb.log.info("loaded");
   void restoreAll("startup");
   bb.onDispose(async () => {
+    clearInterval(sweep);
     await restoreAll("dispose");
     bb.log.info("disposed");
   });

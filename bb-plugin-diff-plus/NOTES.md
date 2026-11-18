@@ -1,6 +1,6 @@
 # Diff Plus: design notes
 
-A folder tree overlaid into BB's own Diff tab. BB has no slot beside the tab, so everything here finds the tab by its markup (bb-app 0.47/0.48, undocumented, can change).
+A folder tree overlaid into BB's own Diff tab. BB has no slot beside the tab, so everything here finds the tab by its markup (bb-app 0.47 to 0.50.1, undocumented, can change; every selector below was found again on 0.50.1).
 
 ## Data
 
@@ -20,10 +20,16 @@ A folder tree overlaid into BB's own Diff tab. BB has no slot beside the tab, so
 - Pinned rows: "Changes" and each open folder's row (class `diff-plus-` + the pin word, `top` by depth, opaque, inside its wrapper, which ends it) are pinned by the browser (native CSS pinning) with no script on the scroll path (a scripted version lagged the compositor). `useStuckRows` only places the soft edge and caps the levels (`room`, 40% of the view): `.diff-plus-shade` is a zero-height element at the tree's top that never un-sticks, moved down by `--diff-plus-covered` (an edge cast by the pinned rows themselves left stale paint in Brave).
 - Keyboard: `useTreeKeys` (`src/Tree.tsx`) gives the tree roving focus (one tab stop) and VS Code's keys: Up/Down, Home/End, Right opens or steps in, Left closes or goes to the parent; Enter/Space are the buttons' own click.
 
+## Checked on bb 0.50.1 (2026-11-19)
+
+- Still there: `[data-testid=git-diff-toolbar-layout]`, `-actions`, `-selector-slot` button, `button[aria-label="Search filenames"]` (the search input exists only while that box is open) and `Close filename search`, the list box as the toolbar wrapper's next sibling, the `filters` prop in the actions' React fiber, `[role=checkbox][aria-label^="Viewed "]`, `button[aria-label^="Expand "]`, `#thread-detail-secondary-panel` (`data-panel-size` 50.0 when open), `#thread-detail-secondary-panel-<pane id>` in a split, `[data-testid=secondary-panel-shelf]` on a phone width, `[data-split-resize-grid-root]`.
+- `experimental_usePanelTabs()` and `experimental_useAppPanel().getTabs()` do not help: called from this plugin's app overlay with the Diff panel open they return `{open: false, selectedKey: null, tabs: []}` (the overlay is not rendered inside the thread surface), and even where they work they name a tab (`kind: "plugin"`, its title) but give no element, so the markup is still needed to put the tree in the toolbar and list. Not used.
+
 ## Recent commits (`src/Picker.tsx`, `server.ts`)
 
 - BB's scope picker lists only commits since the merge base and drops a picked commit outside them, and the SDK cannot open another plugin's tab with a target. So the plugin orders BB's menu items with CSS `order`, portals its own commit rows into the menu, and on a click moves the merge base back N commits (`show_recent`), waits for BB to list the commit and clicks BB's own item.
 - The merge base is BB metadata per checkout, not git: every thread on the checkout, the Diff tab's All/Committed views and `bb git status` see it (the composer's context row shows only uncommitted changes). Every exit puts it back: an abandoned pick, any other scope, the plugin's dispose and its startup (`restoreAll` over the `recent:<env>` records). Calls are serialised per environment; each move and restore is logged at info with its reason.
+- bb 0.50 runs no plugin teardown on page unload, and a closed tab runs no page code, so the page cannot be relied on to put the base back. Backstops: the server restores on startup and dispose; the page that moved the base says so every 20s (`keep_base`, `src/lease.ts`) and the server restores it (`page-gone`) once 150s pass without one, checked every 15s (the sweep timer is unref'd). A reload restores through the page's own once-per-load `restore_base`.
 - The page asks `restore_base` once per environment (and Recent commits setting) per page load, then only while its own pick has the base moved (`baseMoved`).
 
 ## Icons

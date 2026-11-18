@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import plugin from "../server.ts";
+import { LEASE_MS, SWEEP_MS } from "./lease.ts";
 
 const ENV = "env_test";
 const git = (cwd: string, ...args: string[]) =>
@@ -246,4 +247,28 @@ test("an environment with no folder reports an error instead of throwing", async
   assert.match(shown.message, /no folder/);
   const commits = await dp.call("recent_commits", { environmentId: ENV, count: 2 });
   assert.equal(commits.ok, false);
+});
+
+test("a moved base whose page stops saying it is looking is put back; a page that keeps saying it is not", async (t) => {
+  const { w } = await fresh(6, "main");
+  t.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const dp = await w.load();
+  await dp.call("show_recent", { environmentId: ENV, count: 2 });
+  const settle = () => new Promise<void>((done) => setImmediate(done));
+  // A page that keeps pinging holds it well past the lease.
+  for (let i = 0; i < 10; i++) {
+    t.mock.timers.tick(LEASE_MS / 5);
+    assert.deepEqual(await dp.call("keep_base", { environmentId: ENV }), { ok: true });
+    await settle();
+  }
+  assert.notEqual(w.environment.mergeBaseBranch, "main", "still moved while its page is there");
+  // The page goes (a closed tab runs no code): after the lease the sweep puts the base back.
+  for (let i = 0; i < 20 && w.environment.mergeBaseBranch !== "main"; i++) {
+    t.mock.timers.tick(SWEEP_MS);
+    await settle();
+    await settle();
+  }
+  assert.equal(w.environment.mergeBaseBranch, "main");
+  assert.ok(w.logs.some((l) => l.message.includes("(page-gone)")));
+  assert.deepEqual(await dp.call("keep_base", { environmentId: ENV }), { ok: false }, "nothing is moved any more");
 });

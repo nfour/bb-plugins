@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../server";
+import { BEAT_MS } from "./lease.ts";
 import { pickerItems, pickerMenu, type DiffTab, type PickerItem } from "./diff-tab";
 import type { RecentCommit } from "./recent";
 
@@ -31,10 +32,38 @@ const LIST_WAIT_MS = 8000;
 /**
  * The environments whose merge base a recent commit moved, as far as this page
  * knows. Their "Committed changes" would mean those N commits, and picking it
- * puts the base back, after which BB drops it for All changes, so it is hidden.
+ * puts the base back, after which BB drops it for All changes, so it is left out.
  */
 const moved = new Set<string>();
-export const baseRestored = (environmentId: string) => moved.delete(environmentId);
+/** While a base is moved the page says so every BEAT_MS, so the server can tell a closed tab from an open one (server.ts `keep_base`). */
+const beats = new Map<string, ReturnType<typeof setInterval>>();
+function beat(environmentId: string, ping: () => Promise<boolean>) {
+  if (beats.has(environmentId)) return;
+  const stop = () => {
+    clearInterval(beats.get(environmentId));
+    beats.delete(environmentId);
+  };
+  beats.set(
+    environmentId,
+    setInterval(() => {
+      if (!moved.has(environmentId)) return stop();
+      void ping().then(
+        (known) => {
+          if (!known) {
+            moved.delete(environmentId);
+            stop();
+          }
+        },
+        () => {},
+      );
+    }, BEAT_MS),
+  );
+}
+export const baseRestored = (environmentId: string) => {
+  moved.delete(environmentId);
+  clearInterval(beats.get(environmentId));
+  beats.delete(environmentId);
+};
 /** Whether this page moved the environment's merge base and has not put it back. */
 export const baseMoved = (environmentId: string) => moved.has(environmentId);
 
@@ -139,7 +168,10 @@ export function PickerCommits({ tab, environmentId, commits, count }: PickerProp
     try {
       const result = await rpc.call("show_recent", { environmentId, count });
       if (!result.ok) throw new Error(result.message);
-      if (result.moved) moved.add(environmentId);
+      if (result.moved) {
+        moved.add(environmentId);
+        beat(environmentId, () => rpc.call("keep_base", { environmentId }).then((answer) => answer.ok));
+      }
       const deadline = Date.now() + LIST_WAIT_MS;
       while (menuRef.current === menu && menu.isConnected) {
         const item = pickerItems(menu).find((item) => item.kind === "commit" && item.sha && commit.sha.startsWith(item.sha));
