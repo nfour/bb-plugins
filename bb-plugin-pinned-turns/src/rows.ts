@@ -24,39 +24,125 @@ export function flatten(rows: readonly Row[], out: Row[] = []): Row[] {
   return out;
 }
 
-/** How a delta lists the page's order: a `[from, to]` stretch of the rows already held (to exclusive), or the id of one row. */
+/** How a delta lists the page's order: a `[start, count]` stretch of the rows already held (`count` rows from index `start`), or the id of one new row. */
 export type RowOrder = readonly (string | readonly [number, number])[];
 
+/** Where in a row an op acts: string keys and array indexes, never empty. */
+type PatchPath = readonly (string | number)[];
+/** One change to a row already held, as BB (0.50 and later) sends it in a delta's `patchRows`. */
+export type RowOp = readonly ["append", PatchPath, string] | readonly ["set", PatchPath, unknown] | readonly ["delete", PatchPath];
+export interface RowPatch {
+  id: string;
+  ops: readonly RowOp[];
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const BAD = Symbol("a patch that does not fit");
+
+/** The value an op leaves at its last key: `set` replaces it, `append` extends a string that is there. */
+function leaf(held: unknown, op: RowOp): unknown {
+  if (op[0] === "set") return op[2];
+  return op[0] === "append" && typeof held === "string" ? held + op[2] : BAD;
+}
+
 /**
- * The page a delta read stands for: `page` (the rows as the last read left them) with `upsertRows`
- * put in their places. Without `rowOrder` the order is unchanged and every upsert must already be on
- * the page; with it, the page is rebuilt from the stretches and ids listed. Returns null when the
- * delta does not fit what is held (a stretch out of range, an id nowhere), and the caller reads a
- * full page instead.
+ * `node` with `op` applied at `op[1][depth]` and below: copied along the path, `node` itself never
+ * touched. Follows BB's own client: no key is created on the way (`set` makes only its last key, or the
+ * array slot just past the end), `append` needs a string, `delete` needs an object key that exists
+ * (an array element is replaced as a whole array, never deleted), and anything else is `BAD`.
  */
-export function applyDelta<T extends { id: string }>(page: readonly T[], delta: { upsertRows: readonly T[]; rowOrder?: RowOrder }): T[] | null {
+function patchAt(node: unknown, op: RowOp, depth: number): unknown {
+  const path = op[1];
+  const key = path[depth]!;
+  const last = depth === path.length - 1;
+  if (Array.isArray(node)) {
+    if (typeof key !== "number" || !Number.isInteger(key) || key < 0 || key > node.length) return BAD;
+    if (last && op[0] === "delete") return BAD;
+    const next = last ? leaf(node[key], op) : patchAt(node[key], op, depth + 1);
+    if (next === BAD) return BAD;
+    const copy = [...node];
+    copy[key] = next;
+    return copy;
+  }
+  if (!isObject(node) || typeof key !== "string") return BAD;
+  if (last && op[0] === "delete") {
+    if (node[key] === undefined) return BAD;
+    const { [key]: _gone, ...rest } = node;
+    return rest;
+  }
+  const next = last ? leaf(node[key], op) : patchAt(node[key], op, depth + 1);
+  if (next === BAD) return BAD;
+  const copy = { ...node };
+  // Not an assignment: a key like `__proto__` must stay a plain key.
+  Object.defineProperty(copy, key, { configurable: true, enumerable: true, value: next, writable: true });
+  return copy;
+}
+
+/** A copy of `row` with `ops` applied in order, or null when one does not fit or the row would change its id or kind. */
+export function patchRow<T extends { id: string }>(row: T, ops: readonly RowOp[]): T | null {
+  let now: unknown = row;
+  for (const op of ops) {
+    if (op[1].length === 0) return null;
+    now = patchAt(now, op, 0);
+    if (now === BAD) return null;
+  }
+  const kind = (row as { kind?: unknown }).kind;
+  return isObject(now) && now.id === row.id && now.kind === kind ? (now as T) : null;
+}
+
+/**
+ * The page a delta read stands for: `page` (the rows as the last read left them) with the delta's
+ * changes put in their places. `upsertRows` are new or whole replacement rows; `patchRows` are changes to rows
+ * held (BB 0.50 sends a changed row as ops, not whole). Without `rowOrder` the order is unchanged and every
+ * upsert and patch must be for a row already on the page; with it, the page is rebuilt from the stretches
+ * (`[start, count]`) and ids listed. Returns null when the delta does not fit what is held (a stretch out of range, an id
+ * nowhere, a patch that does not apply, a row left out or counted twice), and the caller reads a full
+ * page instead. The held rows are never changed.
+ */
+export function applyDelta<T extends { id: string }>(
+  page: readonly T[],
+  delta: { upsertRows: readonly T[]; patchRows?: readonly RowPatch[]; rowOrder?: RowOrder },
+): T[] | null {
   const upserts = new Map(delta.upsertRows.map((row) => [row.id, row]));
-  if (!delta.rowOrder) {
-    const out = page.map((row) => upserts.get(row.id) ?? row);
-    for (const id of upserts.keys()) if (!page.some((row) => row.id === id)) return null;
-    return out;
-  }
-  const held = new Map(page.map((row) => [row.id, row]));
-  const out: T[] = [];
-  for (const entry of delta.rowOrder) {
-    if (typeof entry === "string") {
-      const row = upserts.get(entry) ?? held.get(entry);
-      if (!row) return null;
-      out.push(row);
-      continue;
+  const patches = new Map((delta.patchRows ?? []).map((patch) => [patch.id, patch.ops]));
+  if (upserts.size !== delta.upsertRows.length || patches.size !== (delta.patchRows ?? []).length) return null;
+  let upserted = 0;
+  let patched = 0;
+  let broken = false;
+  // A held row as the delta leaves it.
+  const place = (row: T): T => {
+    const whole = upserts.get(row.id);
+    if (whole) {
+      upserted++;
+      return whole;
     }
-    const [from, to] = entry;
-    if (!(from >= 0 && from <= to && to <= page.length)) return null;
-    for (let i = from; i < to; i++) out.push(upserts.get(page[i]!.id) ?? page[i]!);
+    const ops = patches.get(row.id);
+    if (!ops) return row;
+    patched++;
+    const next = patchRow(row, ops);
+    if (!next) broken = true;
+    return next ?? row;
+  };
+  const out: T[] = [];
+  if (!delta.rowOrder) {
+    for (const row of page) out.push(place(row));
+  } else {
+    for (const entry of delta.rowOrder) {
+      if (typeof entry === "string") {
+        // A row named by id is a new one; a held row comes in a stretch.
+        const row = upserts.get(entry);
+        if (!row) return null;
+        upserted++;
+        out.push(row);
+        continue;
+      }
+      const [start, count] = entry;
+      if (!(Number.isInteger(start) && Number.isInteger(count) && start >= 0 && count >= 0 && start + count <= page.length)) return null;
+      for (let i = start; i < start + count; i++) out.push(place(page[i]!));
+    }
   }
-  // Every upsert must have a place, or a row would be lost.
-  for (const id of upserts.keys()) if (!out.some((row) => row.id === id)) return null;
-  return out;
+  // Every upsert and patch must have found its row exactly once, or a change would be lost.
+  return !broken && upserted === upserts.size && patched === patches.size ? out : null;
 }
 
 /**

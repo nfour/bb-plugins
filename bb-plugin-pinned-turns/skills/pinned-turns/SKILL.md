@@ -23,7 +23,7 @@ Use the **Pinned turns** submenu in a thread's actions menu (⋯ in the thread h
 
 ## How it reads the thread
 
-The newest page of the timeline is read once, then kept current with deltas: a refresh asks only for what changed since the last read (`afterTag`, about 1 KB, against 70 to 80 KB for a page) and tool rows' content is left out. A change that does not fit what is held, a rewrite of history (`history-rewritten`, `history-compacted`) and 60 s since the last full page read the whole page again. Older pages are read only when a half of the bar is missing and older rows exist. A burst of thread changes is read once, after 300 ms of quiet and at the latest every second.
+The newest page of the timeline is read once, then kept current with deltas: a refresh asks only for what changed since the last read (`afterTag`, about 1 KB, against 70 to 80 KB for a page; from BB 0.50 a changed row comes as small `patchRows` ops that are applied to the held row) and tool rows' content is left out. A change that does not fit what is held, a rewrite of history (`history-rewritten`, `history-compacted`) and 60 s since the last full page read the whole page again. Older pages are read only when a half of the bar is missing and older rows exist. A burst of thread changes is read once, after 300 ms of quiet and at the latest every second.
 
 Nothing is read while the bar is not on the page or the tab is in the background; changes only mark the data stale, and one read catches up when the bar or tab comes back. So a bar that looks stale in a background tab is normal; it updates on return. The turn counter reads BB's `conversationOutline` (one small request) again only when the newest user message changes.
 

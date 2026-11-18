@@ -18,4 +18,4 @@ Open the thread's actions menu (⋯ in the thread header, or a sidebar row's men
 
 Each is also a plugin setting (`halves` is `both`, `message` or `reply`). Every pane of a split workspace has its own bar. Options that cannot apply here (the turn counter on a narrow thread view, full text on hover on a touch-only device) are greyed out, with the reason below the list. **Show in thread menus** on the plugin's page in BB settings removes the submenu; that page then holds every option, so it is the way back.
 
-It reads BB's timeline DOM, which is undocumented; the selectors it relies on are in `src/dom.ts` and `NOTES.md`. It needs BB 0.48 or later, and no account or service besides BB.
+It reads BB's timeline DOM, which is undocumented; the selectors it relies on are in `src/dom.ts` and `NOTES.md`. Requires BB 0.50 or later; no account or service besides BB.

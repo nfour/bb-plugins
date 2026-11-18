@@ -115,17 +115,19 @@ export function watchTimeline(sdk: Sdk, threadId: string, publish: (rows: Row[],
     const rewrite = replace;
     replace = false;
     try {
-      const asDelta = loaded && !rewrite && tag !== null && began - fullAt < FULL_EVERY_MS;
+      const asTag = tag;
+      const asDelta = loaded && !rewrite && asTag !== null && began - fullAt < FULL_EVERY_MS;
       const page = asDelta
-        ? await sdk.threads.timeline({ threadId, afterTag: tag!, deferContent: "true", signal: controller.signal })
+        ? await sdk.threads.timeline({ threadId, afterTag: asTag!, deferContent: "true", signal: controller.signal })
         : await sdk.threads.timeline({ threadId, deferContent: "true", signal: controller.signal });
       if (disposed || mine !== issued) return;
       const took = Date.now() - began;
       let updates: readonly Row[];
       if ("delta" in page) {
-        const next = applyDelta(pageRows, page.delta);
+        // A delta stands on the read it names; if that is not the one held, or it does not fit what is held (a patch that
+        // does not apply, a row it names that is not here), read the whole page.
+        const next = page.delta.afterTag === asTag ? applyDelta(pageRows, page.delta) : null;
         if (!next) {
-          // The delta does not fit what is held: read the whole page.
           tag = null;
           void newest();
           return;

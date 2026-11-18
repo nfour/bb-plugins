@@ -8,7 +8,7 @@ The options are in **Pinned turns** in a thread's actions menu; the README lists
 
 ## Requirements
 
-- BB 0.48 or later.
+- Requires BB 0.50 or later.
 - It reads BB's timeline layout, which is not a documented interface, so a future BB release may need a plugin update.
 - Jumping never changes the page URL or the back button's history.
 - While a turn works it fetches only what changed in the timeline (about 1 KB), and nothing while the bar is off the page or the tab is in the background.

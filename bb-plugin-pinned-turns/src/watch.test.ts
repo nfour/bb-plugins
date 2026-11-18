@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { applyDelta, type Row } from "./rows.ts";
+import { applyDelta, patchRow, type Row, type RowOp } from "./rows.ts";
 import { watchTimeline } from "./watch.ts";
 
 type Cursor = { anchorId: string; anchorSeq: number } | null;
@@ -55,6 +55,20 @@ function growing() {
   });
 }
 
+test("applyDelta: a stretch is [start, count], so a window that slid or a row that left still lines up", () => {
+  const r = (id: string, text = id) => ({ id, kind: "message", text });
+  const page = ["a", "b", "c", "d", "e"].map((id) => r(id));
+  // bb 0.50.1's own `computeThreadTimelineDelta` for rows a..e becoming b,c,d,e,f with c's text extended:
+  const slid = { upsertRows: [r("f")], patchRows: [{ id: "c", ops: [["append", ["text"], "!"]] as const }], rowOrder: [[1, 4], "f"] as const };
+  assert.deepEqual(applyDelta(page, slid)?.map((x) => `${x.id}:${x.text}`), ["b:b", "c:c!", "d:d", "e:e", "f:f"]);
+  // A middle row gone, the stretches either side of it.
+  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[0, 2], [3, 2]] })?.map((x) => x.id), ["a", "b", "d", "e"]);
+  // A stretch that runs past the page, or ends exactly at it.
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[3, 3]] }), null);
+  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[3, 2]] })?.map((x) => x.id), ["d", "e"]);
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[-1, 2]] }), null);
+});
+
 test("applyDelta: without an order upserts replace rows where they are, and cannot add one", () => {
   const r = (id: string, v = "") => ({ id, v });
   assert.deepEqual(applyDelta([r("a"), r("b")], { upsertRows: [r("b", "!")] }), [r("a"), r("b", "!")]);
@@ -65,7 +79,8 @@ test("applyDelta: an order of stretches and ids rebuilds the page, and refuses w
   const r = (id: string, v = "") => ({ id, v });
   const page = [r("a"), r("b"), r("c")];
   assert.deepEqual(applyDelta(page, { upsertRows: [r("c", "!"), r("d")], rowOrder: [[0, 3], "d"] }), [r("a"), r("b"), r("c", "!"), r("d")]);
-  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[1, 3], "a"] }), [r("b"), r("c"), r("a")]);
+  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[1, 2], [0, 1]] }), [r("b"), r("c"), r("a")], "a moved row is a stretch of its own");
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[1, 2], "a"] }), null, "an id names only a new row (BB's own client agrees)");
   assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[0, 4]] }), null);
   assert.equal(applyDelta(page, { upsertRows: [], rowOrder: ["nope"] }), null);
   assert.equal(applyDelta(page, { upsertRows: [r("x")], rowOrder: [[0, 3]] }), null, "an upsert with no place would lose a row");
@@ -423,6 +438,135 @@ test("stop aborts the read in flight and unsubscribes", async () => {
     watch.stop();
     assert.equal(f.hasListener(), false);
     assert.equal((f.calls[0]!.signal as AbortSignal).aborted, true);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// BB 0.50 sends a changed row as `patchRows` ops instead of whole in `upsertRows`.
+
+const frozen = <T>(value: T): T => structuredClone(value);
+const turn = () => ({ id: "t", kind: "turn", status: "pending", text: "", meta: { n: 1, tags: ["x"] }, children: [{ id: "c1", kind: "conversation", text: "hel" }] });
+
+test("patchRow: append, set and delete change a copy and leave the held row alone", () => {
+  const held = turn();
+  const before = frozen(held);
+  const got = patchRow(held, [
+    ["append", ["children", 0, "text"], "lo"],
+    ["set", ["status"], "completed"],
+    ["delete", ["meta", "n"]],
+  ]) as typeof held | null;
+  assert.deepEqual(got?.children[0], { id: "c1", kind: "conversation", text: "hello" });
+  assert.equal(got?.status, "completed");
+  assert.deepEqual(got?.meta, { tags: ["x"] });
+  assert.deepEqual(held, before, "the held row is untouched");
+  assert.notEqual(got?.children, held.children, "arrays along the path are copied");
+  assert.equal(got?.meta.tags, held.meta.tags, "what is off the path is shared");
+});
+
+test("patchRow: set makes its last key, or the array slot just past the end", () => {
+  const got = patchRow(turn(), [
+    ["set", ["children", 1], { id: "c2", kind: "conversation", text: "new" }],
+    ["set", ["meta", "added"], true],
+    ["set", ["meta", "tags", 1], "y"],
+  ]) as ReturnType<typeof turn> & { meta: Record<string, unknown> };
+  assert.deepEqual(got.children.map((c) => c.id), ["c1", "c2"]);
+  assert.equal(got.meta.added, true);
+  assert.deepEqual(got.meta.tags, ["x", "y"]);
+});
+
+test("patchRow: a key named __proto__ stays a plain key", () => {
+  const got = patchRow({ id: "a", kind: "k" }, [["set", ["__proto__"], { polluted: true }]]) as Record<string, unknown>;
+  assert.equal(Object.getPrototypeOf(got), Object.prototype);
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+  assert.deepEqual(Object.keys(got), ["id", "kind", "__proto__"]);
+});
+
+test("patchRow: refuses what does not fit", () => {
+  const bad = (op: RowOp | RowOp[]) => assert.equal(patchRow(turn(), Array.isArray(op[0]) ? (op as RowOp[]) : [op as RowOp]), null, JSON.stringify(op));
+  bad(["append", ["meta", "n"], "x"]); // not a string
+  bad(["append", ["nope"], "x"]); // nothing there to append to
+  bad(["delete", ["nope"]]); // no such key
+  bad(["delete", ["children", 0]]); // an array element is never deleted
+  bad(["set", ["nope", "deeper"], 1]); // no object is made on the way
+  bad(["set", ["children", 5], 1]); // a hole
+  bad(["set", ["children", "0"], 1]); // a string key in an array
+  bad(["set", ["meta", 0], 1]); // a number key in an object
+  bad(["set", ["status", "x"], 1]); // into a string
+  bad(["set", [], 1]); // no path
+  bad(["set", ["id"], "other"]); // a row cannot change its id
+  bad(["set", ["kind"], "conversation"]); // or its kind
+  bad([["set", ["status"], "ok"], ["delete", ["nope"]]]); // one bad op spoils the patch
+});
+
+test("applyDelta: patchRows are applied where the row is, with and without an order", () => {
+  const r = (id: string, text = "") => ({ id, kind: "k", text });
+  const page = [r("a", "x"), r("b", "he"), r("c")];
+  const patch = [{ id: "b", ops: [["append", ["text"], "llo"]] as const }];
+  const flat = applyDelta(page, { upsertRows: [], patchRows: patch });
+  assert.deepEqual(flat, [r("a", "x"), r("b", "hello"), r("c")]);
+  assert.equal(flat![0], page[0], "a row nothing touched is the same object");
+  assert.equal(page[1]!.text, "he", "the held page is untouched");
+  const ordered = applyDelta(page, { upsertRows: [r("d")], patchRows: patch, rowOrder: [[1, 2], "d", [0, 1]] });
+  assert.deepEqual(ordered, [r("b", "hello"), r("c"), r("d"), r("a", "x")]);
+});
+
+test("applyDelta: a patch that cannot be applied makes the delta not fit", () => {
+  const r = (id: string, text = "") => ({ id, kind: "k", text });
+  const page = [r("a"), r("b")];
+  const ops = (...o: RowOp[]) => [{ id: "b", ops: o }];
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: [{ id: "zzz", ops: [["set", ["text"], "x"]] }] }), null, "an id not held");
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: ops(["delete", ["nope"]]) }), null, "a path that does not resolve");
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: ops(["append", ["nope"], "x"]) }), null, "an op that does not fit");
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: ops(["set", ["text"], "x"]), rowOrder: [[0, 1]] }), null, "a patched row the order leaves out");
+  assert.equal(applyDelta(page, { upsertRows: [r("b", "w")], patchRows: ops(["set", ["text"], "x"]) }), null, "a row both replaced and patched");
+  assert.equal(applyDelta(page, { upsertRows: [], patchRows: [...ops(["set", ["text"], "x"]), ...ops(["set", ["text"], "y"])] }), null, "two patches for one row");
+});
+
+test("a patched delta updates a held row without a full read; one that does not fit reads the page", async () => {
+  clock();
+  try {
+    let n = 1;
+    const f = scripted((q) => {
+      if (!q.afterTag) return full([row("a", 1, "hel"), row("b", 2)], n === 1 ? "t1" : "t9");
+      n++;
+      if (n === 2) return { tag: "t2", delta: { afterTag: "t1", upsertRows: [], patchRows: [{ id: "a", ops: [["append", ["text"], "lo"]] }], fields: {} } };
+      return { tag: "t3", delta: { afterTag: "t2", upsertRows: [], patchRows: [{ id: "gone", ops: [["set", ["text"], "x"]] }], fields: {} } };
+    });
+    const seen: Seen[] = [];
+    const w = watchTimeline(f.sdk, "thr", (rows, hasOlder) => seen.push({ rows, hasOlder }), quiet, true);
+    await flush();
+    f.signal("timeline");
+    mock.timers.tick(400);
+    await flush();
+    assert.equal((seen.at(-1)!.rows[0] as unknown as { text: string }).text, "hello", "the streamed text is there at once");
+    assert.equal(f.calls.length, 2);
+    assert.equal(f.calls[1]!.afterTag, "t1", "and it came as a delta");
+    f.signal("timeline");
+    mock.timers.tick(400);
+    await flush();
+    assert.equal(f.calls.length, 4, "a patch for a row not held is followed by a full read");
+    assert.equal(f.calls[3]!.afterTag, undefined);
+    w.stop();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a delta that names another read than the one held is not applied", async () => {
+  clock();
+  try {
+    const f = scripted((q) => (q.afterTag ? { tag: "t3", delta: { afterTag: "tX", upsertRows: [], patchRows: [{ id: "a", ops: [["set", ["text"], "no"]] }], fields: {} } } : full([row("a", 1, "kept")], "t1")));
+    const seen: Seen[] = [];
+    const w = watchTimeline(f.sdk, "thr", (rows, hasOlder) => seen.push({ rows, hasOlder }), quiet, true);
+    await flush();
+    f.signal("timeline");
+    mock.timers.tick(400);
+    await flush();
+    assert.equal(f.calls.at(-1)!.afterTag, undefined, "a full read follows");
+    assert.equal((seen.at(-1)!.rows[0] as unknown as { text: string }).text, "kept");
+    w.stop();
   } finally {
     mock.timers.reset();
   }
