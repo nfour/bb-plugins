@@ -35,6 +35,8 @@ import {
   shares,
   splitOf,
   sane,
+  mergeVersions,
+  newerVersion,
   toneOf,
   worstGap,
 } from "./model.ts";
@@ -366,4 +368,22 @@ test("a window written with an impossible style time is read as having none", ()
   assert.deepEqual(sane(bad), { frameMs: 150, scriptMs: 140, forcedMs: 5, styleMs: 0, otherMs: 10 });
   const fine = { frameMs: 100, scriptMs: 40, forcedMs: 0, styleMs: 30, otherMs: 30 };
   assert.equal(sane(fine), fine);
+});
+
+test("a split with an impossible style time is not read as render-bound", () => {
+  assert.equal(boundOf({ frameMs: 150, scriptMs: 140, forcedMs: 5, styleMs: 14_747_893, otherMs: 1 }), "script");
+  assert.equal(boundOf({ frameMs: 150, scriptMs: 20, forcedMs: 0, styleMs: 120, otherMs: 10 }), "render");
+});
+
+test("versions compare by their numbers, and a merge keeps the newest a page has reported", () => {
+  assert.equal(newerVersion("0.50.1", "0.49.0"), true);
+  assert.equal(newerVersion("1.13.0", "1.9.2"), true);
+  assert.equal(newerVersion("0.49.0", "0.49.0"), false);
+  assert.equal(newerVersion("0.9", "0.9.1"), false);
+  const a = mergeVersions({}, [{ id: "x", version: "1.1.0" }, { id: "y", version: null }]);
+  assert.deepEqual(a, { x: "1.1.0" });
+  // a page that has not reloaded after an update reports the old version: no flip back
+  const b = mergeVersions(a, [{ id: "x", version: "1.0.0" }, { id: "z", version: "2.0.0" }]);
+  assert.deepEqual(b, { x: "1.1.0", z: "2.0.0" });
+  assert.deepEqual(mergeVersions(b, [{ id: "x", version: "1.2.0" }]), { x: "1.2.0", z: "2.0.0" });
 });

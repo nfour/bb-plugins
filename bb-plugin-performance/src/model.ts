@@ -147,6 +147,7 @@ export type Bound = "script" | "render" | "other";
 
 /** What a frame was mostly waiting on: its script, its style and layout, or other tasks. */
 export function boundOf(split: Split): Bound {
+  split = sane(split)!;
   const top = Math.max(split.scriptMs, split.styleMs, split.otherMs);
   if (top === split.scriptMs) return "script";
   return top === split.styleMs ? "render" : "other";
@@ -388,6 +389,29 @@ export function slimServer(line: ServerLine, prev: WorkerState | null, day: stri
   if (Object.keys(changed).length) out.workers = changed;
   if (gone.length) out.gone = gone;
   return { out, state: { workers, day, since: prev.since + 1 } };
+}
+
+/** Whether version `a` is newer than `b`, comparing their numeric parts (`0.50.1` over `0.49.0`, `1.13.0` over `1.9.2`). */
+export function newerVersion(a: string, b: string): boolean {
+  const x = a.match(/\d+/g)?.map(Number) ?? [];
+  const y = b.match(/\d+/g)?.map(Number) ?? [];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d > 0;
+  }
+  return false;
+}
+
+/**
+ * The plugin versions the server has been told of, one entry per plugin, the newest seen. Pages
+ * report their own list, and a tab left open across an update reports the old one: replacing the
+ * map with each report would make the `targets` key flip between pages and write a header at
+ * every flush. A removed plugin stays until the server restarts, which writes a header anyway.
+ */
+export function mergeVersions(known: Record<string, string>, reported: { id: string; version: string | null }[]): Record<string, string> {
+  const out = { ...known };
+  for (const p of reported) if (p.version && (out[p.id] === undefined || newerVersion(p.version, out[p.id]))) out[p.id] = p.version;
+  return out;
 }
 
 /** What a `css` line says, for telling whether the last one written already holds it. */

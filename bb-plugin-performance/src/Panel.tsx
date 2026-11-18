@@ -4,6 +4,7 @@ import type { rpcContract } from "../server";
 import { collector, type Live } from "./collector";
 import {
   boundOf,
+  sane,
   CALL_KINDS,
   coreKinds,
   CORE,
@@ -20,6 +21,7 @@ import {
   toneOf,
   worstGap,
   type Bound,
+  type Split,
   type Line,
   type MarkLine,
   type Measure,
@@ -410,6 +412,15 @@ interface DetailProps {
   cssKnown: boolean;
 }
 
+/** How a slow frame divided and what it was mostly waiting on; a split written before `splitOf` clamped style time is read through `sane` by the caller. */
+function SplitFlag({ split }: { split: Split }) {
+  return (
+    <span className="perf-flag" data-bound={boundOf(split)} title={`script ${split.scriptMs} ms (forced layout ${split.forcedMs}), style and layout ${split.styleMs} ms, other ${split.otherMs} ms`}>
+      {BOUND_LABEL[boundOf(split)]}
+    </span>
+  );
+}
+
 /** Everything known about one plugin, for the row that was opened. */
 function PluginDetail({ row, merged, windows, slows, live, probe, words, now, rangeMs, buckets, labels, cssKnown }: DetailProps) {
   const id = row.id;
@@ -555,7 +566,7 @@ function Moments({ slows, navs, from, to }: { slows: SlowLine[]; navs: NavLine[]
               <b data-tone={toneOfMs(l.ms)}>{l.ms} ms</b>
               <span className="perf-dim">{l.what === "loaf" ? "frame" : "input"} · {new Date(l.t).toLocaleTimeString()} · while {l.driver}</span>
               {l.phases && <span className="perf-flag" data-bound={phaseBound(l.phases) === "delay" ? "script" : "render"} title={`waited ${l.phases.delay} ms for the page, handlers ${l.phases.handler} ms, paint ${l.phases.present} ms`}>{{ delay: "queued behind other work", handler: "its own handlers", present: "slow to paint" }[phaseBound(l.phases)]}</span>}
-              {l.split && <span className="perf-flag" data-bound={boundOf(l.split)} title={`script ${l.split.scriptMs} ms (forced layout ${l.split.forcedMs}), style and layout ${l.split.styleMs} ms, other ${l.split.otherMs} ms`}>{BOUND_LABEL[boundOf(l.split)]}</span>}
+              {l.split && <SplitFlag split={sane(l.split)!} />}
               {l.scripts.map((s) => (
                 <span className="perf-flag" key={s.owner + s.inv} data-core={s.owner === CORE || undefined}>{s.owner} {s.ms} ms{s.forced ? ` (${s.forced} forced)` : ""}</span>
               ))}

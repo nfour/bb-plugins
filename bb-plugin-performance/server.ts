@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { cliCommand, defineCli, defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { createWriter, dayOf } from "./src/jsonl.ts";
-import { cssKey, measures, mergeWindows, slimServer, TARGETS, worstGap, type Line, type ServerLine, type TargetsLine, type WindowLine, type WorkerState } from "./src/model.ts";
+import { cssKey, measures, mergeVersions, mergeWindows, newerVersion, slimServer, TARGETS, worstGap, type Line, type ServerLine, type TargetsLine, type WindowLine, type WorkerState } from "./src/model.ts";
 import { findWorkers, readWorker, type Reading } from "./src/proc.ts";
 
 /** The boolean settings the page can switch. */
@@ -152,8 +152,8 @@ export default async function plugin(bb: BbPluginApi) {
       return null;
     },
     ingest: async ({ lines, bb: version, plugins }) => {
-      if (version) bbVersion = version;
-      versions = Object.fromEntries(plugins.filter((p) => p.version).map((p) => [p.id, p.version as string]));
+      if (version && (bbVersion === null || newerVersion(version, bbVersion))) bbVersion = version;
+      versions = mergeVersions(versions, plugins);
       for (const p of plugins) {
         const before = seen.get(p.id);
         seen.set(p.id, { calls: p.calls, errors: p.errors });
