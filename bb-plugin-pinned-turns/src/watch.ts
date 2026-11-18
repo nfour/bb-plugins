@@ -129,6 +129,9 @@ export function watchTimeline(sdk: Sdk, threadId: string, publish: (rows: Row[],
         const next = page.delta.afterTag === asTag ? applyDelta(pageRows, page.delta) : null;
         if (!next) {
           tag = null;
+          // The read below returns at once if the pane went inactive while this one was in flight; the page
+          // held is still stale then, and becoming active must read it.
+          stale = true;
           void newest();
           return;
         }
@@ -159,6 +162,7 @@ export function watchTimeline(sdk: Sdk, threadId: string, publish: (rows: Row[],
       replace ||= rewrite;
       stale = true;
       // Nothing else will prompt a retry on a thread that has gone quiet.
+      clearTimeout(timer);
       timer = setTimeout(newest, RETRY_MS);
     }
   };

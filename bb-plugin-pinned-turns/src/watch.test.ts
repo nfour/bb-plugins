@@ -265,6 +265,34 @@ test("a delta that does not fit what is held is answered with a full read", asyn
   }
 });
 
+test("a delta that does not fit while the pane went inactive is read in full when it becomes active again", async () => {
+  clock();
+  try {
+    let release: (page: unknown) => void = () => {};
+    const f = scripted((q) => {
+      if (!q.afterTag) return full([row("a", 1)], q.afterTag ? "x" : "t" + (f.calls.length));
+      return new Promise((resolve) => (release = resolve));
+    });
+    const seen: Seen[] = [];
+    const watch = watchTimeline(f.sdk, "t", (rows, hasOlder) => seen.push({ rows, hasOlder }), quiet, true);
+    await flush();
+    f.signal("message-added");
+    mock.timers.tick(300);
+    await flush();
+    watch.setActive(false);
+    release(delta("t1", "t2", [], [[0, 9]]));
+    await flush();
+    const before = f.calls.length;
+    watch.setActive(true);
+    await flush();
+    assert.equal(f.calls.length, before + 1, "becoming active reads what the failed delta could not");
+    assert.equal(f.calls.at(-1)!.afterTag, undefined);
+    watch.stop();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
 test("a rewrite of history and a minute of deltas both force a full read", async () => {
   clock();
   try {

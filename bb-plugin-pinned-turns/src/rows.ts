@@ -96,8 +96,9 @@ export function patchRow<T extends { id: string }>(row: T, ops: readonly RowOp[]
  * held (BB 0.50 sends a changed row as ops, not whole). Without `rowOrder` the order is unchanged and every
  * upsert and patch must be for a row already on the page; with it, the page is rebuilt from the stretches
  * (`[start, count]`) and ids listed. Returns null when the delta does not fit what is held (a stretch out of range, an id
- * nowhere, a patch that does not apply, a row left out or counted twice), and the caller reads a full
- * page instead. The held rows are never changed.
+ * nowhere, a patch that does not apply, an upserted or patched row that is not placed exactly once), and the
+ * caller reads a full page instead. Overlapping stretches may repeat an untouched held row (bb's own client
+ * accepts that too). The held rows are never changed.
  */
 export function applyDelta<T extends { id: string }>(
   page: readonly T[],

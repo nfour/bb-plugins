@@ -119,6 +119,8 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
     let observer: ResizeObserver | null = null;
     let watch: MutationObserver | null = null;
     let retry = 0;
+    let seeker: MutationObserver | null = null;
+    let seeking = 0;
     const l = live.current;
 
     const detach = () => {
@@ -133,11 +135,32 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
     };
     const attached = () =>
       timeline !== null && element !== null && timeline.scroller.isConnected && timeline.items.isConnected && element.parentElement === timeline.frame;
-    // A rebuilt timeline may not have its rows yet when its box appears; look again for a few frames.
+    // A rebuilt timeline may not have its rows yet when its box appears; look again for a few frames, then
+    // keep an eye on the page until the thread's first row turns up (a new thread, a slow fetch): BB mounts
+    // this component with the pane, rows or not. The observer is gone as soon as the bar is parked.
     const attachSoon = (tries: number) => {
       cancelAnimationFrame(retry);
       attach();
-      if (!attached() && tries > 0) retry = requestAnimationFrame(() => attachSoon(tries - 1));
+      if (attached()) stopSeeking();
+      else if (tries > 0) retry = requestAnimationFrame(() => attachSoon(tries - 1));
+      else seek();
+    };
+    const seek = () => {
+      if (seeker) return;
+      seeker = new MutationObserver(() => {
+        if (seeking) return;
+        seeking = requestAnimationFrame(() => {
+          seeking = 0;
+          attachSoon(0);
+        });
+      });
+      seeker.observe(document.body, { childList: true, subtree: true });
+    };
+    const stopSeeking = () => {
+      seeker?.disconnect();
+      seeker = null;
+      cancelAnimationFrame(seeking);
+      seeking = 0;
     };
     const attach = () => {
       if (attached()) return;
@@ -169,6 +192,7 @@ export function PinnedTurns({ threadId }: { threadId: string }) {
     attachSoon(ATTACH_FRAMES);
     return () => {
       cancelAnimationFrame(retry);
+      stopSeeking();
       cancelAnimationFrame(l.frame);
       l.frame = 0;
       detach();

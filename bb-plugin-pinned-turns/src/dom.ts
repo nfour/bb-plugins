@@ -1,6 +1,6 @@
 import { dataIdOf } from "./model.ts";
 
-/** BB's timeline DOM, as found in bb-app 0.47.0. Undocumented: see AGENTS.md. */
+/** BB's timeline DOM, as found in bb-app 0.47 and rechecked on 0.50.1. Undocumented: see AGENTS.md. */
 export interface Timeline {
   scroller: HTMLElement;
   /** `[data-timeline-items]`: the mounted rows and the windowing spacers. */
