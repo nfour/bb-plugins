@@ -11,13 +11,15 @@
 // page lists the last N commits itself; picking one moves the merge base to the
 // commit N back (a sha passes bb--git's branch-name check) so BB lists and shows
 // it, and picking any other scope puts the base back. The base it replaced is
-// kept in kv until then.
+// kept in kv until then. A page that closes cannot put it back (bb 0.50 runs no
+// page teardown), so while a Diff tab shows the commit the page pings `keep_base`
+// and the server restores the base itself once the pings stop (src/lease.ts).
 //
 // Everything else is in the page (app.tsx).
 import { execFile } from "node:child_process";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { LEASE_MS, SWEEP_MS } from "./src/lease.ts";
+import { LEASE_MS, MAX_LAPSE_TRIES, SWEEP_MS } from "./src/lease.ts";
 
 const target = z.discriminatedUnion("type", [
   z.object({ type: z.literal("uncommitted") }),
@@ -69,7 +71,7 @@ export const rpcContract = defineRpcContract({
   recent_commits: { input: z.object({ environmentId: z.string().min(1), count: z.number().int().min(1).max(50) }), output: commits },
   /** Moves the merge base back `count` commits so BB lists them; `moved` true while a record stands for it. */
   show_recent: { input: z.object({ environmentId: z.string().min(1), count: z.number().int().min(1).max(50) }), output: moved },
-  /** The page still shows its picked commit: keeps the moved base from being put back for LEASE_MS more. */
+  /** A page is still showing its picked commit (it pings only while a Diff tab shows one): keeps the moved base from being put back for LEASE_MS more. */
   keep_base: { input: z.object({ environmentId: z.string().min(1) }), output: z.object({ ok: z.boolean() }) },
   /** Puts back the merge base `show_recent` replaced; `moved` false when there was nothing to put back. */
   restore_base: {
@@ -128,6 +130,8 @@ export default async function plugin(bb: BbPluginApi) {
   // read-modify-write of the base and its record.
   /** When each moved environment's page last said it was still looking. */
   const lastSeen = new Map<string, number>();
+  /** Failed page-gone restores: when to try again, and how many have failed. */
+  const lapses = new Map<string, { at: number; tries: number }>();
   const chains = new Map<string, Promise<unknown>>();
   const serial = <T>(environmentId: string, task: () => Promise<T>): Promise<T> => {
     const run = (chains.get(environmentId) ?? Promise.resolve()).then(task, task);
@@ -149,10 +153,15 @@ export default async function plugin(bb: BbPluginApi) {
   /** Puts the replaced base back (inside `serial`); true when there was one to put back. */
   const restore = async (environmentId: string, reason: string) => {
     const record = await current(environmentId);
-    if (!record) return false;
+    // Nothing of ours is moved (put back, or changed elsewhere): no page has a lease on it.
+    if (!record) {
+      lastSeen.delete(environmentId);
+      return false;
+    }
     await setMergeBase(environmentId, record.previous);
     await kv.delete(recentKey(environmentId));
     lastSeen.delete(environmentId);
+    lapses.delete(environmentId);
     bb.log.info(`base restored ${environmentId}: ${record.sha} -> ${record.previous ?? "default"} (${reason})`);
     return true;
   };
@@ -243,11 +252,25 @@ export default async function plugin(bb: BbPluginApi) {
     }
   };
   const sweep = setInterval(() => {
-    for (const [environmentId, seen] of lastSeen)
-      if (Date.now() - seen > LEASE_MS)
-        void serial(environmentId, () => restore(environmentId, "page-gone")).catch((cause) =>
-          bb.log.warn(`restoring the merge base failed for ${environmentId}: ${message(cause)}`),
-        );
+    for (const [environmentId, seen] of lastSeen) {
+      if (Date.now() - seen <= LEASE_MS || Date.now() < (lapses.get(environmentId)?.at ?? 0)) continue;
+      void serial(environmentId, async () => {
+        // Looked at again here: a ping, or another restore, may have come while this waited its turn.
+        const again = lastSeen.get(environmentId);
+        if (again === undefined || Date.now() - again <= LEASE_MS) return;
+        try {
+          await restore(environmentId, "page-gone");
+        } catch (cause) {
+          // Try again later, further apart each time, and give up after a few: the startup restore still covers it.
+          const tries = (lapses.get(environmentId)?.tries ?? 0) + 1;
+          bb.log.warn(`restoring the merge base failed for ${environmentId} (try ${tries} of ${MAX_LAPSE_TRIES}): ${message(cause)}`);
+          if (tries >= MAX_LAPSE_TRIES) {
+            lapses.delete(environmentId);
+            lastSeen.delete(environmentId);
+          } else lapses.set(environmentId, { at: Date.now() + SWEEP_MS * 2 ** tries, tries });
+        }
+      });
+    }
   }, SWEEP_MS);
   sweep.unref?.();
   bb.log.info("loaded");

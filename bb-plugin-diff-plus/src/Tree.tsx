@@ -56,7 +56,7 @@ import {
 import { fileIcon, folderIcon } from "./file-icons";
 import { filterMatches } from "./match";
 import { setOption, useOptions } from "./options";
-import { baseMoved, baseRestored, PickerCommits } from "./Picker";
+import { baseMoved, baseRestored, PickerCommits, viewCommit } from "./Picker";
 import { refresher, refreshes } from "./refresh";
 import { useRecentCommits } from "./recent";
 import { TreeMenu, ViewMenu } from "./TreeMenu";
@@ -285,6 +285,8 @@ function TabTree({ tab, label, query, filters, thread }: TabState) {
       .then((result) => result.ok && baseRestored(environmentId))
       .catch(() => {});
   }, [rpc, environmentId, scope !== null, showsCommit, options.recent]); // scope !== null stands for scope
+  // While this tab shows a commit the moved base is wanted: the page keeps telling the server so (Picker.tsx).
+  useEffect(() => (environmentId && showsCommit && options.recent ? viewCommit(environmentId) : undefined), [environmentId, showsCommit, options.recent]);
   const files = useChangedFiles(options.open ? environmentId : null, scope);
   const viewed = useViewed(environmentId, files.status === "ready" ? files.target : null, tab.list, filters?.showViewed === false);
   const filterKey = filtersKey(filters);

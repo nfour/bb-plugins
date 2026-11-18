@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import plugin from "../server.ts";
-import { LEASE_MS, SWEEP_MS } from "./lease.ts";
+import { LEASE_MS, MAX_LAPSE_TRIES, SWEEP_MS } from "./lease.ts";
 
 const ENV = "env_test";
 const git = (cwd: string, ...args: string[]) =>
@@ -271,4 +271,58 @@ test("a moved base whose page stops saying it is looking is put back; a page tha
   assert.equal(w.environment.mergeBaseBranch, "main");
   assert.ok(w.logs.some((l) => l.message.includes("(page-gone)")));
   assert.deepEqual(await dp.call("keep_base", { environmentId: ENV }), { ok: false }, "nothing is moved any more");
+});
+
+const settle = () => new Promise<void>((done) => setImmediate(done));
+async function lapse(t: import("node:test").TestContext, steps: number) {
+  for (let i = 0; i < steps; i++) {
+    t.mock.timers.tick(SWEEP_MS);
+    await settle();
+    await settle();
+  }
+}
+
+test("a lapsed restore that keeps failing is tried a few times, further apart, then left alone", async (t) => {
+  const { w } = await fresh(6, "main");
+  t.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const dp = await w.load();
+  await dp.call("show_recent", { environmentId: ENV, count: 2 });
+  w.failSets(true);
+  await lapse(t, 60); // 15 minutes
+  const warns = w.logs.filter((l) => l.level === "warn" && l.message.includes("restoring the merge base failed")).length;
+  assert.equal(warns, MAX_LAPSE_TRIES, "one warning per try, and no more");
+  assert.deepEqual(await dp.call("keep_base", { environmentId: ENV }), { ok: false }, "the lease is dropped");
+  assert.ok(w.kv.has(`recent:${ENV}`), "the record stays, so the startup restore still covers it");
+  w.failSets(false);
+  await dp.dispose();
+  assert.equal(w.environment.mergeBaseBranch, "main");
+});
+
+test("a base changed elsewhere leaves no lease behind", async (t) => {
+  const { w } = await fresh(6, "main");
+  t.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const dp = await w.load();
+  await dp.call("show_recent", { environmentId: ENV, count: 2 });
+  w.environment.mergeBaseBranch = "release";
+  await lapse(t, 12);
+  assert.equal(w.environment.mergeBaseBranch, "release", "left alone");
+  assert.deepEqual(await dp.call("keep_base", { environmentId: ENV }), { ok: false });
+  assert.ok(!w.kv.has(`recent:${ENV}`));
+});
+
+test("a restore that waited its turn does not undo a base that was just moved again", async (t) => {
+  const { w, shas } = await fresh(8, "main");
+  t.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const dp = await w.load();
+  await dp.call("show_recent", { environmentId: ENV, count: 2 });
+  t.mock.timers.tick(LEASE_MS - SWEEP_MS); // just inside the lease
+  const release = w.hold();
+  const again = dp.call("show_recent", { environmentId: ENV, count: 4 }); // waits on the git plugin
+  await settle();
+  t.mock.timers.tick(SWEEP_MS * 2); // the lease has lapsed by the first pick's clock: a sweep queues behind `again`
+  await settle();
+  release();
+  assert.deepEqual(await again, { ok: true, moved: true });
+  await lapse(t, 1);
+  assert.equal(w.environment.mergeBaseBranch, shas[4], "the new pick stands; the lapse was judged again when its turn came");
 });

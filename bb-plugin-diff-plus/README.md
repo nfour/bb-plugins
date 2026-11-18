@@ -43,7 +43,7 @@ BB's scope picker only lists commits made since the checkout's merge base, so co
 - Picking a recent commit moves the checkout's merge base back far enough for BB to list that commit
 - The merge base is BB's own setting for the checkout, the one its base branch picker sets; git itself is never changed
 - While it is moved, every thread on that checkout sees it: **All changes**, **Committed** and the branch's git status count those commits too
-- It is put back when you pick any other scope, close the picker without picking, or the plugin stops or starts
+- It is put back when you pick any other scope, close the picker without picking, or the plugin stops or starts; if you close the Diff tab, the panel or the page while a picked commit is showing, it is put back within about three minutes
 - Each move and restore is logged (`bb plugin logs diff-plus`)
 - Don't want this? Set **Recent commits** to Off in the folder button's menu
 
