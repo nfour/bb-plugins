@@ -55,7 +55,7 @@ An opened spoiler's summary stays pinned (`position` set to stick) at the top of
 
 ## Path Numbers and Dim Markers
 
-Path Numbers (off by default, the user's choice) only touches `[data-markdown-preview] > ol > li > ol > li`, the Needs you shape: a counter of the plugin's own (`reply-style-question`) on the outer items gives `1.1.`; `counters(list-item)` showed `1.1.2` once a bullet list came earlier in the reply, because a counter's scope runs on into later siblings. A `start` on the outer list is not followed, and the options move right 1.6ch (the elbow indent grows with them). Lettered options were tried and turned down, since answers would become `1a`. Dim Markers (on) gives `li::marker` its own strength, `--reply-style-marker` (45%): at the guide colour (18%) the user found the numbers too faint.
+Path Numbers (off by default, the user's choice) only touches `[data-markdown-preview] > ol > li > ol > li`, the Needs you shape: a counter of the plugin's own (`reply-style-question`) on the outer items gives `1.1.`; `counters(list-item)` showed `1.1.2` once a bullet list came earlier in the reply, because a counter's scope runs on into later siblings. A `start` on the outer list is not followed, and the options stay where plain numbers put them: the wider marker reaches left over the elbow, which stops 1.4ch shorter and is left as a nub (the user preferred that to moving the options right by 1.6ch, 2026-11-19). Lettered options were tried and turned down, since answers would become `1a`. Dim Markers (on) gives `li::marker` its own strength, `--reply-style-marker` (45%): at the guide colour (18%) the user found the numbers too faint.
 
 ## Tables in spoilers
 

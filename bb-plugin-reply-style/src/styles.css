@@ -466,14 +466,11 @@
    1.1, 1.2, 2.1, which is the key an answer uses. Only that shape. The question's number is a
    counter of the plugin's own: counters(list-item) also picked up the list-item counter of a list
    earlier in the reply (a counter's scope runs on into later siblings), which showed 1.1.2. The
-   options move right by 1.6ch so the wider marker clears the guide line, and the indent the
-   elbows use grows with them. */
+   options stay where plain numbers put them: the wider marker reaches left over the elbow, and the
+   elbow stops 1.4ch shorter (the width the "1." adds, plus a gap), which leaves only a nub of it. */
 :where(:root[data-reply-style-path="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
-  & > ol > li > ol {
-    --reply-style-indent: calc(var(--spacing, 0.25rem) * 5 + 1.6ch);
-  }
   & > ol > li > ol > li {
-    margin-inline-start: 1.6ch;
+    --reply-style-reach: calc(-1 * var(--reply-style-indent) + 0.15em - 1.4ch);
   }
   & > ol {
     counter-reset: reply-style-question;
