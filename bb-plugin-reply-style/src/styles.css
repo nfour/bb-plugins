@@ -359,9 +359,10 @@
   li > input[type="checkbox"]:first-child {
     position: relative;
     inset-block-start: var(--reply-style-checkbox, 2.5px);
-    /* The browser's 3px plus a space's width: the gap the format used to write as an &nbsp;
-       after every box (dropped from the format 2026-11-19; older replies sit one space wider). */
-    margin-inline-end: calc(3px + 0.28em);
+    /* About a space's width: the gap the format used to write as an &nbsp; after every box
+       (dropped from the format 2026-11-19; older replies sit one space wider). 1px rather than the
+       browser's 3px, since the user found the full gap 2px too wide. */
+    margin-inline-end: calc(1px + 0.28em);
   }
   /* A spoiler standing on its own, not under a list item, gets the room the format used to make
      with a <br> above and below it (dropped 2026-11-19). */
