@@ -6,8 +6,6 @@ What an agent working on this plugin must know. The user-facing description is `
 
 Since 2026-11-18 this plugin's thread (`thr_ig7mwdgfv8`) owns the `reply-style` format as well as its CSS, because the two change together. The format lives in `/home/dev/.agents/skills/reply-style/` (git repo `~/.agents`, one commit per change, with the reason): `core.md` (the always-on rules, applied with `bb instructions set`), `SKILL.md`, `example.md`, and `styling.css`, now only a pointer to `src/styles.css`. Read `HANDOVER.md` there before changing any of it: it holds the settled decisions, the 4,096 cap (counted as a JavaScript string length) and BB's renderer facts. The rules used to be pasted into the user's theme `~/.bb/theme/null-syntax/theme.css`; that copy is gone and must not come back.
 
-Next, when the user asks: turn Spoiler As Quote on by default and drop the `>` prefix from spoiler bodies in `core.md`, `SKILL.md` and `example.md`, all in the same change.
-
 Constraints from the request, held by `src/styles.test.ts`:
 
 - Element names and data attributes only, never a BB class name.
@@ -47,7 +45,11 @@ BB leaves a task item's checkbox on the baseline: its middle sat 2px above the m
 
 ## Spoiler As Quote
 
-The bar goes on `::details-content` (so it grows with the content and the summary stays outside it). A quote that is a direct child of a spoiler loses its bar and padding, and the tables' margin goes to 0, so old quoted bodies and new plain ones render alike: measured one bar, body text and tables both at x 538. The mode is behind `@supports selector(details::details-content)`.
+On by default since 2026-11-19, when the format stopped quoting spoiler bodies (`core.md`, `SKILL.md`, `example.md` changed in the same step; the user's saved value, stored off by an earlier Reset all, was turned on through `set_switch`). The bar goes on `::details-content` (so it grows with the content and the summary stays outside it), and the body's direct children and their p/li/em/strong take the quote text colour. A quote inside a spoiler keeps its own bar: the user chose that (2026-11-19) over hiding the bar of a quote right inside a spoiler, so replies from before the change show two bars. The mode is behind `@supports selector(details::details-content)`.
+
+## Path Numbers and Dim Markers
+
+Path Numbers (off by default, the user's choice) only touches `[data-markdown-preview] > ol > li > ol > li`, the Needs you shape: a counter of the plugin's own (`reply-style-question`) on the outer items gives `1.1.`; `counters(list-item)` showed `1.1.2` once a bullet list came earlier in the reply, because a counter's scope runs on into later siblings. A `start` on the outer list is not followed, and the options move right 1.6ch (the elbow indent grows with them). Lettered options were tried and turned down, since answers would become `1a`. Dim Markers (on) gives `li::marker` its own strength, `--reply-style-marker` (45%): at the guide colour (18%) the user found the numbers too faint.
 
 ## Tables in spoilers
 
@@ -62,8 +64,6 @@ Under `prefers-reduced-motion: reduce` the open/close, the hover and the chevron
 - `pnpm --filter bb-plugin-reply-style test`: the settings list and the stylesheet guards (scope, colours, no `!important`, clip, dist check).
 - Headless: cut the theme's copy out of `#bb-app-theme` in the page (`textContent` up to `/* Quotes borrow`), so you see the plugin's effect. Older rows mount only after `wheel` events on `[data-page-scroll-viewport]`. Setting `details.open` from a script is undone by BB's next render; open a spoiler with `page.mouse.click` on its summary. Force options by answering `GET /api/v1/plugins/reply-style/settings` with changed `values`; never write the user's settings.
 
-## Ideas the user raised for later (2026-11-19)
+## Ideas the user raised (2026-11-19)
 
-- Styling list markers (the bullet, the numbers).
-- Spike: nested numbers shown as a path (`1.2` rather than `2.`), so the answer key is on screen; and letters (a/b/c) as an option.
-- Spike: spoilers carry no quote at all and get their padding, text colour and left bar from the plugin's settings, so the format writes plain bodies and real quotes can sit inside a spoiler. Close to Spoiler As Quote; it changes what the format writes, so the format changes in the same move.
+All four are done: centred checkboxes, dimmed markers, path numbers (a switch, off) and spoiler bodies without quotes.

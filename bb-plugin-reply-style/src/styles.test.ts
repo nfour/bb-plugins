@@ -68,7 +68,7 @@ test("the animation clips with clip-path, never overflow: clip", () => {
 
 test(":root appears only as an option switch", () => {
   for (const m of css.match(/:root[^)\s]*/g) ?? []) {
-    assert.match(m, /^:root(:not\(\[data-reply-style-(guides|tables)="off"\]|\[data-reply-style-quote="on"\]|\[data-reply-style-elbows="off"\])/, m);
+    assert.match(m, /^:root(:not\(\[data-reply-style-(guides|tables|quote|markers)="off"\]|\[data-reply-style-path="on"\]|\[data-reply-style-elbows="off"\])/, m);
   }
   assert.doesNotMatch(css, /(^|[\s,}])html\b/);
 });

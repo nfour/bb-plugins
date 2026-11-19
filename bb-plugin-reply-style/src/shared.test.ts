@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NUMBERS, NUMBER_KEYS, SETTING_KEYS, SWITCHES, TABS, attributesFor, clampNumber, propertiesFor, valueOf } from "./shared.ts";
 
-const NO_ATTRS = { "data-reply-style-guides": null, "data-reply-style-elbows": null, "data-reply-style-quote": null, "data-reply-style-tables": null };
+const NO_ATTRS = { "data-reply-style-guides": null, "data-reply-style-elbows": null, "data-reply-style-path": null, "data-reply-style-markers": null, "data-reply-style-quote": null, "data-reply-style-tables": null };
 
 test("every key has one setting, and every setting a tab", () => {
   assert.deepEqual([...SWITCHES.map((s) => s.key), ...NUMBERS.map((n) => n.key)], [...SETTING_KEYS]);
@@ -13,15 +13,17 @@ test("every key has one setting, and every setting a tab", () => {
 
 test("defaults write no attribute and no property", () => {
   assert.deepEqual(attributesFor({}), NO_ATTRS);
-  assert.deepEqual(attributesFor({ guides: true, elbows: true, spoilerQuote: false, tables: true }), NO_ATTRS);
+  assert.deepEqual(attributesFor({ guides: true, elbows: true, paths: false, markers: true, spoilerQuote: true, tables: true }), NO_ATTRS);
   for (const value of Object.values(propertiesFor({}))) assert.equal(value, null);
 });
 
 test("an option off its default writes its attribute", () => {
-  assert.deepEqual(attributesFor({ guides: false, elbows: false, spoilerQuote: true, tables: false }), {
+  assert.deepEqual(attributesFor({ guides: false, elbows: false, paths: true, markers: false, spoilerQuote: false, tables: false }), {
     "data-reply-style-guides": "off",
     "data-reply-style-elbows": "off",
-    "data-reply-style-quote": "on",
+    "data-reply-style-path": "on",
+    "data-reply-style-markers": "off",
+    "data-reply-style-quote": "off",
     "data-reply-style-tables": "off",
   });
 });

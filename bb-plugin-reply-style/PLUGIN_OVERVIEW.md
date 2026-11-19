@@ -4,7 +4,7 @@ Reply Style makes a thread's replies easier to scan. Quote bars are grey rather 
 
 ## Settings
 
-**Reply Style** in a thread's actions menu opens a settings panel over the chat (also the plugin's page in BB's settings), with tabs for quotes, spoilers, lists and tables: switches for **Guide Lines**, **Elbows**, **Spoiler As Quote** and **Tables Surface**, and sliders for each strength, width and the open time. A slider restyles the replies behind it while you drag.
+**Reply Style** in a thread's actions menu opens a settings panel over the chat (also the plugin's page in BB's settings), with tabs for quotes, spoilers, lists and tables: switches for **Guide Lines**, **Elbows**, **Path Numbers**, **Dim Markers**, **Spoiler As Quote** and **Tables Surface**, and sliders for each strength, width and the open time. A slider restyles the replies behind it while you drag.
 
 ## Cost
 

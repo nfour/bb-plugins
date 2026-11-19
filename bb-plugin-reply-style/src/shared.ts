@@ -17,7 +17,7 @@ type Common = {
 
 /** An option the stylesheet reads as an attribute on <html>, written while it differs from its default. */
 export type Switch = Common & {
-  key: "guides" | "elbows" | "spoilerQuote" | "tables";
+  key: "guides" | "elbows" | "paths" | "markers" | "spoilerQuote" | "tables";
   default: boolean;
   attribute: string;
   value: string;
@@ -54,13 +54,31 @@ export const SWITCHES: readonly Switch[] = [
     value: "off",
   },
   {
+    key: "paths",
+    label: "Path Numbers",
+    description: "Options nested in a top-level numbered list are numbered as a path (1.1, 1.2, 2.1), the same key an answer uses.",
+    tab: "Lists",
+    default: false,
+    attribute: "data-reply-style-path",
+    value: "on",
+  },
+  {
+    key: "markers",
+    label: "Dim Markers",
+    description: "Bullets and numbers are dimmed to the marker strength, so the text leads.",
+    tab: "Lists",
+    default: true,
+    attribute: "data-reply-style-markers",
+    value: "off",
+  },
+  {
     key: "spoilerQuote",
     label: "Spoiler As Quote",
-    description: "Draws the quote bar on the opened part of every spoiler, so a spoiler's body needs no quote markers. A quote sitting right inside a spoiler loses its own bar, so older replies do not show two.",
+    description: "Draws the quote bar down the opened part of every spoiler and dims its text like a quote's, so a spoiler's body needs no quote markers. A quote inside a spoiler keeps its own bar.",
     tab: "Spoilers",
-    default: false,
+    default: true,
     attribute: "data-reply-style-quote",
-    value: "on",
+    value: "off",
   },
   {
     key: "tables",
@@ -73,7 +91,7 @@ export const SWITCHES: readonly Switch[] = [
   },
 ];
 
-export const NUMBER_KEYS = ["quoteBar", "quoteWidth", "quoteText", "summary", "hover", "chevron", "open", "guide", "guideWidth", "checkbox"] as const;
+export const NUMBER_KEYS = ["quoteBar", "quoteWidth", "quoteText", "summary", "hover", "chevron", "open", "guide", "guideWidth", "marker", "checkbox"] as const;
 export type NumberKey = (typeof NUMBER_KEYS)[number];
 
 export const NUMBERS: readonly Num[] = [
@@ -86,10 +104,11 @@ export const NUMBERS: readonly Num[] = [
   { key: "open", label: "Open and close", description: "How long a spoiler takes to open or close; 0 snaps", tab: "Spoilers", default: 220, min: 0, max: 600, step: 10, unit: "ms", property: "--reply-style-open" },
   { key: "guide", label: "Line strength", description: "Guide lines, as a share of the text colour", tab: "Lists", default: 18, min: 0, max: 60, unit: "%", property: "--reply-style-guide" },
   { key: "guideWidth", label: "Line width", description: "How wide each guide line is", tab: "Lists", default: 1, min: 1, max: 4, unit: "px", property: "--reply-style-guide-width" },
+  { key: "marker", label: "Marker strength", description: "Bullets and numbers under Dim Markers, as a share of the text colour", tab: "Lists", default: 45, min: 10, max: 100, unit: "%", property: "--reply-style-marker" },
   { key: "checkbox", label: "Checkbox drop", description: "How far a reply's checkboxes move down from where BB puts them, so they sit on the middle of their text", tab: "Lists", default: 2.5, min: 0, max: 6, step: 0.5, unit: "px", property: "--reply-style-checkbox" },
 ];
 
-export const SETTING_KEYS = ["guides", "elbows", "spoilerQuote", "tables", ...NUMBER_KEYS] as const;
+export const SETTING_KEYS = ["guides", "elbows", "paths", "markers", "spoilerQuote", "tables", ...NUMBER_KEYS] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SwitchKey = Switch["key"];
 

@@ -21,7 +21,10 @@
  * Options. The plugin writes an attribute on <html> only while an option differs from its default
  * (app.tsx), so the default look needs no script:
  *   data-reply-style-guides="off"  no guide lines
- *   data-reply-style-quote="on"    Spoiler As Quote
+ *   data-reply-style-elbows="off"  guide lines with no elbows
+ *   data-reply-style-path="on"     Path Numbers
+ *   data-reply-style-markers="off" bullets and numbers in BB's colour
+ *   data-reply-style-quote="off"   no Spoiler As Quote
  *   data-reply-style-tables="off"  tables without their own surface
  * The numbers in the settings panel arrive the same way, as custom properties on <html> written only
  * while they differ from their defaults; every var(--reply-style-*, x) below carries its default as
@@ -330,18 +333,20 @@
   }
 }
 
-/* Spoiler As Quote (off by default). The bar is drawn on the opened part of every spoiler, so a
-   spoiler's body needs no `>` on each line. It changes what the format writes, so it is only on
-   when the user turns it on and changes the format with it.
+/* Spoiler As Quote (on by default since 2026-11-19, when the format stopped quoting spoiler
+   bodies). The bar is drawn down the opened part of every spoiler and the body's text is dimmed as
+   a quote's is, so a body is plain markdown, tables included.
    - The bar is on ::details-content, not on details: the summary line stays outside the bar, and
      the bar grows and shrinks with the content.
-   - A quote that is a direct child of a spoiler loses its own bar and padding, so a quoted body
-     from older replies and a plain body from the new format render the same: one bar, not two.
-     A quote nested deeper (inside a list inside the spoiler) keeps its bar.
+   - A quote inside a spoiler keeps its own bar, so a real quote still reads as one. Replies written
+     before the change quote their bodies, so they show two bars; the user chose that over hiding
+     the bar of every quote that sits right inside a spoiler.
+   - The text rules name p/li/em/strong as the quote rules do: BB's colour class on a paragraph
+     beats inheritance. code, kbd and links keep their own colour.
    - Without ::details-content support the mode does nothing and spoilers look as they do by
      default. */
 @supports selector(details::details-content) {
-  :where(:root[data-reply-style-quote="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  :where(:root:not([data-reply-style-quote="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
     details::details-content {
       border-inline-start: var(--reply-style-quote-width, 2px) solid color-mix(in oklch, var(--ink) var(--reply-style-quote-bar, 30%), var(--canvas));
       padding-inline-start: 0.75rem;
@@ -349,10 +354,42 @@
     details[open]::details-content {
       margin-block: 0.5rem;
     }
-    details > blockquote {
-      border-inline-start-width: 0;
-      padding-inline-start: 0;
+    details > :not(summary),
+    details > :not(summary) :is(p, li, em, strong) {
+      color: color-mix(in oklch, var(--ink) var(--reply-style-quote-text, 80%), var(--canvas));
     }
+  }
+}
+
+/* Path Numbers (off by default). Options nested in a top-level numbered list show their path,
+   1.1, 1.2, 2.1, which is the key an answer uses. Only that shape. The question's number is a
+   counter of the plugin's own: counters(list-item) also picked up the list-item counter of a list
+   earlier in the reply (a counter's scope runs on into later siblings), which showed 1.1.2. The
+   options move right by 1.6ch so the wider marker clears the guide line, and the indent the
+   elbows use grows with them. */
+:where(:root[data-reply-style-path="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  & > ol > li > ol {
+    --reply-style-indent: calc(var(--spacing, 0.25rem) * 5 + 1.6ch);
+  }
+  & > ol > li > ol > li {
+    margin-inline-start: 1.6ch;
+  }
+  & > ol {
+    counter-reset: reply-style-question;
+  }
+  & > ol > li {
+    counter-increment: reply-style-question;
+  }
+  & > ol > li > ol > li::marker {
+    content: counter(reply-style-question) "." counter(list-item) ". ";
+  }
+}
+
+/* Dim Markers (on by default): bullets and numbers are dimmed to their own strength, so the text
+   leads. The guide line's colour was too faint for numbers that are an answer's key. */
+:where(:root:not([data-reply-style-markers="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  li::marker {
+    color: color-mix(in oklch, var(--ink) var(--reply-style-marker, 45%), var(--canvas));
   }
 }
 
