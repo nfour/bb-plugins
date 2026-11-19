@@ -73,7 +73,7 @@ export const SWITCHES: readonly Switch[] = [
   },
 ];
 
-export const NUMBER_KEYS = ["quoteBar", "quoteWidth", "quoteText", "summary", "hover", "chevron", "open", "guide", "guideWidth"] as const;
+export const NUMBER_KEYS = ["quoteBar", "quoteWidth", "quoteText", "summary", "hover", "chevron", "open", "guide", "guideWidth", "checkbox"] as const;
 export type NumberKey = (typeof NUMBER_KEYS)[number];
 
 export const NUMBERS: readonly Num[] = [
@@ -86,6 +86,7 @@ export const NUMBERS: readonly Num[] = [
   { key: "open", label: "Open and close", description: "How long a spoiler takes to open or close; 0 snaps", tab: "Spoilers", default: 220, min: 0, max: 600, step: 10, unit: "ms", property: "--reply-style-open" },
   { key: "guide", label: "Line strength", description: "Guide lines, as a share of the text colour", tab: "Lists", default: 18, min: 0, max: 60, unit: "%", property: "--reply-style-guide" },
   { key: "guideWidth", label: "Line width", description: "How wide each guide line is", tab: "Lists", default: 1, min: 1, max: 4, unit: "px", property: "--reply-style-guide-width" },
+  { key: "checkbox", label: "Checkbox drop", description: "How far a reply's checkboxes move down from where BB puts them, so they sit on the middle of their text", tab: "Lists", default: 2.5, min: 0, max: 6, step: 0.5, unit: "px", property: "--reply-style-checkbox" },
 ];
 
 export const SETTING_KEYS = ["guides", "elbows", "spoilerQuote", "tables", ...NUMBER_KEYS] as const;

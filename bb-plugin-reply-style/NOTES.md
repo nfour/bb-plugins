@@ -41,6 +41,10 @@ A file tree (rewritten 2026-11-19 after the user saw overlaps and breaks): one l
 - A nested item's elbow is placed from the parent's rail (`--reply-style-parent-rail`, passed on by the nested list) minus BB's indent (`--spacing` × 5 plus 1ch per extra marker digit, `--markdown-list-marker-digits`). These are BB variables, not class names. A quote places children from inside its bar, so the bar width comes off.
 - A left rule on nested lists was rejected: it draws nothing for a spoiler or quote under an item, which is the format's main shape. Headless check: copy a reply's `[data-markdown-preview]` into an overlay pinned over the page, carrying `data-timeline-row-id` and `data-markdown-preview`; the live timeline keeps scrolling under a script.
 
+## Checkboxes
+
+BB leaves a task item's checkbox on the baseline: its middle sat 2px above the middle of the capitals and 3px above the middle of the small letters (Inter, 13px, measured 2026-11-19; the user saw about 3px). The first checkbox of an item's first line moves down by `--reply-style-checkbox` (Checkbox drop, 2.5px, 0 to 6 in half pixels) by an offset from where it stood, so the line keeps its height.
+
 ## Spoiler As Quote
 
 The bar goes on `::details-content` (so it grows with the content and the summary stays outside it). A quote that is a direct child of a spoiler loses its bar and padding, and the tables' margin goes to 0, so old quoted bodies and new plain ones render alike: measured one bar, body text and tables both at x 538. The mode is behind `@supports selector(details::details-content)`.
@@ -60,7 +64,6 @@ Under `prefers-reduced-motion: reduce` the open/close, the hover and the chevron
 
 ## Ideas the user raised for later (2026-11-19)
 
-- Checkboxes sit about 3px high against their text: an option to centre them.
 - Styling list markers (the bullet, the numbers).
 - Spike: nested numbers shown as a path (`1.2` rather than `2.`), so the answer key is on screen; and letters (a/b/c) as an option.
 - Spike: spoilers carry no quote at all and get their padding, text colour and left bar from the plugin's settings, so the format writes plain bodies and real quotes can sit inside a spoiler. Close to Spoiler As Quote; it changes what the format writes, so the format changes in the same move.

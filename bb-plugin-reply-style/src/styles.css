@@ -318,6 +318,18 @@
   }
 }
 
+/* Checkboxes. BB leaves a task item's checkbox on the text's baseline, so its middle sits about
+   2px above the middle of the capitals and 3px above the middle of the small letters (Inter at
+   13px, measured 2026-11-19). A relative nudge moves the box down without changing the line's
+   height; the amount is the Checkbox drop setting. */
+:where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  li > p:first-child > input[type="checkbox"]:first-child,
+  li > input[type="checkbox"]:first-child {
+    position: relative;
+    inset-block-start: var(--reply-style-checkbox, 2.5px);
+  }
+}
+
 /* Spoiler As Quote (off by default). The bar is drawn on the opened part of every spoiler, so a
    spoiler's body needs no `>` on each line. It changes what the format writes, so it is only on
    when the user turns it on and changes the format with it.
