@@ -2,6 +2,11 @@
 
 What an agent working on this plugin must know. The user-facing description is `README.md`. BB facts below were checked on bb-app 0.49.0 in a headless page and are undocumented.
 
+## Scope the user set (2026-11-19)
+
+- The user runs the dark theme by default: check dark first; it is the main target. No separate dark-theme pass is owed.
+- No release, no README screenshots: the plugin is for the user's own BB, not the marketplace.
+
 ## The format this styles
 
 Since 2026-11-18 this plugin's thread (`thr_ig7mwdgfv8`) owns the `reply-style` format as well as its CSS, because the two change together. The format lives in `/home/dev/.agents/skills/reply-style/` (git repo `~/.agents`, one commit per change, with the reason): `core.md` (the always-on rules, applied with `bb instructions set`), `SKILL.md`, `example.md`, and `styling.css`, now only a pointer to `src/styles.css`. Read `HANDOVER.md` there before changing any of it: it holds the settled decisions, the 4,096 cap (counted as a JavaScript string length) and BB's renderer facts. The rules used to be pasted into the user's theme `~/.bb/theme/null-syntax/theme.css`; that copy is gone and must not come back.
