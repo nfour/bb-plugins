@@ -181,10 +181,10 @@ function Content({ focusOnOpen }: { focusOnOpen?: boolean }) {
 const KEEP = 48;
 type Spot = { x: number; y: number };
 
-/** Where the panel appears: the top right of the thread's timeline, clear of the replies' text. */
+/** Where the panel appears: the top left of the thread's timeline (the user's choice, 2026-11-19). */
 function home(): Spot {
   const rect = document.querySelector("[data-page-scroll-viewport]")?.getBoundingClientRect();
-  return rect && rect.width > 0 ? { x: Math.max(16, rect.right - 460 - 24), y: rect.top + 16 } : { x: 16, y: 64 };
+  return rect && rect.width > 0 ? { x: rect.left + 16, y: rect.top + 16 } : { x: 16, y: 64 };
 }
 
 const clampSpot = (spot: Spot, width: number): Spot => ({

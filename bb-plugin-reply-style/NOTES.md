@@ -33,7 +33,13 @@ The settings panel (`src/Panel.tsx`, `src/panel.css`, opened from the thread act
 
 ## Guide lines
 
-Drawn by the parent `li` that has a direct `ul`, `ol`, `details`, `blockquote` or `pre` child, as an absolutely placed `::before` in its marker column (0.9em before the item, from 1.75em down). BB's `li` has no position and no pseudo-element of its own. A left rule on nested lists was rejected: it draws nothing for a spoiler or quote under an item, which is the format's main shape.
+A file tree (rewritten 2026-11-19 after the user saw overlaps and breaks): one line per list, in the items' marker column (`--reply-style-rail`: 0.82em plus 1px left of the text, the same under bullets and numbers as the user asked; set from the user's screen, where headless draws the bullet about 2px further left), going from just under each marker to just over the next, with an elbow to everything under an item (nested item's marker, spoiler, quote, code fence, further paragraph). Under the last item it stops at the bottom edge of the last elbow. Only lists where some item has something under it get lines.
+
+- No two pieces overlap or leave a gap. Thin lines land on fractional pixels; the soft edges of two overlapping pieces add up and show as darker (lighter in dark themes) spots, which the user saw with the earlier per-child pieces. Each item draws its own segment (`li::after`); elbows (`::before` of the child) start one line-width right of the line.
+- The segment must know the space to the next item, so in these lists each item contains its own margins (a new formatting context: the `display` value pairs the list item keyword with the flow root one, see the stylesheet), its last child has no bottom margin, and its bottom margin is set (`--reply-style-gap`: 0.25rem, 0.5rem when something sits under it, matching BB's collapsed margins).
+- The last item's segment ends with CSS anchor positioning: each last elbow is named `--reply-style-end-<level>` (levels 1 to 4 by counting `li` ancestors; 4 covers deeper), the item's `::after` uses `anchor(--reply-style-end-<level> bottom, 0px)`. A pseudo-element anchor works (Chrome 156 headless). The anchor rules tie in specificity with the segment's rule and win by order; a more specific rule there hid them once. Without an elbow (tables put straight under the item) the segment goes to the item's end.
+- A nested item's elbow is placed from the parent's rail (`--reply-style-parent-rail`, passed on by the nested list) minus BB's indent (`--spacing` × 5 plus 1ch per extra marker digit, `--markdown-list-marker-digits`). These are BB variables, not class names. A quote places children from inside its bar, so the bar width comes off.
+- A left rule on nested lists was rejected: it draws nothing for a spoiler or quote under an item, which is the format's main shape. Headless check: copy a reply's `[data-markdown-preview]` into an overlay pinned over the page, carrying `data-timeline-row-id` and `data-markdown-preview`; the live timeline keeps scrolling under a script.
 
 ## Spoiler As Quote
 
@@ -51,3 +57,10 @@ Under `prefers-reduced-motion: reduce` the open/close, the hover and the chevron
 
 - `pnpm --filter bb-plugin-reply-style test`: the settings list and the stylesheet guards (scope, colours, no `!important`, clip, dist check).
 - Headless: cut the theme's copy out of `#bb-app-theme` in the page (`textContent` up to `/* Quotes borrow`), so you see the plugin's effect. Older rows mount only after `wheel` events on `[data-page-scroll-viewport]`. Setting `details.open` from a script is undone by BB's next render; open a spoiler with `page.mouse.click` on its summary. Force options by answering `GET /api/v1/plugins/reply-style/settings` with changed `values`; never write the user's settings.
+
+## Ideas the user raised for later (2026-11-19)
+
+- Checkboxes sit about 3px high against their text: an option to centre them.
+- Styling list markers (the bullet, the numbers).
+- Spike: nested numbers shown as a path (`1.2` rather than `2.`), so the answer key is on screen; and letters (a/b/c) as an option.
+- Spike: spoilers carry no quote at all and get their padding, text colour and left bar from the plugin's settings, so the format writes plain bodies and real quotes can sit inside a spoiler. Close to Spoiler As Quote; it changes what the format writes, so the format changes in the same move.

@@ -17,7 +17,7 @@ type Common = {
 
 /** An option the stylesheet reads as an attribute on <html>, written while it differs from its default. */
 export type Switch = Common & {
-  key: "guides" | "spoilerQuote" | "tables";
+  key: "guides" | "elbows" | "spoilerQuote" | "tables";
   default: boolean;
   attribute: string;
   value: string;
@@ -42,6 +42,15 @@ export const SWITCHES: readonly Switch[] = [
     tab: "Lists",
     default: true,
     attribute: "data-reply-style-guides",
+    value: "off",
+  },
+  {
+    key: "elbows",
+    label: "Elbows",
+    description: "Each nested item, spoiler and quote joins its guide line with a short stub, and the line stops at the last one, like a file tree.",
+    tab: "Lists",
+    default: true,
+    attribute: "data-reply-style-elbows",
     value: "off",
   },
   {
@@ -79,7 +88,7 @@ export const NUMBERS: readonly Num[] = [
   { key: "guideWidth", label: "Line width", description: "How wide each guide line is", tab: "Lists", default: 1, min: 1, max: 4, unit: "px", property: "--reply-style-guide-width" },
 ];
 
-export const SETTING_KEYS = ["guides", "spoilerQuote", "tables", ...NUMBER_KEYS] as const;
+export const SETTING_KEYS = ["guides", "elbows", "spoilerQuote", "tables", ...NUMBER_KEYS] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SwitchKey = Switch["key"];
 

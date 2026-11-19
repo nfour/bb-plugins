@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NUMBERS, NUMBER_KEYS, SETTING_KEYS, SWITCHES, TABS, attributesFor, clampNumber, propertiesFor, valueOf } from "./shared.ts";
 
-const NO_ATTRS = { "data-reply-style-guides": null, "data-reply-style-quote": null, "data-reply-style-tables": null };
+const NO_ATTRS = { "data-reply-style-guides": null, "data-reply-style-elbows": null, "data-reply-style-quote": null, "data-reply-style-tables": null };
 
 test("every key has one setting, and every setting a tab", () => {
   assert.deepEqual([...SWITCHES.map((s) => s.key), ...NUMBERS.map((n) => n.key)], [...SETTING_KEYS]);
@@ -13,13 +13,14 @@ test("every key has one setting, and every setting a tab", () => {
 
 test("defaults write no attribute and no property", () => {
   assert.deepEqual(attributesFor({}), NO_ATTRS);
-  assert.deepEqual(attributesFor({ guides: true, spoilerQuote: false, tables: true }), NO_ATTRS);
+  assert.deepEqual(attributesFor({ guides: true, elbows: true, spoilerQuote: false, tables: true }), NO_ATTRS);
   for (const value of Object.values(propertiesFor({}))) assert.equal(value, null);
 });
 
 test("an option off its default writes its attribute", () => {
-  assert.deepEqual(attributesFor({ guides: false, spoilerQuote: true, tables: false }), {
+  assert.deepEqual(attributesFor({ guides: false, elbows: false, spoilerQuote: true, tables: false }), {
     "data-reply-style-guides": "off",
+    "data-reply-style-elbows": "off",
     "data-reply-style-quote": "on",
     "data-reply-style-tables": "off",
   });
@@ -46,5 +47,7 @@ test("every default sits in its range, and matches the stylesheet's fallback", (
     assert.ok(uses.length > 0, `${n.property} is not used`);
     for (const fallback of uses) assert.equal(fallback, `${n.default}${n.unit}`, n.property);
   }
-  for (const m of css.matchAll(/var\((--reply-style-[a-z-]+)/g)) assert.ok(NUMBERS.some((n) => n.property === m[1]), m[1]);
+  // The rest are the guide lines' own geometry, set in the stylesheet itself.
+  const own = ["--reply-style-indent", "--reply-style-x", "--reply-style-reach", "--reply-style-mid", "--reply-style-gap", "--reply-style-rail", "--reply-style-parent-rail", "--reply-style-clear", "--reply-style-line"];
+  for (const m of css.matchAll(/var\((--reply-style-[a-z-]+)/g)) assert.ok(own.includes(m[1]!) || NUMBERS.some((n) => n.property === m[1]), m[1]);
 });

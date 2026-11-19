@@ -147,29 +147,174 @@
   }
 }
 
-/* Guide lines. A list item that holds something under its own line (a spoiler, a quote, a
-   sub-list, a code block) draws a 1px line in its marker column, from just under its first text
-   line to its end. Everything nested under the item sits to the right of that line, so it reads as
-   belonging to the line above; a nested item with its own evidence draws its own line one level in.
+/* Guide lines and elbows, drawn like a file tree:
+
+     • item            one line per list, in the items' marker column, running from just under
+     │ ├ spoiler       each marker to just over the next one, with an elbow to everything under
+     │ └ quote         an item: a spoiler, a quote, a code block, a further paragraph, or a nested
+     • item            item's marker. Under the last item the line stops at its last elbow.
+     ├ 1. option
+     └ 2. option
+
    It serves both of the format's shapes: `- [x]` items with evidence under them, and `1. [ ]`
-   questions with `1) [ ]` options.
-   Why on the parent item and not a border on the nested list: a border on ul/ol draws nothing for a
-   spoiler or quote under an item, which is the format's main shape. Why not on the nested block: a
-   quote already has a bar, and two parallel bars 12px apart read as noise.
-   18% ink, lighter than the 30% quote bar, so the hierarchy line and the quote bar do not compete.
-   BB's list items have no position and no ::before of their own (bb 0.49). */
-:where(:root:not([data-reply-style-guides="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
-  li:has(> :is(ul, ol, details, blockquote, pre)) {
-    position: relative;
+   questions with `1) [ ]` options. Lists where no item has anything under it get no line.
+
+   No two pieces overlap or leave a gap. Lines are thin and often land on fractional pixels, so
+   antialiased edges of two overlapping pieces add up and show as a darker (or, in dark themes,
+   lighter) spot, and a gap shows as a break. So:
+   - the line is one box per item, the item's own ::after, running from under its marker to over
+     the next item's marker. The space between two items has to be known for that, so in these
+     lists an item contains its own margins (flow-root), its last child has no bottom margin, and
+     the item's bottom margin is set here (0.25rem, or 0.5rem when something sits under it, as
+     BB's collapsed margins gave);
+   - an elbow starts one line-width right of the line, so the two only meet at an edge;
+   - under the last item the line ends at the bottom edge of the last elbow, found with anchor
+     positioning: each last elbow is named for its item's nesting level, and the item's line
+     anchors to that name. A level's own name keeps a deeper last elbow from being picked. Where
+     anchors are not supported, or the last child has no elbow (a table placed straight under the
+     item), the line runs to the item's end.
+
+   Geometry, in the coordinates of the box that draws:
+   --reply-style-rail   where an item's line is, left of its text: 0.82em and 1px, the same for
+                        bullets and numbers.
+   --reply-style-x      where the parent's line is, for an elbow.
+                        A nested item starts one list indent further in, and the indent is BB's:
+                        5 spacing steps, plus 1ch per extra marker digit on a numbered list (the
+                        same sum BB writes in the list's style attribute). A quote places its
+                        children from inside its bar, so the bar's width comes off.
+   --reply-style-reach  where the elbow stops, just short of what it points at: the chevron of a
+                        spoiler (its hover surface starts 0.35rem left of the text), the bar of a
+                        quote, the marker of a nested item.
+   --reply-style-mid    the middle of the child's first line, where the elbow is.
+   --reply-style-clear  how far the line keeps from the middle of a marker, above and below.
+   BB's list items, spoilers, quotes and paragraphs have no position and no ::before or ::after of
+   their own (bb 0.50); every piece is pointer-events: none. 18% ink by default, lighter than the
+   30% quote bar, so the two do not compete. */
+:where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  ul {
+    --reply-style-indent: calc(var(--spacing, 0.25rem) * 5);
   }
-  li:has(> :is(ul, ol, details, blockquote, pre))::before {
+  ol {
+    --reply-style-indent: calc(var(--spacing, 0.25rem) * 5 + (var(--markdown-list-marker-digits, 1) - 1) * 1ch);
+  }
+  /* The line's place, left of an item's text: the same under a bullet and under a number, as the
+     user asked (2026-11-19), set from their screen. A nested list passes its item's place on, for
+     the elbows to its own items. */
+  li {
+    --reply-style-rail: calc(-0.82em - 1px);
+  }
+  li > :is(ul, ol) {
+    --reply-style-parent-rail: var(--reply-style-rail);
+  }
+}
+:where(:root:not([data-reply-style-guides="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  li {
+    --reply-style-line: color-mix(in oklch, var(--ink) var(--reply-style-guide, 18%), var(--canvas));
+  }
+  /* The line down each item of a list where something sits under an item. */
+  :is(ul, ol):has(> li > :nth-child(2)) > li {
+    position: relative;
+    display: list-item flow-root;
+    --reply-style-gap: 0.25rem;
+    --reply-style-clear: 0.85em;
+    margin-block-end: var(--reply-style-gap);
+  }
+  :is(ul, ol):has(> li > :nth-child(2)) > li:has(> :nth-child(2)) {
+    --reply-style-gap: 0.5rem;
+  }
+  :is(ul, ol):has(> li > :nth-child(2)) > li:last-child {
+    margin-block-end: 0;
+  }
+  :is(ul, ol):has(> li > :nth-child(2)) > li > :last-child,
+  :is(ul, ol):has(> li > :nth-child(2)) > li > details:last-child > :last-child {
+    margin-block-end: 0;
+  }
+  :is(ul, ol):has(> li > :nth-child(2)) > li::after {
     content: "";
     position: absolute;
     pointer-events: none;
-    inset-block: 1.75em 0.15em;
-    inset-inline-start: -0.9em;
+    inset-inline-start: var(--reply-style-rail);
     inline-size: var(--reply-style-guide-width, 1px);
-    background: color-mix(in oklch, var(--ink) var(--reply-style-guide, 18%), var(--canvas));
+    inset-block-start: calc(0.5lh + var(--reply-style-clear));
+    inset-block-end: calc(var(--reply-style-clear) - 0.5lh - var(--reply-style-gap));
+    background: var(--reply-style-line);
+  }
+  :is(ul, ol):has(> li > :nth-child(2)) > li:last-child:not(:has(> :nth-child(2)))::after {
+    content: none;
+  }
+
+  /* The elbows. */
+  li > :is(p, details, blockquote, pre):not(:first-child),
+  li > :is(ul, ol) > li {
+    position: relative;
+    --reply-style-x: var(--reply-style-rail);
+    --reply-style-reach: -3px;
+    --reply-style-mid: 0.5lh;
+  }
+  li > blockquote:not(:first-child) {
+    --reply-style-x: calc(var(--reply-style-rail) - var(--reply-style-quote-width, 2px));
+    --reply-style-reach: calc(-3px - var(--reply-style-quote-width, 2px));
+  }
+  li > details:not(:first-child) {
+    --reply-style-reach: -0.5rem;
+    --reply-style-mid: calc(0.5lh + 0.1rem);
+  }
+  li > :is(ul, ol) > li {
+    --reply-style-x: calc(var(--reply-style-parent-rail) - var(--reply-style-indent));
+    --reply-style-reach: calc(-1 * var(--reply-style-indent) + 0.15em);
+  }
+  li > :is(p, details, blockquote, pre):not(:first-child)::before,
+  li > :is(ul, ol) > li::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset-inline-start: calc(var(--reply-style-x) + var(--reply-style-guide-width, 1px));
+    inline-size: calc(var(--reply-style-reach) - var(--reply-style-x) - var(--reply-style-guide-width, 1px));
+    inset-block-start: calc(var(--reply-style-mid) - var(--reply-style-guide-width, 1px));
+    block-size: var(--reply-style-guide-width, 1px);
+    background: var(--reply-style-line);
+  }
+
+  /* Under the last item, the line ends at the bottom edge of its last elbow, or at the item's end
+     (the anchor's fallback). These rules tie with the line's own rule above and win by coming
+     after it: a more specific rule there would hide them. */
+  li:not(li li) > :is(p, details, blockquote, pre):not(:first-child):last-child::before,
+  li:not(li li) > :is(ul, ol):last-child > li:last-child::before {
+    anchor-name: --reply-style-end-1;
+  }
+  li:not(li li):last-child::after {
+    inset-block-end: anchor(--reply-style-end-1 bottom, 0px);
+  }
+  li li:not(li li li) > :is(p, details, blockquote, pre):not(:first-child):last-child::before,
+  li li:not(li li li) > :is(ul, ol):last-child > li:last-child::before {
+    anchor-name: --reply-style-end-2;
+  }
+  li li:not(li li li):last-child::after {
+    inset-block-end: anchor(--reply-style-end-2 bottom, 0px);
+  }
+  li li li:not(li li li li) > :is(p, details, blockquote, pre):not(:first-child):last-child::before,
+  li li li:not(li li li li) > :is(ul, ol):last-child > li:last-child::before {
+    anchor-name: --reply-style-end-3;
+  }
+  li li li:not(li li li li):last-child::after {
+    inset-block-end: anchor(--reply-style-end-3 bottom, 0px);
+  }
+  li li li li > :is(p, details, blockquote, pre):not(:first-child):last-child::before,
+  li li li li > :is(ul, ol):last-child > li:last-child::before {
+    anchor-name: --reply-style-end-4;
+  }
+  li li li li:last-child::after {
+    inset-block-end: anchor(--reply-style-end-4 bottom, 0px);
+  }
+}
+/* Elbows off: the same lines with no elbows, the last item's running to its end. */
+:where(:root[data-reply-style-elbows="off"]:not([data-reply-style-guides="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  li > :is(p, details, blockquote, pre):not(:first-child)::before,
+  li > :is(ul, ol) > li::before {
+    content: none;
+  }
+  :is(ul, ol):has(> li > :nth-child(2)) > li:last-child:last-child::after {
+    inset-block-end: 0;
   }
 }
 

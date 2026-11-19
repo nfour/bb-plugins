@@ -9,6 +9,7 @@ A BB plugin that styles the reply surface of a thread: quotes, spoilers (`<detai
 - Spoilers open and close smoothly, without cutting off wide tables that span past the message. With reduced motion set in your system, they open at once.
 - Wide tables keep their full-width span and sit on the message's surface, so guide lines and quote bars pass under them instead of through.
 - **Guide Lines:** a thin line down each nesting level of a list, so the spoiler, quote or sub-list under an item reads as belonging to it. It serves both of the format's shapes: checked items with evidence under them, and numbered questions with their options.
+- **Elbows:** the line runs from bullet to bullet, each nested item, spoiler and quote joins it with a short stub, and under the last item it stops at the last stub, like a file tree.
 
 Every colour is mixed from the theme's ink and canvas, so it follows any theme, light or dark.
 
@@ -18,8 +19,8 @@ Every colour is mixed from the theme's ink and canvas, so it follows any theme, 
 
 - **Quotes:** bar strength, bar width, text strength.
 - **Spoilers:** **Spoiler As Quote**, description strength, hover surface, chevron strength, open and close time (0 snaps).
-- **Lists:** **Guide Lines** (on), line strength, line width.
-- **Tables:** **Tables Surface** (on), the background that lets lines pass under a table.
+- **Lists:** **Guide Lines** (on), **Elbows** (on), line strength, line width.
+- **Tables:** **Tables Surface** (on), the background that lets lines pass under tables.
 
 **Spoiler As Quote** (off) draws the quote bar on the opened part of every spoiler, so a spoiler's body needs no `>` on each line. A quote sitting right inside a spoiler loses its own bar, so older replies do not show two. Turn it on together with a change to the format that stops quoting spoiler bodies.
 
