@@ -47,6 +47,12 @@ BB leaves a task item's checkbox on the baseline: its middle sat 2px above the m
 
 On by default since 2026-11-19, when the format stopped quoting spoiler bodies (`core.md`, `SKILL.md`, `example.md` changed in the same step; the user's saved value, stored off by an earlier Reset all, was turned on through `set_switch`). The bar goes on `::details-content` (so it grows with the content and the summary stays outside it), and the body's direct children and their p/li/em/strong take the quote text colour. A quote inside a spoiler keeps its own bar: the user chose that (2026-11-19) over hiding the bar of a quote right inside a spoiler, so replies from before the change show two bars. The mode is behind `@supports selector(details::details-content)`.
 
+## Height Limit and the summary line
+
+Height Limit (off) puts `max-block-size` and `overflow-y: auto` on `details[open]::details-content` (checked headless: a 740px-tall set of rows in a 120px body scrolls inside it, the page does not move), so the summary stays outside the scroller. Screen Height Units (on) chooses `--reply-style-limit-vh` (50vh) or `--reply-style-limit-px` (480px); a number with `when` in `src/shared.ts` is greyed out in the panel while its switch is the other way. The scroller also scrolls sideways, so a wide one scrolls inside the body instead of spanning. No reflow when the scrollbar appears (the user asked, 2026-11-19): the body keeps `scrollbar-gutter: stable` and a negative end margin of `--reply-style-scrollbar`, which `app.tsx` measures with a probe while Height Limit is on (BB sets thin scrollbars: 10px headless; overlay scrollbars give 0) and again when the window changes size. Measured: text 573.8px wide with the limit off, on and overflowing, and on and not overflowing.
+
+An opened spoiler's summary stays pinned (`position` set to stick) at the top of the timeline (the user asked, 2026-11-19), on a `--canvas` surface at `z-index: 2`, above tables (`z-index: 1` under Tables Surface, so they cover the line down an item, which is its `::after` and later in the tree). On a highlighted message it shows the plain canvas. A level on tables alone was not enough inside a spoiler: `::details-content` has a `clip-path` (the open/close reveal), which makes it a stacking context, so the level only counted inside it; a spoiler holding one is raised to `z-index: 1` itself (it paints nothing of its own). `elementFromPoint` ignores pseudo-elements, so check lines crossing tables with a screenshot, not a hit test.
+
 ## Path Numbers and Dim Markers
 
 Path Numbers (off by default, the user's choice) only touches `[data-markdown-preview] > ol > li > ol > li`, the Needs you shape: a counter of the plugin's own (`reply-style-question`) on the outer items gives `1.1.`; `counters(list-item)` showed `1.1.2` once a bullet list came earlier in the reply, because a counter's scope runs on into later siblings. A `start` on the outer list is not followed, and the options move right 1.6ch (the elbow indent grows with them). Lettered options were tried and turned down, since answers would become `1a`. Dim Markers (on) gives `li::marker` its own strength, `--reply-style-marker` (45%): at the guide colour (18%) the user found the numbers too faint.
@@ -64,6 +70,20 @@ Under `prefers-reduced-motion: reduce` the open/close, the hover and the chevron
 - `pnpm --filter bb-plugin-reply-style test`: the settings list and the stylesheet guards (scope, colours, no `!important`, clip, dist check).
 - Headless: cut the theme's copy out of `#bb-app-theme` in the page (`textContent` up to `/* Quotes borrow`), so you see the plugin's effect. Older rows mount only after `wheel` events on `[data-page-scroll-viewport]`. Setting `details.open` from a script is undone by BB's next render; open a spoiler with `page.mouse.click` on its summary. Force options by answering `GET /api/v1/plugins/reply-style/settings` with changed `values`; never write the user's settings.
 
+## Panel layout
+
+`LAYOUT` in `src/shared.ts` lists each tab's rows: a setting, or a switch with the settings that only act while it is on (`children`), shown indented behind a line and greyed out and disabled while the switch is off (the user asked for this grouping, 2026-11-19). A test holds that every setting appears once, on its own tab, nested only under a switch.
+
+## Spoiler Card and Fit Spoilers
+
+Spoiler Card (off) is a box on the `details` element itself, so the summary is inside it (the user asked, 2026-11-19). It is always there (1px edge line, 0.15rem by 0.6rem padding) so opening moves nothing; closed, the edge line and shade are `transparent`, and they fade in over the open time. `::details-content` loses Spoiler As Quote's bar in this mode and keeps the open/close clip; the shade is on `details`, so it is never cut. A spoiler's elbow moves down by the padding and the edge (`--reply-style-mid`) and reaches the box (`--reply-style-reach: 0px`). The shade is `color-mix(in oklch, black N%, transparent)`, the only colour not from `--ink`/`--canvas` (ink is light in a dark theme and would glow); the colour test allows exactly that one. In dark themes it barely shows.
+
+Fit Spoilers (off) holds wide tables inside a spoiler to its width: BB's outer wrapper sets its width inline, and `max-width: 100%` (which it does not set) wins over it; `--md-table-start-offset: 0px` on the spoiler zeroes both wrappers' start margins. Measured: wrapper 73 to 739 inside a spoiler at 60 to 752, instead of the 846px breakout.
+
 ## Ideas the user raised (2026-11-19)
 
 All four are done: centred checkboxes, dimmed markers, path numbers (a switch, off) and spoiler bodies without quotes.
+
+## Spacing the format no longer writes (2026-11-19)
+
+To shorten the always-on core (the user asked for rules the plugin can carry to leave it), the format stopped writing `&nbsp;` after a task box and before a spoiler's chips, and `<br>` around a spoiler standing on its own. The plugin draws those gaps: a checkbox's end margin is the browser's 3px plus 0.28em, the chevron's end margin gains 0.28em, and a spoiler that is a direct child of the message gets 1rem above and below (Spoiler Card keeps its 0.25rem only under list items). Measured headless: box to text 10.3px new form, 13.9px old; summary start to first chip 16.3px new, 20px old; 16px above and below a standalone spoiler. Older replies still carry the characters and sit one space wider (put to the user as the cost, 2026-11-19).

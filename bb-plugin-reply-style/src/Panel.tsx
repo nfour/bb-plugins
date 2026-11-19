@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { experimental_Icon as Icon, useRpc, useSettings } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../server";
-import { NUMBERS, SWITCHES, TABS, valueOf, type Num, type Switch, type Tab } from "./shared";
+import { LAYOUT, NUMBERS, SWITCHES, TABS, valueOf, type Entry, type Num, type SettingKey, type Switch, type Tab } from "./shared";
 import { setPanelOpen, usePanelOpen } from "./panelState";
 import { clearPreview, getPreview, setPreview, usePreview } from "./preview";
 
@@ -15,12 +15,12 @@ const SIZED = ["re", "size"].join("");
 const REL = ["rela", "tive"].join("");
 const ABS = ["abs", "olute"].join("");
 
-function SwitchRow({ s }: { s: Switch }) {
+function SwitchRow({ s, off }: { s: Switch; off?: boolean }) {
   const rpc = useRpc<typeof rpcContract>();
   const { values } = useSettings();
   const on = valueOf(values, s.key) as boolean;
   return (
-    <div className="reply-style-opt">
+    <div className="reply-style-opt" data-off={off ? "" : undefined}>
       <div className="reply-style-opt-text">
         <b>{s.label}</b>
         <span>{s.description}</span>
@@ -30,6 +30,7 @@ function SwitchRow({ s }: { s: Switch }) {
         role="switch"
         aria-checked={on}
         aria-label={s.label}
+        disabled={off}
         className="reply-style-switch"
         onClick={() => void rpc.call("set_switch", { key: s.key, value: !on }).catch(() => {})}
       />
@@ -41,7 +42,7 @@ function SwitchRow({ s }: { s: Switch }) {
  * A slider that previews while it is dragged and saves once: on the native `change` (release), when the
  * panel closes, or 600ms after the last step. The preview is dropped once the saved value catches up.
  */
-function NumberRow({ n }: { n: Num }) {
+function NumberRow({ n, off }: { n: Num; off?: boolean }) {
   const rpc = useRpc<typeof rpcContract>();
   const { values } = useSettings();
   const saved = valueOf(values, n.key) as number;
@@ -68,7 +69,7 @@ function NumberRow({ n }: { n: Num }) {
   }, [commit]);
   const shown = previewed ?? saved;
   return (
-    <div className="reply-style-opt" data-stack="">
+    <div className="reply-style-opt" data-stack="" data-off={off ? "" : undefined}>
       <div className="reply-style-opt-text">
         <b>{n.label}</b>
         <span>{n.description}</span>
@@ -79,6 +80,7 @@ function NumberRow({ n }: { n: Num }) {
           type="range"
           className="reply-style-range"
           aria-label={n.label}
+          disabled={off}
           min={n.min}
           max={n.max}
           step={n.step ?? 1}
@@ -93,6 +95,32 @@ function NumberRow({ n }: { n: Num }) {
           {shown}
           {n.unit}
         </output>
+      </div>
+    </div>
+  );
+}
+
+/** One setting's row; `off` greys it out while the switch it belongs to is off, or a number's `when` is not met. */
+function Row({ k, off }: { k: SettingKey; off?: boolean }) {
+  const { values } = useSettings();
+  const s = SWITCHES.find((x) => x.key === k);
+  if (s) return <SwitchRow s={s} off={off} />;
+  const n = NUMBERS.find((x) => x.key === k)!;
+  return <NumberRow n={n} off={off || (n.when !== undefined && valueOf(values, n.when.key) !== n.when.is)} />;
+}
+
+/** A switch with the settings that only act while it is on, nested under it. */
+function Group({ entry }: { entry: Entry }) {
+  const { values } = useSettings();
+  if (typeof entry === "string") return <Row k={entry} />;
+  const off = !(valueOf(values, entry.key) as boolean);
+  return (
+    <div className="reply-style-group">
+      <Row k={entry.key} />
+      <div className="reply-style-children">
+        {entry.children.map((k) => (
+          <Row key={k} k={k} off={off} />
+        ))}
       </div>
     </div>
   );
@@ -166,11 +194,8 @@ function Content({ focusOnOpen }: { focusOnOpen?: boolean }) {
         ))}
       </div>
       <div className="reply-style-panel-body" role="tabpanel" id={pane} aria-labelledby={`${uid}-${tab}`}>
-        {SWITCHES.filter((s) => s.tab === tab).map((s) => (
-          <SwitchRow key={s.key} s={s} />
-        ))}
-        {NUMBERS.filter((n) => n.tab === tab).map((n) => (
-          <NumberRow key={n.key} n={n} />
+        {LAYOUT[tab].map((entry) => (
+          <Group key={typeof entry === "string" ? entry : entry.key} entry={entry} />
         ))}
       </div>
     </>

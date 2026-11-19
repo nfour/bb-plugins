@@ -117,8 +117,26 @@
   align-items: stretch;
   gap: 6px;
 }
-.reply-style-opt + .reply-style-opt {
+/* Rows and groups are separated by a hairline; inside a group the children are not, so the group
+   reads as one block. */
+.reply-style-panel-body > * + * {
   border-top: 1px solid color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+/* A switch's own settings sit under it, indented behind a line, and grey out while it is off. */
+.reply-style-children {
+  margin: 0 0 9px 6px;
+  padding-left: 14px;
+  border-left: 2px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.reply-style-children > .reply-style-opt {
+  padding: 6px 0;
+}
+.reply-style-opt[data-off] {
+  opacity: 0.45;
+}
+.reply-style-switch:disabled,
+.reply-style-range:disabled {
+  cursor: default;
 }
 .reply-style-opt-text {
   display: var(--reply-style-row);

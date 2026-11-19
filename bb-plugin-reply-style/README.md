@@ -22,9 +22,17 @@ Every colour is mixed from the theme's ink and canvas, so it follows any theme, 
 **Reply Style** in a thread's actions menu opens a settings panel over the chat, like Minimap's: drag it by its title bar, Esc closes it. The same panel is the plugin's page in BB's settings. Sliders restyle the replies behind the panel while you drag and save when you let go; **Reset all** puts every value back.
 
 - **Quotes:** bar strength, bar width, text strength.
-- **Spoilers:** **Spoiler As Quote**, description strength, hover surface, chevron strength, open and close time (0 snaps).
+- **Spoilers:** **Spoiler As Quote**, **Spoiler Card** (off) with its edge line and shade strengths, description strength, hover surface, chevron strength, open and close time (0 snaps).
 - **Lists:** **Guide Lines** (on), **Elbows** (on), **Path Numbers** (off), **Dim Markers** (on), line strength, line width, marker strength (45%), checkbox drop (2.5px).
-- **Tables:** **Tables Surface** (on), the background that lets lines pass under tables.
+- **Tables:** **Tables Surface** (on), the background that lets lines pass under tables; **Fit Spoilers** (off), which keeps wide tables inside a spoiler to the spoiler's width, scrolling sideways.
+
+A switch's own settings sit indented under it in the panel and grey out while it is off (Guide Lines holds Elbows and the line's strength and width; Dim Markers holds Marker strength; Spoiler Card holds its two strengths).
+
+An opened spoiler's summary line stays in view at the top of the timeline while you scroll through its body.
+
+**Height Limit** (off) caps an opened spoiler's body at a height and scrolls it inside; **Screen Height Units** (on) picks between a share of the window's height and a number of pixels, each with its own slider (the one not in use is greyed out).
+
+**Spoiler Card** (off) puts an opened spoiler, summary line included, in a box with a thin edge line and a soft shade, in place of the quote bar. Closed, the box is invisible; it fades in as the spoiler opens.
 
 **Spoiler As Quote** (on) draws the quote bar on the opened part of every spoiler and gives its text the quote colour, so the reply format writes spoiler bodies without `>`. A real quote inside a spoiler keeps its own bar; replies written before the format changed quoted their bodies and show two bars.
 

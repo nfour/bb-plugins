@@ -17,7 +17,7 @@ type Common = {
 
 /** An option the stylesheet reads as an attribute on <html>, written while it differs from its default. */
 export type Switch = Common & {
-  key: "guides" | "elbows" | "paths" | "markers" | "spoilerQuote" | "tables";
+  key: "guides" | "elbows" | "paths" | "markers" | "spoilerQuote" | "card" | "limit" | "viewport" | "tables" | "fit";
   default: boolean;
   attribute: string;
   value: string;
@@ -30,7 +30,9 @@ export type Num = Common & {
   min: number;
   max: number;
   step?: number;
-  unit: "%" | "px" | "ms";
+  unit: "%" | "px" | "ms" | "vh";
+  /** Only acts while this switch has this value; the panel greys it out otherwise. */
+  when?: { key: Switch["key"]; is: boolean };
   property: string;
 };
 
@@ -81,6 +83,33 @@ export const SWITCHES: readonly Switch[] = [
     value: "off",
   },
   {
+    key: "card",
+    label: "Spoiler Card",
+    description: "An opened spoiler, its summary line included, sits in a box with a thin edge line and a soft shade beneath it, in place of the quote bar. Closed, the box does not show.",
+    tab: "Spoilers",
+    default: false,
+    attribute: "data-reply-style-card",
+    value: "on",
+  },
+  {
+    key: "limit",
+    label: "Height Limit",
+    description: "An opened spoiler's body stops growing at a set height and scrolls inside.",
+    tab: "Spoilers",
+    default: false,
+    attribute: "data-reply-style-limit",
+    value: "on",
+  },
+  {
+    key: "viewport",
+    label: "Screen Height Units",
+    description: "On, the limit is a share of the window's height (vh); off, a set number of pixels.",
+    tab: "Spoilers",
+    default: true,
+    attribute: "data-reply-style-limit-unit",
+    value: "px",
+  },
+  {
     key: "tables",
     label: "Tables Surface",
     description: "Tables sit on the message's own background, so guide lines and quote bars pass under them instead of through.",
@@ -89,10 +118,23 @@ export const SWITCHES: readonly Switch[] = [
     attribute: "data-reply-style-tables",
     value: "off",
   },
+  {
+    key: "fit",
+    label: "Fit Spoilers",
+    description: "Wide tables inside a spoiler stay within the spoiler's width and scroll sideways, instead of spanning past the message.",
+    tab: "Tables",
+    default: false,
+    attribute: "data-reply-style-fit",
+    value: "on",
+  },
 ];
 
-export const NUMBER_KEYS = ["quoteBar", "quoteWidth", "quoteText", "summary", "hover", "chevron", "open", "guide", "guideWidth", "marker", "checkbox"] as const;
+export const NUMBER_KEYS = ["quoteBar", "quoteWidth", "quoteText", "summary", "hover", "chevron", "open", "guide", "guideWidth", "marker", "cardBorder", "cardShadow", "limitVh", "limitPx", "checkbox"] as const;
 export type NumberKey = (typeof NUMBER_KEYS)[number];
+
+// Words the plugin build would turn into page-wide rules if they stood whole in this folder.
+const BORDER = ["bor", "der"].join("");
+const SHADOW = ["sha", "dow"].join("");
 
 export const NUMBERS: readonly Num[] = [
   { key: "quoteBar", label: "Bar strength", description: "How much of the text colour the quote bar takes", tab: "Quotes", default: 30, min: 0, max: 100, unit: "%", property: "--reply-style-quote-bar" },
@@ -104,13 +146,28 @@ export const NUMBERS: readonly Num[] = [
   { key: "open", label: "Open and close", description: "How long a spoiler takes to open or close; 0 snaps", tab: "Spoilers", default: 220, min: 0, max: 600, step: 10, unit: "ms", property: "--reply-style-open" },
   { key: "guide", label: "Line strength", description: "Guide lines, as a share of the text colour", tab: "Lists", default: 18, min: 0, max: 60, unit: "%", property: "--reply-style-guide" },
   { key: "guideWidth", label: "Line width", description: "How wide each guide line is", tab: "Lists", default: 1, min: 1, max: 4, unit: "px", property: "--reply-style-guide-width" },
-  { key: "marker", label: "Marker strength", description: "Bullets and numbers under Dim Markers, as a share of the text colour", tab: "Lists", default: 45, min: 10, max: 100, unit: "%", property: "--reply-style-marker" },
+  { key: "marker", label: "Marker strength", description: "How strong the dimmed bullets and numbers are, as a share of the text colour", tab: "Lists", default: 45, min: 10, max: 100, unit: "%", property: "--reply-style-marker" },
+  { key: "cardBorder", label: `Card ${BORDER}`, description: "The card's edge line, as a share of the text colour", tab: "Spoilers", default: 16, min: 0, max: 60, unit: "%", property: "--reply-style-card-border" },
+  { key: "cardShadow", label: `Card ${SHADOW}`, description: "How dark the shade beneath the card is", tab: "Spoilers", default: 14, min: 0, max: 50, unit: "%", property: "--reply-style-card-shadow" },
+  { key: "limitVh", label: "Height limit (screen)", description: "The tallest a spoiler's body grows, as a share of the window's height", tab: "Spoilers", default: 50, min: 10, max: 100, unit: "vh", property: "--reply-style-limit-vh", when: { key: "viewport", is: true } },
+  { key: "limitPx", label: "Height limit (pixels)", description: "The tallest a spoiler's body grows, in pixels", tab: "Spoilers", default: 480, min: 100, max: 2000, step: 20, unit: "px", property: "--reply-style-limit-px", when: { key: "viewport", is: false } },
   { key: "checkbox", label: "Checkbox drop", description: "How far a reply's checkboxes move down from where BB puts them, so they sit on the middle of their text", tab: "Lists", default: 2.5, min: 0, max: 6, step: 0.5, unit: "px", property: "--reply-style-checkbox" },
 ];
 
-export const SETTING_KEYS = ["guides", "elbows", "paths", "markers", "spoilerQuote", "tables", ...NUMBER_KEYS] as const;
+export const SETTING_KEYS = ["guides", "elbows", "paths", "markers", "spoilerQuote", "card", "limit", "viewport", "tables", "fit", ...NUMBER_KEYS] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SwitchKey = Switch["key"];
+
+/** A row of the settings panel: a setting on its own, or a switch with the settings that only act while it is on. */
+export type Entry = SettingKey | { key: SwitchKey; children: readonly SettingKey[] };
+
+/** The panel's rows, tab by tab. Every setting appears once, on its own tab (a test holds that). */
+export const LAYOUT: Readonly<Record<Tab, readonly Entry[]>> = {
+  Quotes: ["quoteBar", "quoteWidth", "quoteText"],
+  Spoilers: ["spoilerQuote", { key: "card", children: ["cardBorder", "cardShadow"] }, { key: "limit", children: ["viewport", "limitVh", "limitPx"] }, "summary", "hover", "chevron", "open"],
+  Lists: [{ key: "guides", children: ["elbows", "guide", "guideWidth"] }, "paths", { key: "markers", children: ["marker"] }, "checkbox"],
+  Tables: ["tables", "fit"],
+};
 
 /** Clamps a number setting to its range, kept to whole steps. */
 export function clampNumber(key: NumberKey, value: number): number {

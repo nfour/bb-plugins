@@ -49,10 +49,12 @@ test("no class selectors", () => {
 test("colours come only from --ink and --canvas", () => {
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/);
   assert.doesNotMatch(css, /\b(rgb|rgba|hsl|hsla|oklch|oklab)\(/);
-  for (const mix of css.match(/color-mix\([^;]*\)/g) ?? []) {
+  // The card's shade is the one exception: black over transparent, so it is darker than any surface.
+  const shade = /color-mix\(in oklch, black var\(--reply-style-card-shadow, \d+%\), transparent\)/g;
+  for (const mix of css.replace(shade, "").match(/color-mix\([^;]*\)/g) ?? []) {
     assert.match(mix, /^color-mix\(in oklch, var\(--ink\) (\d+%|var\(--reply-style-[a-z-]+, \d+%\)), var\(--canvas\)\)/);
   }
-  assert.doesNotMatch(css, /:\s*(red|white|black|grey|gray|orange)\s*[;}]/);
+  assert.doesNotMatch(css.replace(shade, ""), /\b(red|white|black|grey|gray|orange)\b\s*[;}),]/);
 });
 
 test("no !important", () => {
@@ -68,7 +70,7 @@ test("the animation clips with clip-path, never overflow: clip", () => {
 
 test(":root appears only as an option switch", () => {
   for (const m of css.match(/:root[^)\s]*/g) ?? []) {
-    assert.match(m, /^:root(:not\(\[data-reply-style-(guides|tables|quote|markers)="off"\]|\[data-reply-style-path="on"\]|\[data-reply-style-elbows="off"\])/, m);
+    assert.match(m, /^:root(:not\(\[data-reply-style-(guides|tables|quote|markers)="off"\]|\[data-reply-style-(path|card|fit|limit)="on"\]|\[data-reply-style-limit-unit="px"\]|\[data-reply-style-elbows="off"\])/, m);
   }
   assert.doesNotMatch(css, /(^|[\s,}])html\b/);
 });
@@ -85,8 +87,9 @@ test("the build made no page-wide utility rules", { skip: !existsSync(dist) && "
 });
 
 test("tables keep BB's span and paint over the guide line and quote bar", () => {
-  assert.doesNotMatch(css, /--md-table-start-offset/);
-  assert.match(css, new RegExp("position: rel" + "ative;\\s*background: var\\(--canvas\\)"));
+  // Only Fit Spoilers, an option, touches BB's span.
+  for (const m of css.matchAll(new RegExp("--md-tab" + "le-start-offset", "g"))) assert.match(css.slice(0, m.index), /data-reply-style-fit="on"\]\)[^@]*$/);
+  assert.match(css, new RegExp("position: rel" + "ative;\\s*z-index: 1;\\s*background: var\\(--canvas\\)"));
 });
 
 test("reduced motion turns the transitions off", () => {

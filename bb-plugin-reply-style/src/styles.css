@@ -25,7 +25,11 @@
  *   data-reply-style-path="on"     Path Numbers
  *   data-reply-style-markers="off" bullets and numbers in BB's colour
  *   data-reply-style-quote="off"   no Spoiler As Quote
+ *   data-reply-style-card="on"     Spoiler Card
+ *   data-reply-style-limit="on"    Height Limit
+ *   data-reply-style-limit-unit="px"  the limit in pixels, not screen height
  *   data-reply-style-tables="off"  tables without their own surface
+ *   data-reply-style-fit="on"      Fit Spoilers
  * The numbers in the settings panel arrive the same way, as custom properties on <html> written only
  * while they differ from their defaults; every var(--reply-style-*, x) below carries its default as
  * the fallback, and src/shared.ts holds the same default (a test keeps the two equal).
@@ -60,14 +64,26 @@
 
   /* Tables. BB centres a table wider than the message on the pane, so a wide one under a list item
      or in a quote runs left across the guide line and the quote bar. The table keeps that span and
-     covers them instead: an opaque surface, and a position so it paints after the guide line (an
-     absolutely placed pseudo-element earlier in the tree) and over the quote's border.
+     covers them instead: an opaque surface, a position, and a stacking level of 1. The level is
+     needed because the line running down an item is its ::after, which comes after the table in
+     the tree and would otherwise paint over it (the user saw a line through a spoiler's table,
+     2026-11-19); a position alone only beats the elbows (::before, earlier in the tree) and the
+     quote's border.
      `background: inherit` was tried and computes to transparent, since the table's parent paints
      nothing. --canvas is the message surface; on a message BB is flashing or highlighting, the
      table keeps the plain surface while the rows around it tint. Tables Surface off drops both. */
   :where(:root:not([data-reply-style-tables="off"])) & table {
     position: relative;
+    z-index: 1;
     background: var(--canvas);
+  }
+  /* A table inside a spoiler sits in ::details-content, whose clip-path (the open/close reveal)
+     makes it a stacking context of its own, so the table's level counts only inside it and the
+     line down the item still paints over the whole body. Raising the spoiler itself (already
+     positioned for its elbow; it paints nothing of its own) lifts the body above the line. */
+  :where(:root:not([data-reply-style-tables="off"])) & details:has(table) {
+    position: relative;
+    z-index: 1;
   }
 
   /* Hovering a spoiler summary: a faint surface behind the whole line and the description brought
@@ -79,6 +95,16 @@
     padding: 0.1rem 0.35rem;
     margin-inline: -0.35rem;
     transition: background-color 120ms ease;
+  }
+  /* An opened spoiler's summary line sticks to the top of the timeline while the spoiler is in
+     view, so a tall body (or one scrolling under Height Limit) never loses its title. It needs an
+     opaque surface to cover the body passing under it, and a stacking level above tables, which
+     have their own (Tables Surface). Before the hover rule, which wins on order. */
+  details[open] > summary {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background: var(--canvas);
   }
   details > summary:hover {
     background: color-mix(in oklch, var(--ink) var(--reply-style-hover, 9%), var(--canvas));
@@ -104,7 +130,10 @@
     width: 0.5em;
     height: 0.5em;
     margin-left: -2px;
-    margin-right: 0.2em;
+    /* 0.2em for the chevron itself plus the width of a space, which the format no longer writes
+       as an &nbsp; before the chips (2026-11-19). Older replies still carry it and sit one space
+       wider. */
+    margin-right: calc(0.2em + 0.28em);
     border-right: 2px solid color-mix(in oklch, var(--ink) var(--reply-style-chevron, 55%), var(--canvas));
     border-bottom: 2px solid color-mix(in oklch, var(--ink) var(--reply-style-chevron, 55%), var(--canvas));
     transform: translateY(calc(-0.16em + 2px)) rotate(-45deg);
@@ -330,6 +359,14 @@
   li > input[type="checkbox"]:first-child {
     position: relative;
     inset-block-start: var(--reply-style-checkbox, 2.5px);
+    /* The browser's 3px plus a space's width: the gap the format used to write as an &nbsp;
+       after every box (dropped from the format 2026-11-19; older replies sit one space wider). */
+    margin-inline-end: calc(3px + 0.28em);
+  }
+  /* A spoiler standing on its own, not under a list item, gets the room the format used to make
+     with a <br> above and below it (dropped 2026-11-19). */
+  & > details {
+    margin-block: 1rem;
   }
 }
 
@@ -358,6 +395,70 @@
     details > :not(summary) :is(p, li, em, strong) {
       color: color-mix(in oklch, var(--ink) var(--reply-style-quote-text, 80%), var(--canvas));
     }
+  }
+}
+
+/* Spoiler Card (off by default). The whole spoiler, its summary line included, sits in a box
+   with a thin edge line and a soft shade, in place of Spoiler As Quote's bar.
+   - The box is always there, so opening a spoiler moves nothing; closed, its edge line and shade
+     are transparent, and they fade in as it opens (over the open time).
+   - The box is on the details element, which is not clipped: the open/close clip stays on
+     ::details-content, so the shade is never cut.
+   - Its padding moves the summary down by 0.15rem and the edge line by 1px, so a spoiler's elbow
+     (guide lines) moves down with it and reaches the box's edge.
+   - The shade is the one colour not mixed from --ink and --canvas: a shade has to be darker than
+     the surface in every theme, and ink is light in a dark theme, where it would glow.
+   - Text dimming stays with Spoiler As Quote. */
+:where(:root[data-reply-style-card="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  details {
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    padding: 0.15rem 0.6rem;
+    box-shadow: 0 2px 10px transparent;
+    transition: border-color var(--reply-style-open, 220ms) ease, box-shadow var(--reply-style-open, 220ms) ease;
+  }
+  li > details {
+    margin-block: 0.25rem;
+  }
+  details[open] {
+    border-color: color-mix(in oklch, var(--ink) var(--reply-style-card-border, 16%), var(--canvas));
+    box-shadow: 0 2px 10px color-mix(in oklch, black var(--reply-style-card-shadow, 14%), transparent);
+  }
+  details::details-content {
+    border-inline-start-width: 0;
+    padding-inline-start: 0;
+  }
+  details[open]::details-content {
+    margin-block: 0.25rem 0.4rem;
+  }
+  li > details:not(:first-child) {
+    --reply-style-reach: 0px;
+    --reply-style-mid: calc(0.5lh + 0.25rem + 1px);
+  }
+}
+
+/* Height Limit (off by default). An opened spoiler's body stops at a set height and scrolls inside,
+   in screen units (vh, Screen Height Units on) or pixels. The limit and the scroller are on
+   ::details-content, so the summary line stays put above it.
+   - overflow-y: auto makes the sideways axis scroll too, so a wide table that would span past
+     the message scrolls inside the body instead; Fit Spoilers does the same on purpose.
+   - The open/close animation still runs: it grows the body to auto and the limit caps it. */
+:where(:root[data-reply-style-limit="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  details[open]::details-content {
+    max-block-size: var(--reply-style-limit-vh, 50vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* No reflow when the scrollbar comes and goes: its gutter is always kept, and the body is
+       widened by the same amount on the right, so the text keeps the width it has without the
+       limit and the scrollbar hangs just outside it. --reply-style-scrollbar is measured by
+       app.tsx (0 with overlay scrollbars). */
+    scrollbar-gutter: stable;
+    margin-inline-end: calc(-1 * var(--reply-style-scrollbar, 0px));
+  }
+}
+:where(:root[data-reply-style-limit="on"][data-reply-style-limit-unit="px"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  details[open]::details-content {
+    max-block-size: var(--reply-style-limit-px, 480px);
   }
 }
 
@@ -393,10 +494,24 @@
   }
 }
 
+/* Fit Spoilers (off by default). BB widens a table past the message with an inline width on the
+   wrapper two levels up from it; max-width (which the inline style does not set) holds that wrapper
+   to the spoiler's width, and a zero start offset keeps it at the spoiler's left edge (zero, since a
+   nonzero offset is applied once per wrapper). The inner wrapper already scrolls sideways. */
+:where(:root[data-reply-style-fit="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+  details {
+    --md-table-start-offset: 0px;
+  }
+  details div:has(> div > table) {
+    max-width: 100%;
+  }
+}
+
 /* Reduced motion: spoilers open and close at once, the summary's hover lands at once, and the
    chevron turns without rotating through. */
 @media (prefers-reduced-motion: reduce) {
   :where([data-timeline-row-id]) :where([data-markdown-preview]) {
+    details,
     details::details-content,
     details > summary,
     details > summary em,
