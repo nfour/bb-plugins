@@ -243,25 +243,30 @@
   li {
     --reply-style-line: color-mix(in oklch, var(--ink) var(--reply-style-guide, 18%), var(--canvas));
   }
-  /* The line down each item of a list where something sits under an item. */
-  :is(ul, ol):has(> li > :nth-child(2)) > li {
+  /* The line down each item of any list of two or more items, flat lists
+     included (the user, 2026-11-19), so a list reads the same whatever its
+     items hold. "Something under" an item, which earns the item a wider gap
+     and keeps the last item's line, is a block after the item's own line,
+     never just a second child: a tight list has no paragraph, so an item's
+     bold and code are its own children too. */
+  :is(ul, ol):has(> li + li) > li {
     position: relative;
     display: list-item flow-root;
     --reply-style-gap: 0.25rem;
     --reply-style-clear: 0.85em;
     margin-block-end: var(--reply-style-gap);
   }
-  :is(ul, ol):has(> li > :nth-child(2)) > li:has(> :nth-child(2)) {
+  :is(ul, ol):has(> li + li) > li:has(> :is(ul, ol, details, blockquote, pre, div, p:not(:first-child))) {
     --reply-style-gap: 0.5rem;
   }
-  :is(ul, ol):has(> li > :nth-child(2)) > li:last-child {
+  :is(ul, ol):has(> li + li) > li:last-child {
     margin-block-end: 0;
   }
-  :is(ul, ol):has(> li > :nth-child(2)) > li > :last-child,
-  :is(ul, ol):has(> li > :nth-child(2)) > li > details:last-child > :last-child {
+  :is(ul, ol):has(> li + li) > li > :last-child,
+  :is(ul, ol):has(> li + li) > li > details:last-child > :last-child {
     margin-block-end: 0;
   }
-  :is(ul, ol):has(> li > :nth-child(2)) > li::after {
+  :is(ul, ol):has(> li + li) > li::after {
     content: "";
     position: absolute;
     pointer-events: none;
@@ -271,7 +276,7 @@
     inset-block-end: calc(var(--reply-style-clear) - 0.5lh - var(--reply-style-gap));
     background: var(--reply-style-line);
   }
-  :is(ul, ol):has(> li > :nth-child(2)) > li:last-child:not(:has(> :nth-child(2)))::after {
+  :is(ul, ol):has(> li + li) > li:last-child:not(:has(> :is(ul, ol, details, blockquote, pre, div, p:not(:first-child))))::after {
     content: none;
   }
 
@@ -345,7 +350,7 @@
   li > :is(ul, ol) > li::before {
     content: none;
   }
-  :is(ul, ol):has(> li > :nth-child(2)) > li:last-child:last-child::after {
+  :is(ul, ol):has(> li + li) > li:last-child:last-child::after {
     inset-block-end: 0;
   }
 }

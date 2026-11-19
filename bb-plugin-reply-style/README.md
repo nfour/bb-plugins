@@ -8,7 +8,7 @@ A BB plugin that styles the reply surface of a thread: quotes, spoilers (`<detai
 - A spoiler's summary line: the description after the chips is dimmed and slanted, the whole line lights up under the pointer, and a chevron replaces the triangle, turning as the spoiler opens.
 - Spoilers open and close smoothly, without cutting off wide tables that span past the message. With reduced motion set in your system, they open at once.
 - Wide tables keep their full-width span and sit on the message's surface, so guide lines and quote bars pass under them instead of through.
-- **Guide Lines:** a thin line down each nesting level of a list, so the spoiler, quote or sub-list under an item reads as belonging to it. It serves both of the format's shapes: checked items with evidence under them, and numbered questions with their options.
+- **Guide Lines:** a thin line down every list of two or more items and each nesting level in it, so the spoiler, quote or sub-list under an item reads as belonging to it. It serves both of the format's shapes: checked items with evidence under them, and numbered questions with their options.
 - **Elbows:** the line runs from bullet to bullet, each nested item, spoiler and quote joins it with a short stub, and under the last item it stops at the last stub, like a file tree.
 - Checkboxes in replies sit on the middle of their text line instead of a little high.
 - **Dim Markers:** bullets and numbers are dimmed (marker strength, 45%), so the text leads.
