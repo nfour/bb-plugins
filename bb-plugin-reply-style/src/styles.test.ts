@@ -52,7 +52,7 @@ test("colours come only from --ink and --canvas", () => {
   // The card's shade is the one exception: black over transparent, so it is darker than any surface.
   const shade = /color-mix\(in oklch, black var\(--reply-style-card-shadow, \d+%\), transparent\)/g;
   for (const mix of css.replace(shade, "").match(/color-mix\([^;]*\)/g) ?? []) {
-    assert.match(mix, /^color-mix\(in oklch, var\(--ink\) (\d+%|var\(--reply-style-[a-z-]+, \d+%\)), var\(--canvas\)\)/);
+    assert.match(mix, /^color-mix\(in oklch, var\(--ink\) (\d+%|var\(--reply-style-[a-z-]+, \d+%\)|calc\(var\(--reply-style-[a-z-]+, \d+%\) \* [\d.]+\)), var\(--canvas\)\)/);
   }
   assert.doesNotMatch(css.replace(shade, ""), /\b(red|white|black|grey|gray|orange)\b\s*[;}),]/);
 });

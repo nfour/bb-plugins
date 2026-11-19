@@ -466,21 +466,57 @@
 /* Path Numbers (off by default). Options nested in a top-level numbered list show their path,
    1.1, 1.2, 2.1, which is the key an answer uses. Only that shape. The question's number is a
    counter of the plugin's own: counters(list-item) also picked up the list-item counter of a list
-   earlier in the reply (a counter's scope runs on into later siblings), which showed 1.1.2. The
-   options stay where plain numbers put them: the wider marker reaches left over the elbow, and the
-   elbow stops 1.4ch shorter (the width the "1." adds, plus a gap), which leaves only a nub of it. */
+   earlier in the reply (a counter's scope runs on into later siblings), which showed 1.1.2.
+   The option's own number stays the list marker. The question's part ("1." of 1.3) is drawn small
+   and raised, like a superscript, by the item's ::before, which is also its elbow: the box runs from
+   the guide line to where the marker begins, the elbow is a background line along its bottom edge
+   (at the middle of the first line, where every elbow sits), and the number sits at its end, the line running a little under it.
+   The marker begins 1.22em left of the item (a tabular digit is 0.649em and ". " 0.570em in BB's
+   Inter, measured 2026-11-19), so options past 9 would overlap. The box's own font is 0.75 of the
+   item's, so lengths from the item (the guide's x, half a line) are passed in registered
+   properties, which turn them into pixels on the item before the smaller font can rescale them.
+   The box ends at the middle of the line, so the question's line still ends at its last elbow. */
+@property --reply-style-path-x {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --reply-style-path-half {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
 :where(:root[data-reply-style-path="on"]) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
-  & > ol > li > ol > li {
-    --reply-style-reach: calc(-1 * var(--reply-style-indent) + 0.15em - 1.4ch);
-  }
   & > ol {
     counter-reset: reply-style-question;
   }
   & > ol > li {
     counter-increment: reply-style-question;
   }
+  & > ol > li > ol > li {
+    position: relative;
+    --reply-style-path-x: calc(var(--reply-style-x) + var(--reply-style-guide-width, 1px));
+    --reply-style-path-half: 0.5lh;
+  }
   & > ol > li > ol > li::marker {
-    content: counter(reply-style-question) "." counter(list-item) ". ";
+    font-variant-numeric: tabular-nums;
+  }
+  & > ol > li > ol > li::before {
+    content: counter(reply-style-question) ".";
+    position: absolute;
+    font-size: 0.75em;
+    inset-inline-start: var(--reply-style-path-x);
+    inset-inline-end: calc(100% + 1.22em / 0.75);
+    inline-size: auto;
+    inset-block-start: 0;
+    block-size: var(--reply-style-path-half);
+    line-height: calc(var(--reply-style-path-half) * 2 - 0.5em + 4px);
+    text-align: end;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in oklch, var(--ink) 75%, var(--canvas));
+    background: linear-gradient(var(--reply-style-line), var(--reply-style-line)) no-repeat 0 100% /
+      calc(100% - 0.8em) var(--reply-style-guide-width, 1px);
   }
 }
 
@@ -489,6 +525,10 @@
 :where(:root:not([data-reply-style-markers="off"])) :where([data-timeline-row-id]) :where([data-markdown-preview]) {
   li::marker {
     color: color-mix(in oklch, var(--ink) var(--reply-style-marker, 45%), var(--canvas));
+  }
+  /* Path Numbers' question part: a quarter dimmer than the markers (75% of their strength). */
+  & > ol > li > ol > li::before {
+    color: color-mix(in oklch, var(--ink) calc(var(--reply-style-marker, 45%) * 0.75), var(--canvas));
   }
 }
 

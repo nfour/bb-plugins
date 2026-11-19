@@ -54,7 +54,7 @@ test("every default sits in its range, and matches the stylesheet's fallback", (
     for (const fallback of uses) assert.equal(fallback, `${n.default}${n.unit}`, n.property);
   }
   // The rest are the guide lines' own geometry, set in the stylesheet itself.
-  const own = ["--reply-style-indent", "--reply-style-x", "--reply-style-reach", "--reply-style-mid", "--reply-style-gap", "--reply-style-rail", "--reply-style-parent-rail", "--reply-style-clear", "--reply-style-line", "--reply-style-scrollbar"];
+  const own = ["--reply-style-indent", "--reply-style-x", "--reply-style-reach", "--reply-style-mid", "--reply-style-gap", "--reply-style-rail", "--reply-style-parent-rail", "--reply-style-clear", "--reply-style-line", "--reply-style-scrollbar", "--reply-style-path-x", "--reply-style-path-half"];
   for (const m of css.matchAll(/var\((--reply-style-[a-z-]+)/g)) assert.ok(own.includes(m[1]!) || NUMBERS.some((n) => n.property === m[1]), m[1]);
 });
 
