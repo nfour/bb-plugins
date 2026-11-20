@@ -2,6 +2,13 @@
 
 Releases are the tags `pinned-turns/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.7 (2026-11-20)
+
+- Needs bb 0.50 or later. The bar now sits in bb's own slot at the top of the thread.
+- Works with how bb 0.50 sends thread updates; before, a reply's title or status could lag behind.
+- The bar appears even when a thread's first messages take a while to load; before, it could give up and never show.
+- A pane that was in the background reads the thread again when you come back to it.
+
 ## 0.1.6 (2026-11-15)
 
 - Nothing changes on screen: the agent skill now explains how the plugin reads a thread, and the settings are kept in one list.
