@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../server";
 import { BEAT_MS } from "./lease.ts";
+import { createViewers } from "./viewers.ts";
 import { pickerItems, pickerMenu, type DiffTab, type PickerItem } from "./diff-tab";
 import type { RecentCommit } from "./recent";
 
@@ -37,17 +38,10 @@ const LIST_WAIT_MS = 8000;
 const moved = new Set<string>();
 /** While a base is moved and a Diff tab shows the commit, the page says so every BEAT_MS (server.ts `keep_base`); without a ping the server puts the base back. */
 const beats = new Map<string, ReturnType<typeof setInterval>>();
-/** Diff tabs showing a commit, per environment: the page pings only while one is mounted, so a closed panel lets the lease lapse. */
-const viewers = new Map<string, number>();
-/** Registers a Diff tab showing a commit of `environmentId`; returns what to call when it goes. */
-export function viewCommit(environmentId: string): () => void {
-  viewers.set(environmentId, (viewers.get(environmentId) ?? 0) + 1);
-  return () => {
-    const left = (viewers.get(environmentId) ?? 1) - 1;
-    if (left > 0) viewers.set(environmentId, left);
-    else viewers.delete(environmentId);
-  };
-}
+/** Diff tabs showing a commit, per environment: the page pings only while one is on the page, so a closed panel or another thread lets the lease lapse. */
+const viewers = createViewers();
+/** Registers a Diff tab showing a commit of `environmentId` (`isShowing`: its elements are still on the page); returns what to call when it goes. */
+export const viewCommit = (environmentId: string, isShowing: () => boolean) => viewers.add(environmentId, isShowing);
 function beat(environmentId: string, ping: () => Promise<boolean>) {
   if (beats.has(environmentId)) return;
   const stop = () => {

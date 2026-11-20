@@ -2,6 +2,11 @@
 
 Releases are the tags `diff-plus/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 1.2.2 (2026-11-20)
+
+- After you look at a recent commit, the checkout's merge base goes back within about two and a half minutes when you close the tab or the page, or switch to another thread, even if nothing else puts it back.
+- A failing put-back is tried a few more times, then left for the next start of bb instead of being retried forever.
+
 ## 1.2.1 (2026-11-15)
 
 - The folder tree updates when files change while the Diff tab is open, including when the last change is committed, reverted or discarded; before, it could keep showing files BB's list no longer had.

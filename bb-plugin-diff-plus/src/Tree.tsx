@@ -286,7 +286,10 @@ function TabTree({ tab, label, query, filters, thread }: TabState) {
       .catch(() => {});
   }, [rpc, environmentId, scope !== null, showsCommit, options.recent]); // scope !== null stands for scope
   // While this tab shows a commit the moved base is wanted: the page keeps telling the server so (Picker.tsx).
-  useEffect(() => (environmentId && showsCommit && options.recent ? viewCommit(environmentId) : undefined), [environmentId, showsCommit, options.recent]);
+  useEffect(
+    () => (environmentId && showsCommit && options.recent ? viewCommit(environmentId, () => tab.list.isConnected) : undefined),
+    [environmentId, showsCommit, options.recent, tab.list],
+  );
   const files = useChangedFiles(options.open ? environmentId : null, scope);
   const viewed = useViewed(environmentId, files.status === "ready" ? files.target : null, tab.list, filters?.showViewed === false);
   const filterKey = filtersKey(filters);
