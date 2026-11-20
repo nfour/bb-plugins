@@ -2,6 +2,11 @@
 
 Releases are the tags `minimap/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.1.8 (2026-11-20)
+
+- Works with how bb 0.50 sends thread updates; before, a row's size or colour could lag behind.
+- A pane that was in the background reads the thread again when you come back to it.
+
 ## 0.1.7 (2026-11-15)
 
 - On a touch screen the settings panel's switches, sliders, tabs and buttons are easier to hit, the panel shows above BB's open drawer, and a swipe at the end of its list no longer scrolls the thread.
