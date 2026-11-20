@@ -47,7 +47,7 @@ function leaf(held: unknown, op: RowOp): unknown {
 
 /**
  * `node` with `op` applied at `op[1][depth]` and below: copied along the path, `node` itself never
- * touched. Follows BB's own client: no key is created on the way (`set` makes only its last key, or the
+ * touched. Follows BB's own client, and reads only a row's own keys: no key is created on the way (`set` makes only its last key, or the
  * array slot just past the end), `append` needs a string, `delete` needs an object key that exists
  * (an array element is replaced as a whole array, never deleted), and anything else is `BAD`.
  */
@@ -65,12 +65,14 @@ function patchAt(node: unknown, op: RowOp, depth: number): unknown {
     return copy;
   }
   if (!isObject(node) || typeof key !== "string") return BAD;
+  // Only the row's own keys are read: `toString` or `__proto__` are never found through the prototype.
+  const held = Object.hasOwn(node, key) ? node[key] : undefined;
   if (last && op[0] === "delete") {
-    if (node[key] === undefined) return BAD;
+    if (held === undefined) return BAD;
     const { [key]: _gone, ...rest } = node;
     return rest;
   }
-  const next = last ? leaf(node[key], op) : patchAt(node[key], op, depth + 1);
+  const next = last ? leaf(held, op) : patchAt(held, op, depth + 1);
   if (next === BAD) return BAD;
   const copy = { ...node };
   // Not an assignment: a key like `__proto__` must stay a plain key.
@@ -138,7 +140,7 @@ export function applyDelta<T extends { id: string }>(
         continue;
       }
       const [start, count] = entry;
-      if (!(Number.isInteger(start) && Number.isInteger(count) && start >= 0 && count >= 0 && start + count <= page.length)) return null;
+      if (!(Number.isInteger(start) && Number.isInteger(count) && start >= 0 && count > 0 && start + count <= page.length)) return null;
       for (let i = start; i < start + count; i++) out.push(place(page[i]!));
     }
   }

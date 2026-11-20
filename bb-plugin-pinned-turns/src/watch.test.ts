@@ -511,6 +511,26 @@ test("patchRow: a key named __proto__ stays a plain key", () => {
   assert.deepEqual(Object.keys(got), ["id", "kind", "__proto__"]);
 });
 
+test("patchRow: only a row's own keys are read, never the prototype's", () => {
+  assert.equal(patchRow({ id: "a", kind: "k" }, [["delete", ["toString"]]]), null, "an inherited member is not a key to delete");
+  assert.equal(patchRow({ id: "a", kind: "k" }, [["set", ["__proto__", "x"], 1]]), null, "the prototype is not a node to set through");
+  assert.equal(patchRow({ id: "a", kind: "k" }, [["append", ["constructor"], "x"]]), null, "nothing own to append to");
+  // Present as own keys, these are plain keys again.
+  const held = JSON.parse('{"id":"a","kind":"k","__proto__":{"n":"x"},"constructor":"c","prototype":"p"}');
+  const got = patchRow(held, [["append", ["__proto__", "n"], "y"], ["append", ["constructor"], "!"], ["delete", ["prototype"]]]) as Record<string, unknown>;
+  assert.deepEqual(Object.getOwnPropertyDescriptor(got, "__proto__")?.value, { n: "xy" });
+  assert.equal(got.constructor, "c!");
+  assert.equal(Object.hasOwn(got, "prototype"), false);
+  assert.equal(Object.getPrototypeOf(got), Object.prototype);
+});
+
+test("applyDelta: a zero-length stretch does not fit (bb's count is positive)", () => {
+  const page = [{ id: "a" }, { id: "b" }];
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[0, 2], [1, 0]] }), null);
+  assert.equal(applyDelta(page, { upsertRows: [], rowOrder: [[2, 0]] }), null);
+  assert.deepEqual(applyDelta(page, { upsertRows: [], rowOrder: [[0, 2]] }), page);
+});
+
 test("patchRow: refuses what does not fit", () => {
   const bad = (op: RowOp | RowOp[]) => assert.equal(patchRow(turn(), Array.isArray(op[0]) ? (op as RowOp[]) : [op as RowOp]), null, JSON.stringify(op));
   bad(["append", ["meta", "n"], "x"]); // not a string
