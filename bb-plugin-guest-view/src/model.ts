@@ -239,16 +239,24 @@ export function maskSecrets(text: string): string {
 export type Inline =
   | string
   | { t: "code"; text: string }
-  | { t: "b" | "i" | "s"; c: Inline[] }
+  | { t: "b" | "i" | "s" | "kbd"; c: Inline[] }
   | { t: "a"; href: string; c: Inline[] }
   | { t: "br" };
+
+/** One list item: what it holds, and for a task item (`- [ ]`, `- [x]`) whether it is ticked (undefined: not a task). */
+export interface ListItem {
+  task?: boolean;
+  c: Block[];
+}
 
 export type Block =
   | { t: "p"; c: Inline[] }
   | { t: "h"; level: number; c: Inline[] }
   | { t: "code"; lang: string; text: string }
-  | { t: "ul" | "ol"; start?: number; items: Inline[][] }
+  | { t: "ul" | "ol"; start?: number; items: ListItem[] }
   | { t: "quote"; c: Block[] }
+  /** A spoiler: `<details><summary>…</summary>` and its body. Read from those exact lines; no other HTML is read. */
+  | { t: "details"; open: boolean; summary: Inline[]; c: Block[] }
   | { t: "tbl"; head: Inline[][]; rows: Inline[][][] }
   | { t: "hr" };
 
@@ -262,9 +270,30 @@ export function safeHref(href: string): string | null {
 const LINK = /\[([^\]\n]{0,500})\]\(([^)\s]{1,2000})(?:\s+"[^"\n]{0,200}")?\)/y;
 const MAX_LINK_CHARS = 2800;
 
-export function parseInline(text: string): Inline[] {
+/** Marks (bold, links, tags) inside marks are followed this deep; a deeper run is plain text (it would otherwise overflow the stack). */
+const MAX_INLINE_DEPTH = 8;
+
+/** The few character entities BB shows as characters, which an agent's HTML-flavoured reply carries (`&nbsp;` most of all). */
+const ENTITIES: Record<string, string> = { nbsp: "\u00a0", amp: "&", lt: "<", gt: ">", quot: '"' };
+const decodeEntities = (text: string) => text.replace(/&(nbsp|amp|lt|gt|quot);/g, (_all, name: string) => ENTITIES[name]!);
+
+/** The tags BB draws from HTML in a reply, within a line, and what each becomes. `code` is read as code, the rest as marks around text. */
+const TAG_MARKS = { strong: "b", b: "b", em: "i", i: "i", kbd: "kbd" } as const;
+
+export function parseInline(text: string, depth = 0): Inline[] {
   const out: Inline[] = [];
   let buffer = "";
+  // Where each closing tag is next (Infinity: none), looked up again only once it is behind us, so text full of
+  // opening tags with no closing one is read in one pass.
+  const closes = new Map<string, number>();
+  const closeOf = (tag: string, from: number): number => {
+    const known = closes.get(tag);
+    if (known !== undefined && known >= from) return known;
+    const found = text.indexOf(tag, from);
+    const at = found < 0 ? Infinity : found;
+    closes.set(tag, at);
+    return at;
+  };
   // Where the next "](" is (Infinity: none), looked up again only once it is behind us.
   let closeAt = -1;
   const linkAt = (from: number): number => {
@@ -292,6 +321,34 @@ export function parseInline(text: string): Inline[] {
       i += 1;
       continue;
     }
+    if (ch === "&") {
+      const entity = /^&(nbsp|amp|lt|gt|quot);/.exec(text.slice(i, i + 7));
+      if (entity) {
+        buffer += ENTITIES[entity[1]!];
+        i += entity[0].length;
+        continue;
+      }
+    }
+    if (ch === "<" && depth < MAX_INLINE_DEPTH) {
+      const here = text.slice(i, i + 8);
+      const br = /^<br\s?\/?>/.exec(here);
+      if (br) {
+        push({ t: "br" });
+        i += br[0].length;
+        continue;
+      }
+      const tag = /^<(code|strong|em|kbd|b|i)>/.exec(here);
+      if (tag) {
+        const name = tag[1]! as "code" | keyof typeof TAG_MARKS;
+        const close = closeOf(`</${name}>`, i + tag[0].length);
+        if (close !== Infinity) {
+          const inner = text.slice(i + tag[0].length, close);
+          push(name === "code" ? { t: "code", text: decodeEntities(inner) } : { t: TAG_MARKS[name], c: parseInline(inner, depth + 1) });
+          i = close + name.length + 3;
+          continue;
+        }
+      }
+    }
     if (ch === "`") {
       let after = i;
       while (text[after] === "`") after += 1;
@@ -307,16 +364,16 @@ export function parseInline(text: string): Inline[] {
       i = after;
       continue;
     }
-    if (ch === "[" && linkAt(i) <= i + MAX_LINK_CHARS) {
+    if (ch === "[" && depth < MAX_INLINE_DEPTH && linkAt(i) <= i + MAX_LINK_CHARS) {
       LINK.lastIndex = i;
       const m = LINK.exec(text);
       if (m) {
         const href = safeHref(m[2]!);
-        if (href) push({ t: "a", href, c: parseInline(m[1]!) });
+        if (href) push({ t: "a", href, c: parseInline(m[1]!, depth + 1) });
         else {
           if (buffer) out.push(buffer);
           buffer = "";
-          out.push(...parseInline(m[1]!));
+          out.push(...parseInline(m[1]!, depth + 1));
         }
         i += m[0].length;
         continue;
@@ -330,7 +387,7 @@ export function parseInline(text: string): Inline[] {
         continue;
       }
     }
-    if (ch === "*" || ch === "_" || ch === "~") {
+    if ((ch === "*" || ch === "_" || ch === "~") && depth < MAX_INLINE_DEPTH) {
       const strong = text.startsWith(ch + ch, i);
       const marker = strong ? ch + ch : ch;
       if (ch !== "~" || strong) {
@@ -340,7 +397,7 @@ export function parseInline(text: string): Inline[] {
         const wordy = ch === "_" && ((i > 0 && /\w/.test(text[i - 1]!)) || /\w/.test(text[close + marker.length] ?? ""));
         if (close > i && inner.trim() === inner && inner.length > 0 && !inner.includes("\n\n") && !wordy) {
           const t = ch === "~" ? "s" : strong ? "b" : "i";
-          push({ t, c: parseInline(inner) });
+          push({ t, c: parseInline(inner, depth + 1) });
           i = close + marker.length;
           continue;
         }
@@ -374,15 +431,32 @@ const splitRow = (line: string) =>
     .split(/(?<!\\)\|/)
     .map((cell) => cell.trim());
 
-/** Quotes inside quotes are followed this deep; a deeper `>` is plain text (a long run of them would otherwise overflow the stack). */
-const MAX_QUOTE_DEPTH = 6;
+/** Quotes, list items and spoilers inside one another are followed this deep; a deeper one is plain text (a long run of them would otherwise overflow the stack). */
+const MAX_NESTING = 6;
+
+const MARKER = /^(\s{0,3})([-*+]|\d{1,9}[.)])\s+(.*)$/;
+const DETAILS_OPEN = /^\s{0,3}<details(\s+open)?\s*>(.*)$/i;
+const DETAILS_CLOSE = /^\s{0,3}<\/details>\s*$/i;
+
+/** `<summary>…</summary>` alone on its line, as a line of text; null for anything else. */
+function summaryOf(line: string): Inline[] | null {
+  const text = line.trim();
+  return text.length >= 19 && text.slice(0, 9).toLowerCase() === "<summary>" && text.slice(-10).toLowerCase() === "</summary>" ? parseInline(text.slice(9, -10)) : null;
+}
+
+/** A line with up to `width` leading blanks taken off. */
+function unindent(line: string, width: number): string {
+  let k = 0;
+  while (k < width && (line[k] === " " || line[k] === "\t")) k += 1;
+  return line.slice(k);
+}
 
 export function parseMarkdown(source: string, depth = 0): Block[] {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
   const blocks: Block[] = [];
   let i = 0;
   const isBlank = (line: string | undefined) => line === undefined || line.trim() === "";
-  const startsBlock = (line: string, level: number) => /^\s{0,3}(?:```|~~~|#{1,6}\s|[-*+]\s|\d{1,9}[.)]\s|(?:-{3,}|\*{3,}|_{3,})\s*$)/.test(line) || (level < MAX_QUOTE_DEPTH && /^\s{0,3}>/.test(line));
+  const startsBlock = (line: string, level: number) => /^\s{0,3}(?:```|~~~|#{1,6}\s|[-*+]\s|\d{1,9}[.)]\s|(?:-{3,}|\*{3,}|_{3,})\s*$)/.test(line) || (level < MAX_NESTING && (/^\s{0,3}>/.test(line) || DETAILS_OPEN.test(line)));
 
   while (i < lines.length) {
     const line = lines[i]!;
@@ -411,38 +485,96 @@ export function parseMarkdown(source: string, depth = 0): Block[] {
       i += 1;
       continue;
     }
-    if (depth < MAX_QUOTE_DEPTH && /^\s{0,3}>/.test(line)) {
+    const spoiler = depth < MAX_NESTING ? DETAILS_OPEN.exec(line) : null;
+    if (spoiler) {
+      i += 1;
+      const body: string[] = [];
+      let summary: Inline[] | null = null;
+      const rest = spoiler[2]!.trim();
+      if (rest !== "") {
+        summary = summaryOf(rest);
+        if (!summary) body.push(rest);
+      } else {
+        let next = i;
+        while (next < lines.length && isBlank(lines[next])) next += 1;
+        summary = next < lines.length ? summaryOf(lines[next]!) : null;
+        if (summary) i = next + 1;
+      }
+      // The body runs to the matching `</details>`, or to the end of the message while it is still being written.
+      let nest = 1;
+      let fence: string | null = null;
+      while (i < lines.length) {
+        const inner = lines[i]!;
+        if (fence) {
+          if (inner.trimStart().startsWith(fence)) fence = null;
+        } else {
+          const opened = /^\s{0,3}(```+|~~~+)/.exec(inner);
+          if (opened) fence = opened[1]!;
+          else if (DETAILS_OPEN.test(inner)) nest += 1;
+          else if (DETAILS_CLOSE.test(inner)) {
+            nest -= 1;
+            if (nest === 0) {
+              i += 1;
+              break;
+            }
+          }
+        }
+        body.push(inner);
+        i += 1;
+      }
+      blocks.push({ t: "details", open: Boolean(spoiler[1]), summary: summary ?? ["Details"], c: parseMarkdown(body.join("\n"), depth + 1) });
+      continue;
+    }
+    if (depth < MAX_NESTING && /^\s{0,3}>/.test(line)) {
       const body: string[] = [];
       while (i < lines.length && /^\s{0,3}>/.test(lines[i]!)) body.push(lines[i++]!.replace(/^\s{0,3}>\s?/, ""));
       blocks.push({ t: "quote", c: parseMarkdown(body.join("\n"), depth + 1) });
       continue;
     }
-    const bullet = /^\s{0,3}([-*+]|\d{1,9}[.)])\s+(.*)$/.exec(line);
+    const bullet = MARKER.exec(line);
     if (bullet) {
-      const ordered = /\d/.test(bullet[1]!);
+      const ordered = /\d/.test(bullet[2]!);
+      // Each item's lines, with the item's own indent taken off, so what is nested in it reads as it would at the left edge.
       const items: string[][] = [];
+      // Where the current item's text starts: a marker indented less than this is the next item, one indented as much or more is nested in it.
+      let width = 0;
+      const sibling = (m: RegExpExecArray | null) => m !== null && /\d/.test(m[2]!) === ordered && (items.length === 0 || m[1]!.length < width);
       while (i < lines.length) {
         const current = lines[i]!;
-        const m = /^\s{0,3}([-*+]|\d{1,9}[.)])\s+(.*)$/.exec(current);
-        if (m && /\d/.test(m[1]!) === ordered) {
-          items.push([m[2]!]);
+        const m = MARKER.exec(current);
+        if (sibling(m)) {
+          width = m![1]!.length + m![2]!.length + 1;
+          items.push([m![3]!]);
           i += 1;
-        } else if (!isBlank(current) && /^\s{2,}\S/.test(current) && items.length > 0) {
-          items[items.length - 1]!.push(current.trim());
+        } else if (!isBlank(current) && items.length > 0 && /^\s{2,}\S/.test(current)) {
+          items[items.length - 1]!.push(unindent(current, width));
           i += 1;
-        } else if (isBlank(current) && i + 1 < lines.length && /^\s{0,3}([-*+]|\d{1,9}[.)])\s+/.test(lines[i + 1]!)) {
-          i += 1;
+        } else if (isBlank(current) && items.length > 0) {
+          // A blank line goes on when the next line is another item (a loose list) or is indented into this one.
+          let next = i + 1;
+          while (next < lines.length && isBlank(lines[next])) next += 1;
+          if (next >= lines.length) break;
+          if (sibling(MARKER.exec(lines[next]!))) i = next;
+          else if (/^\s{2,}\S/.test(lines[next]!)) {
+            for (; i < next; i += 1) items[items.length - 1]!.push("");
+          } else break;
         } else break;
       }
-      const start = ordered ? Number.parseInt(bullet[1]!, 10) : undefined;
-      blocks.push({ t: ordered ? "ol" : "ul", ...(ordered && start !== 1 ? { start } : {}), items: items.map((parts) => parseInline(parts.join("\n"))) });
+      const start = ordered ? Number.parseInt(bullet[2]!, 10) : undefined;
+      const listItems = items.map((parts): ListItem => {
+        const task = /^\[([ xX])\](?:\s+(.*))?$/.exec(parts[0]!);
+        const text = [task ? (task[2] ?? "") : parts[0]!, ...parts.slice(1)].join("\n");
+        const c = depth < MAX_NESTING ? parseMarkdown(text, depth + 1) : [{ t: "p" as const, c: parseInline(text) }];
+        return task ? { task: task[1] !== " ", c } : { c };
+      });
+      blocks.push({ t: ordered ? "ol" : "ul", ...(ordered && start !== 1 ? { start } : {}), items: listItems });
       continue;
     }
     if (line.includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1]!)) {
-      const head = splitRow(line).map(parseInline);
+      const head = splitRow(line).map((cell) => parseInline(cell));
       i += 2;
       const rows: Inline[][][] = [];
-      while (i < lines.length && lines[i]!.includes("|") && !isBlank(lines[i])) rows.push(splitRow(lines[i++]!).map(parseInline));
+      while (i < lines.length && lines[i]!.includes("|") && !isBlank(lines[i])) rows.push(splitRow(lines[i++]!).map((cell) => parseInline(cell)));
       blocks.push({ t: "tbl", head, rows });
       continue;
     }

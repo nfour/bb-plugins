@@ -43,10 +43,28 @@ button,textarea,input{font:inherit;color:inherit}
 .gv-msg>:last-child,.gv-msg li>:last-child,.gv-bubble>:last-child{margin-bottom:0}
 .gv-msg h1,.gv-msg h2,.gv-msg h3,.gv-msg h4,.gv-msg h5,.gv-msg h6{margin:17px 0 7px;line-height:1.3}
 .gv-msg h1{font-size:21.5px}.gv-msg h2{font-size:19px}.gv-msg h3{font-size:17px}.gv-msg h4,.gv-msg h5,.gv-msg h6{font-size:15.5px}
-.gv-msg ul,.gv-msg ol{margin:0 0 10px;padding-left:26px}
-.gv-msg li{margin:2px 0}
+.gv-msg ul,.gv-msg ol{margin:0 0 10px;padding-left:24px}
+.gv-msg ul{list-style-type:disc}
+.gv-msg ol{list-style-type:decimal}
+.gv-msg li{margin:0 0 5px}
+.gv-msg li::marker{color:var(--gv-muted)}
+.gv-msg ol li::marker{font-variant-numeric:tabular-nums}
+.gv-msg li>ul,.gv-msg li>ol{margin-bottom:0}
 .gv-msg blockquote{margin:0 0 10px;padding:2px 14px;border-left:3px solid var(--gv-line);color:var(--gv-muted)}
 .gv-msg hr{border:0;border-top:1px solid var(--gv-line);margin:14px 0}
+.gv-msg kbd{font:13.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--gv-code);border:1px solid var(--gv-line);border-radius:4px;padding:0 5px}
+.gv-task>input{margin:0 6px 0 0;vertical-align:-2px;accent-color:var(--gv-primary)}
+.gv-spoiler{margin:0 0 10px}
+.gv-msg li>.gv-spoiler{margin-top:4px}
+.gv-spoiler>summary{display:block;cursor:pointer;list-style:none;border-radius:6px}
+.gv-spoiler>summary::-webkit-details-marker{display:none}
+.gv-spoiler>summary::before{content:"";display:inline-block;width:6px;height:6px;margin:0 9px 2px 4px;vertical-align:middle;border-right:2px solid var(--gv-muted);border-bottom:2px solid var(--gv-muted);rotate:-45deg;transition:rotate 120ms cubic-bezier(.42,0,.58,1)}
+.gv-spoiler[open]>summary::before{rotate:45deg}
+.gv-spoiler>summary em{font-style:normal;color:var(--gv-muted);margin-left:.5em}
+.gv-spoiler>summary:hover em{color:var(--gv-ink)}
+.gv-spoiler>summary:focus-visible{outline:2px solid var(--gv-primary);outline-offset:2px}
+.gv-spoiler-body{margin:4px 0 0 6px;padding:2px 0 2px 14px;border-left:3px solid var(--gv-line);color:var(--gv-muted)}
+.gv-spoiler-body>:last-child{margin-bottom:0}
 .gv-msg a{color:var(--gv-primary)}
 .gv-msg code{font:14.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--gv-code);border-radius:4px;padding:1px 5px}
 .gv-pre{margin:0 0 10px;background:var(--gv-code);border:1px solid var(--gv-line);border-radius:8px;overflow:auto}
@@ -180,7 +198,7 @@ const SCRIPT = String.raw`
       if (typeof node === "string") { parent.appendChild(document.createTextNode(node)); continue; }
       if (node.t === "br") parent.appendChild(el("br"));
       else if (node.t === "code") parent.appendChild(el("code", null, node.text));
-      else if (node.t === "b" || node.t === "i" || node.t === "s") { const n = el(node.t === "b" ? "strong" : node.t === "i" ? "em" : "del"); renderInline(node.c, n); parent.appendChild(n); }
+      else if (node.t === "b" || node.t === "i" || node.t === "s" || node.t === "kbd") { const n = el(node.t === "b" ? "strong" : node.t === "i" ? "em" : node.t === "kbd" ? "kbd" : "del"); renderInline(node.c, n); parent.appendChild(n); }
       else if (node.t === "a") {
         if (!/^(https?:\/\/|mailto:)/i.test(node.href)) { renderInline(node.c, parent); continue; }
         const a = el("a"); a.href = node.href; a.target = "_blank"; a.rel = "noopener noreferrer nofollow"; renderInline(node.c, a); parent.appendChild(a);
@@ -192,7 +210,27 @@ const SCRIPT = String.raw`
       if (b.t === "p") { const n = el("p"); renderInline(b.c, n); parent.appendChild(n); }
       else if (b.t === "h") { const n = el("h" + Math.min(6, Math.max(1, b.level | 0))); renderInline(b.c, n); parent.appendChild(n); }
       else if (b.t === "code") { const wrap = el("div", "gv-pre"); if (b.lang) wrap.appendChild(el("div", "gv-pre-lang", b.lang)); const pre = el("pre"); pre.appendChild(el("code", null, b.text)); wrap.appendChild(pre); parent.appendChild(wrap); }
-      else if (b.t === "ul" || b.t === "ol") { const n = el(b.t); if (b.start) n.start = b.start; for (const item of b.items) { const li = el("li"); renderInline(item, li); n.appendChild(li); } parent.appendChild(n); }
+      else if (b.t === "ul" || b.t === "ol") {
+        const n = el(b.t); if (b.start) n.start = b.start;
+        // A numbered list makes room for a wider number ("10." needs one more digit than "9."), as BB's does.
+        if (b.t === "ol") { const digits = Math.max(String(b.start || 1).length, String((b.start || 1) + b.items.length - 1).length); if (digits > 1) n.style.setProperty("padding-left", "calc(24px + " + (digits - 1) + "ch)"); }
+        for (const item of b.items) {
+          const li = el("li");
+          // A task item is a read-only checkbox; the guest cannot change the owner's list.
+          if (item.task !== undefined) { li.className = "gv-task"; const box = el("input"); box.type = "checkbox"; box.checked = item.task; box.disabled = true; box.setAttribute("aria-label", item.task ? "Done" : "Not done"); li.appendChild(box); }
+          // The item's first paragraph sits in the item itself (a list is tight); anything after it is nested blocks.
+          const rest = item.c[0] && item.c[0].t === "p" ? (renderInline(item.c[0].c, li), item.c.slice(1)) : item.c;
+          blocks(rest, li);
+          n.appendChild(li);
+        }
+        parent.appendChild(n);
+      }
+      else if (b.t === "details") {
+        const d = el("details", "gv-spoiler"); if (b.open) d.open = true;
+        const sum = el("summary"); renderInline(b.summary, sum); d.appendChild(sum);
+        const body = el("div", "gv-spoiler-body"); blocks(b.c, body); d.appendChild(body);
+        parent.appendChild(d);
+      }
       else if (b.t === "quote") { const n = el("blockquote"); blocks(b.c, n); parent.appendChild(n); }
       else if (b.t === "hr") parent.appendChild(el("hr"));
       else if (b.t === "tbl") {
@@ -228,6 +266,12 @@ const SCRIPT = String.raw`
   let pinned = true;
   window.addEventListener("scroll", () => { pinned = nearBottom(); }, { passive: true });
   new ResizeObserver(() => { if (pinned) scroller.scrollTop = scroller.scrollHeight; }).observe($("gv-bar"));
+  // A message that changes while it is being written is drawn again; a spoiler the reader opened (or shut) stays as they left it.
+  const keepOpen = (before, after) => {
+    const was = [...before.querySelectorAll("details")], now = [...after.querySelectorAll("details")];
+    now.forEach((d, i) => { const old = was[i]; if (old && old.firstChild.textContent === d.firstChild.textContent && old.open !== d.open && old.dataset.moved) d.open = old.open; });
+  };
+  feed.addEventListener("toggle", (event) => { if (event.target.tagName === "DETAILS") event.target.dataset.moved = "1"; }, true);
   const renderFeed = () => {
     const stick = nearBottom();
     const wanted = new Set(feedState.order);
@@ -238,7 +282,7 @@ const SCRIPT = String.raw`
       const item = shown[i], id = item.id;
       const key = JSON.stringify(item);
       let node = nodes.get(id);
-      if (!node || keys.get(id) !== key) { const next = renderItem(item); if (node) node.replaceWith(next); node = next; nodes.set(id, node); keys.set(id, key); }
+      if (!node || keys.get(id) !== key) { const next = renderItem(item); if (node) { keepOpen(node, next); node.replaceWith(next); } node = next; nodes.set(id, node); keys.set(id, key); }
       if (node.nextSibling !== before) feed.insertBefore(node, before);
       before = node;
     }

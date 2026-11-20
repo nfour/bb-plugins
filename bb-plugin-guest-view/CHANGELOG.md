@@ -2,6 +2,12 @@
 
 Releases are the tags `guest-view/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.3.0 (2026-11-20)
+
+- Guests see spoilers (they open on a click) and checkboxes (read-only), and the few HTML tags a reply may carry: a line break in a table cell, key caps and `&nbsp;`. Whatever is indented under a list item shows under it: a spoiler, a table, a nested list, a quote.
+- Lists keep their bullets, numbers and indent, task items included, and a numbered list of ten or more items makes room for the wider number.
+- A streaming reply and a finished turn reach guests as soon as they change on bb 0.50, which sends changes to a message as small patches, and a timeline window that moved no longer drops a message.
+
 ## 0.2.1 (2026-11-15)
 
 - Several guests behind one network address can follow a streaming agent without being told "Too many requests."

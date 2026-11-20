@@ -23,6 +23,8 @@ import {
   tokenFromBytes,
   trimSettled,
   workingLabel,
+  type Block,
+  type Inline,
   type ParseMemo,
   type Row,
 } from "./model.ts";
@@ -297,6 +299,134 @@ test("parseMarkdown keeps headings, quotes and long runs cheap", () => {
   assert.equal(blocks[0]?.t, "quote");
   assert.doesNotThrow(() => parseMarkdown("> ".repeat(40_000) + "x"));
   assert.deepEqual(parseMarkdown("> a\n> > b")[0], { t: "quote", c: [{ t: "p", c: ["a"] }, { t: "quote", c: [{ t: "p", c: ["b"] }] }] });
+});
+
+// ─── Spoilers, checkboxes and the tags BB draws from HTML ───────────────────
+
+const p = (...c: Inline[]): Block => ({ t: "p", c });
+const spoiler = (summary: Inline[], c: Block[], open = false): Block => ({ t: "details", open, summary, c });
+
+test("a task item is a checkbox, ticked or not; a plain item is not", () => {
+  assert.deepEqual(parseMarkdown("- [x] done\n- [ ] open\n- [X] also done\n- plain\n- [] not a task\n- [x]no space"), [
+    {
+      t: "ul",
+      items: [{ task: true, c: [p("done")] }, { task: false, c: [p("open")] }, { task: true, c: [p("also done")] }, { c: [p("plain")] }, { c: [p("[] not a task")] }, { c: [p("[x]no space")] }],
+    },
+  ]);
+  assert.deepEqual(parseMarkdown("1. [ ] **Topic** and `code`\n2. [x]")[0], {
+    t: "ol",
+    items: [{ task: false, c: [p({ t: "b", c: ["Topic"] }, " and ", { t: "code", text: "code" })] }, { task: true, c: [] }],
+  });
+});
+
+test("a list item holds what is indented under it: more text, a nested list, a quote, a spoiler, a tbl", () => {
+  const list = parseMarkdown("- one\n  more of one\n  - nested a\n  - nested b\n    > quoted\n- two");
+  assert.deepEqual(list, [
+    {
+      t: "ul",
+      items: [
+        { c: [p("one", { t: "br" }, "more of one"), { t: "ul", items: [{ c: [p("nested a")] }, { c: [p("nested b"), { t: "quote", c: [p("quoted")] }] }] }] },
+        { c: [p("two")] },
+      ],
+    },
+  ]);
+  const under = parseMarkdown("- [x] claim\n\n  <details>\n  <summary><code>1 tbl</code><em>why</em></summary>\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n\n  </details>\n\n- [ ] next");
+  assert.deepEqual(under, [
+    {
+      t: "ul",
+      items: [
+        { task: true, c: [p("claim"), spoiler([{ t: "code", text: "1 tbl" }, { t: "i", c: ["why"] }], [{ t: "tbl", head: [["a"], ["b"]], rows: [[["1"], ["2"]]] }])] },
+        { task: false, c: [p("next")] },
+      ],
+    },
+  ]);
+});
+
+test("numbered questions with numbered options under them: the options nest, the next question does not", () => {
+  const blocks = parseMarkdown("1. [ ] **Commit** — now?\n   1) [ ] Yes ⭐\n      > cheap\n   2) [ ] Not yet\n2. [ ] **Next**");
+  const [list] = blocks as [Extract<Block, { t: "ul" | "ol" }>];
+  assert.equal(blocks.length, 1);
+  assert.equal(list.items.length, 2, "two questions");
+  const options = list.items[0]!.c[1] as Extract<Block, { t: "ul" | "ol" }>;
+  assert.equal(options.t, "ol");
+  assert.deepEqual(options.items.map((item) => [item.task, (item.c[0] as { c: Inline[] }).c]), [[false, ["Yes ⭐"]], [false, ["Not yet"]]]);
+  assert.deepEqual(options.items[0]!.c[1], { t: "quote", c: [p("cheap")] });
+});
+
+test("a spoiler: its summary and its body, closed unless it says open", () => {
+  assert.deepEqual(parseMarkdown("<details>\n<summary>Why</summary>\n\nbody **bold**\n\n</details>\n\nafter"), [spoiler(["Why"], [p("body ", { t: "b", c: ["bold"] })]), p("after")]);
+  assert.deepEqual(parseMarkdown("<details open><summary>x</summary>\nbody\n</details>"), [spoiler(["x"], [p("body")], true)]);
+  assert.deepEqual(parseMarkdown("<DETAILS>\n<SUMMARY>x</SUMMARY>\nbody\n</DETAILS>")[0], spoiler(["x"], [p("body")]), "tags in capitals");
+  assert.deepEqual(parseMarkdown("<details>\n\nno summary\n\n</details>"), [spoiler(["Details"], [p("no summary")])]);
+  assert.deepEqual(parseMarkdown("<details>\n<summary>  </summary>\nbody\n</details>")[0], spoiler(["  "], [p("body")]), "a blank summary is kept as it is");
+  const chips = parseMarkdown("<details>\n<summary><code>▰▰▰▱▱</code><em>Live; next: release</em></summary>\n\n- [ ] a\n\n</details>")[0] as Extract<Block, { t: "details" }>;
+  assert.deepEqual(chips.summary, [{ t: "code", text: "▰▰▰▱▱" }, { t: "i", c: ["Live; next: release"] }]);
+});
+
+test("a spoiler still being written takes the rest of the message, and one inside another closes at its own end", () => {
+  assert.deepEqual(parseMarkdown("before\n\n<details>\n<summary>x</summary>\n\nthe body so far"), [p("before"), spoiler(["x"], [p("the body so far")])]);
+  const outer = parseMarkdown("<details>\n<summary>outer</summary>\n\n<details>\n<summary>inner</summary>\n\nin\n\n</details>\n\nstill outer\n\n</details>\n\nout");
+  assert.deepEqual(outer, [spoiler(["outer"], [spoiler(["inner"], [p("in")]), p("still outer")]), p("out")]);
+  // A closing tag inside a code fence is code, not the end.
+  const fenced = parseMarkdown("<details>\n<summary>s</summary>\n\n```html\n</details>\n```\n\nstill in\n</details>\nafter");
+  assert.deepEqual(fenced, [spoiler(["s"], [{ t: "code", lang: "html", text: "</details>" }, p("still in")]), p("after")]);
+  // A spoiler interrupts a paragraph, as it does in BB.
+  assert.deepEqual(parseMarkdown("text\n<details>\n<summary>s</summary>\nb\n</details>").map((block) => block.t), ["p", "details"]);
+});
+
+test("a spoiler or a tag inside code is code", () => {
+  assert.deepEqual(parseMarkdown("```md\n<details>\n<summary>x</summary>\n</details>\n```"), [{ t: "code", lang: "md", text: "<details>\n<summary>x</summary>\n</details>" }]);
+  assert.deepEqual(parseInline("`<em>x</em>` and `<br>`"), [{ t: "code", text: "<em>x</em>" }, " and ", { t: "code", text: "<br>" }]);
+});
+
+test("the tags BB draws from HTML within a line: br, em, strong, kbd, code; everything else stays text", () => {
+  assert.deepEqual(parseInline("a<br>b<br/>c<br />d"), ["a", { t: "br" }, "b", { t: "br" }, "c", { t: "br" }, "d"]);
+  assert.deepEqual(parseInline("<kbd>Ctrl</kbd> + <kbd>K</kbd>"), [{ t: "kbd", c: ["Ctrl"] }, " + ", { t: "kbd", c: ["K"] }]);
+  assert.deepEqual(parseInline("<strong>s</strong> <b>b</b> <em>e</em> <i>i</i>"), [{ t: "b", c: ["s"] }, " ", { t: "b", c: ["b"] }, " ", { t: "i", c: ["e"] }, " ", { t: "i", c: ["i"] }]);
+  assert.deepEqual(parseInline("<em>a **b** <code>c</code></em>"), [{ t: "i", c: ["a ", { t: "b", c: ["b"] }, " ", { t: "code", text: "c" }] }]);
+  assert.deepEqual(parseInline("<code>a &lt; b &amp;&amp; c</code>"), [{ t: "code", text: "a < b && c" }]);
+  assert.deepEqual(parseInline("1 &nbsp;&amp; 2 &lt;x&gt; &quot;q&quot; &copy; &#39;"), ["1 \u00a0& 2 <x> \"q\" &copy; &#39;"]);
+  // Not closed, not a tag we know, or with attributes: text.
+  assert.deepEqual(parseInline("<em>no close"), ["<em>no close"]);
+  assert.deepEqual(parseInline('<img src=x onerror=alert(1)> <span style="x">a</span> <a href="x">y</a> <script>alert(1)</script>'), ['<img src=x onerror=alert(1)> <span style="x">a</span> <a href="x">y</a> <script>alert(1)</script>']);
+  assert.deepEqual(parseInline('<em class="x">a</em>'), ['<em class="x">a</em>']);
+  assert.deepEqual(parseMarkdown("<summary>alone</summary>"), [p("<summary>alone</summary>")], "a summary outside a spoiler is text");
+  assert.deepEqual(parseMarkdown("</details>")[0], p("</details>"), "and so is a stray closing tag");
+});
+
+test("a cell of a tbl may hold a br and a kbd", () => {
+  const [grid] = parseMarkdown("| a | b |\n|---|---|\n| one<br>two | <kbd>K</kbd> |") as [Extract<Block, { t: "tbl" }>];
+  assert.deepEqual(grid.rows[0], [["one", { t: "br" }, "two"], [{ t: "kbd", c: ["K"] }]]);
+});
+
+test("a secret in a spoiler's summary or body is masked before anything is read", () => {
+  const secret = "gh" + "p_" + "a".repeat(36);
+  const items = guestTranscript([assistant("a1", `<details>\n<summary>token ${secret}</summary>\n\nbody ${secret}\n\n</details>`)]);
+  assert.ok(!JSON.stringify(items).includes(secret));
+  assert.ok(JSON.stringify(items).includes(MASK));
+});
+
+test("spoilers and nested lists are bounded: a deep run is text, and long runs of tags are read in one pass", () => {
+  // Nested to many levels: the first levels are structure, the rest is plain text, and nothing overflows the stack.
+  assert.doesNotThrow(() => parseMarkdown("<details>\n".repeat(40_000)));
+  assert.doesNotThrow(() => parseMarkdown(Array.from({ length: 3000 }, (_, k) => " ".repeat(Math.min(k * 2, 200)) + "- x").join("\n")));
+  assert.doesNotThrow(() => parseMarkdown("- ".repeat(40_000) + "x"));
+  assert.doesNotThrow(() => parseInline("<em>".repeat(20_000) + "x" + "</em>".repeat(20_000)));
+  assert.doesNotThrow(() => parseInline("<b><i><kbd>".repeat(5_000) + "x"));
+  const depth = (blocks: Block[]): number => Math.max(0, ...blocks.map((block) => (block.t === "details" || block.t === "quote" ? 1 + depth(block.c) : block.t === "ul" || block.t === "ol" ? 1 + Math.max(0, ...block.items.map((item) => depth(item.c))) : 0)));
+  assert.ok(depth(parseMarkdown("<details>\n".repeat(50))) <= 7, "the nesting stops");
+  within(400, () => parseMarkdown("<details>\n".repeat(20_000)));
+  within(400, () => parseMarkdown("<details>\n<summary>x</summary>\n".repeat(10_000)));
+  within(400, () => parseMarkdown("- [ ] a\n  <details>\n".repeat(10_000)));
+  within(400, () => parseMarkdown(Array.from({ length: 20_000 }, (_, k) => (k % 2 ? "  " : "") + "- [x] item").join("\n")));
+  within(400, () => parseMarkdown("- a\n\n".repeat(20_000)));
+  within(400, () => parseMarkdown("- a\n" + "\n".repeat(60_000)));
+  within(400, () => parseInline("<em>".repeat(15_000)));
+  within(400, () => parseInline("<code>".repeat(10_000)));
+  within(400, () => parseInline("&".repeat(60_000)));
+  within(400, () => parseInline("<".repeat(60_000)));
+  within(400, () => parseInline("<em>a</em>".repeat(6_000)));
+  within(400, () => parseMarkdown("<details>" + "<summary>".repeat(6_000)));
 });
 
 test("guestTranscript cuts a huge message, and reuses what did not change", () => {

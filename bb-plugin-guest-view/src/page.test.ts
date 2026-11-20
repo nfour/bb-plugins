@@ -37,6 +37,17 @@ test("the text limit reaches the textarea as a number", () => {
   assert.match(page({ maxChars: 1234 }), /maxlength="1234"/);
 });
 
+test("a task item keeps its list marker and its indent: no rule takes either from it", () => {
+  const style = /<style nonce="NONCE123">([\s\S]*?)<\/style>/.exec(page())![1]!;
+  const rules = [...style.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((rule) => rule[1]!.includes("gv-task"));
+  assert.ok(rules.length > 0, "the checkbox has a rule");
+  for (const [, selector, body] of rules) {
+    assert.ok(!/list-style|margin-left|padding-left/.test(body!), `${selector!.trim()} leaves the item's marker and indent to the list`);
+  }
+  assert.match(style, /\.gv-msg ul\{list-style-type:disc\}/, "bullets at every depth, as BB draws them");
+  assert.match(style, /\.gv-msg ol\{list-style-type:decimal\}/);
+});
+
 test("the page script is valid JavaScript, and the style is balanced", () => {
   const html = page();
   const script = /<script nonce="NONCE123">([\s\S]*?)<\/script>/.exec(html)![1]!;

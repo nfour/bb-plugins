@@ -19,7 +19,7 @@ A guest cannot change anything. They can only write a suggestion, and it waits i
 
 ## What a guest sees
 
-- Your messages and the agent's replies, live, with Markdown and code.
+- Your messages and the agent's replies, live, with Markdown, code, checkboxes and spoilers that open on a click.
 - The agent's tool work only as counts, such as "Ran 3 commands, edited 2 files". No commands, paths, output, diffs or reasoning.
 - Common secret shapes (API keys, tokens, private keys, passwords in URLs) are replaced before text leaves BB. This cannot catch everything, so share only threads you would be comfortable showing in full.
 
