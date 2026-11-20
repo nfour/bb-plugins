@@ -2,9 +2,13 @@
 
 Releases are the tags `guest-view/vX.Y.Z` of https://github.com/nfour/bb-plugins.
 
+## 0.3.1 (2026-11-20)
+
+- Removes a stray page-wide style rule that 0.3.0 added by accident. It matched elements of BB's own pages and made every style recalculation a little slower. Nothing else changed.
+
 ## 0.3.0 (2026-11-20)
 
-- Guests see spoilers (they open on a click) and checkboxes (read-only), and the few HTML tags a reply may carry: a line break in a table cell, key caps and `&nbsp;`. Whatever is indented under a list item shows under it: a spoiler, a table, a nested list, a quote.
+- Guests see spoilers (they open on a click) and checkboxes (read-only), and the few HTML tags a reply may carry: a line break inside a cell, key caps and `&nbsp;`. Whatever is indented under a list item shows under it: spoilers, tables, nested lists and quotes.
 - Lists keep their bullets, numbers and indent, task items included, and a numbered list of ten or more items makes room for the wider number.
 - A streaming reply and a finished turn reach guests as soon as they change on bb 0.50, which sends changes to a message as small patches, and a timeline window that moved no longer drops a message.
 
