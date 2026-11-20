@@ -2,17 +2,17 @@
 
 Plugins for [BB](https://getbb.app), one folder each.
 
-| Plugin | What it does |
-| --- | --- |
-| [Pinned Turns](bb-plugin-pinned-turns) | Keeps the message you are reading under and the latest agent reply pinned to the top of a thread; click either to jump to it. |
-| [Chat Dock](bb-plugin-chat-dock) | Moves the composer into the thread's right panel while it is open, as a strip under any tab or as a Chat tab. |
-| [Diff Plus](bb-plugin-diff-plus) | Improves BB's Diff tab with a folder tree, sticky folders, Tree or Flat view, a view synced with the list, and recent commits in the scope picker. |
-| [Lexicon](bb-plugin-lexicon) | Colours a project's key terms in chat, the same way every time: plugin names, features, code identifiers, actions and outcomes. |
-| [Guest View](bb-plugin-guest-view) | Shares one thread with someone who has no BB account through a public link: they follow it live and suggest prompts you approve. |
-| [Performance](bb-plugin-performance) | A nav tab measuring how far BB is from feeling native in your real sessions (frames, typing, thread switches, start, idle, memory) and which plugin is behind a slowdown. |
-| [Minimap](bb-plugin-minimap) | A scrollbar replacement: a strip along the edge of each thread, one rectangle per row sized and coloured by kind, with a slider you drag to scrub. |
-| [Open Thinking](bb-plugin-open-thinking) | Opens the agent's thinking blocks by itself, with options to close the earlier one when a new one arrives or when the turn finishes. |
-| [Reply Style](bb-plugin-reply-style) | Styles quotes, spoilers, tables and nested lists in thread replies: grey quote bars, a chevron and a smooth open for spoilers, and guide lines down each nesting level. |
+| Plugin | What it does | Status |
+| --- | --- | --- |
+| [Pinned Turns](bb-plugin-pinned-turns) | Keeps the message you are reading under and the latest agent reply pinned to the top of a thread; click either to jump to it. | Released |
+| [Chat Dock](bb-plugin-chat-dock) | Moves the composer into the thread's right panel while it is open, as a strip under any tab or as a Chat tab. | Released |
+| [Diff Plus](bb-plugin-diff-plus) | Improves BB's Diff tab with a folder tree, sticky folders, Tree or Flat view, a view synced with the list, and recent commits in the scope picker. | Released |
+| [Lexicon](bb-plugin-lexicon) | Colours a project's key terms in chat, the same way every time: plugin names, features, code identifiers, actions and outcomes. | Local only |
+| [Guest View](bb-plugin-guest-view) | Shares one thread with someone who has no BB account through a public link: they follow it live and suggest prompts you approve. | Released |
+| [Performance](bb-plugin-performance) | A nav tab measuring how far BB is from feeling native in your real sessions (frames, typing, thread switches, start, idle, memory) and which plugin is behind a slowdown. | Local only |
+| [Minimap](bb-plugin-minimap) | A scrollbar replacement: a strip along the edge of each thread, one rectangle per row sized and coloured by kind, with a slider you drag to scrub. | Released |
+| [Open Thinking](bb-plugin-open-thinking) | Opens the agent's thinking blocks by itself, with options to close the earlier one when a new one arrives or when the turn finishes. | Local only |
+| [Reply Style](bb-plugin-reply-style) | Styles quotes, spoilers, tables and nested lists in thread replies: grey quote bars, a chevron and a smooth open for spoilers, and guide lines down each nesting level. | Local only |
 
 ## Screenshots
 
